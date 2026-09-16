@@ -1,0 +1,266 @@
+/* ============================================================
+   EXPEDITION / Hack Club YSWS
+   Phantom Sans + the official Hack Club palette.
+   Light paper, navy ink, chunky pressable buttons.
+   ============================================================ */
+
+@font-face {
+	font-family: 'Phantom Sans';
+	src: url('/fonts/PhantomSans-Book.ttf') format('truetype');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Phantom Sans';
+	src: url('/fonts/PhantomSans-Medium.ttf') format('truetype');
+	font-weight: 500;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Phantom Sans';
+	src: url('/fonts/PhantomSans-Semibold.ttf') format('truetype');
+	font-weight: 600;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Phantom Sans';
+	src: url('/fonts/PhantomSans-Bold.ttf') format('truetype');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Phantom Sans';
+	src: url('/fonts/PhantomSans-Bold.ttf') format('truetype');
+	font-weight: 800;
+	font-style: normal;
+	font-display: swap;
+}
+
+:root {
+	/* Irish green leads; Hack Club red/orange/blue as secondary accents */
+	--green: #2f9e57;
+	--green-dark: #1f6f3c;
+	--green-bright: #43c06d;
+	--red: #ec3750;
+	--red-dark: #b8293f;
+	--orange: #ff8c37;
+	--orange-dark: #cf6d24;
+	--yellow: #f1c40f;
+	--blue: #338eda;
+	--blue-dark: #21649c;
+	--purple: #a633d6;
+
+	--navy: #17253f;
+	--navy-soft: #273c5e;
+	--ink: #1d2b41;
+	--slate: #3b4a5f;
+	--muted: #66748a;
+
+	/* soft sage paper, distinct from the cream used elsewhere in Hack Club land */
+	--paper: #eef2ea;
+	--paper-soft: #e3ebdf;
+	--white: #ffffff;
+
+	--rule: rgba(23, 37, 63, 0.16);
+	--rule-strong: rgba(23, 37, 63, 0.3);
+
+	--font-sans: 'Phantom Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+	--max-width: 1100px;
+	--edge-pad: clamp(1.25rem, 4vw, 3.5rem);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html {
+	background: var(--paper);
+	color-scheme: light;
+}
+
+body {
+	margin: 0;
+	min-width: 320px;
+	color: var(--ink);
+	font-family: var(--font-sans);
+	font-size: 17px;
+	font-weight: 500;
+	line-height: 1.55;
+	-webkit-font-smoothing: antialiased;
+	overflow-x: hidden;
+	background: var(--paper);
+}
+
+h1, h2, h3, h4 {
+	margin: 0;
+	font-weight: 800;
+	line-height: 1.05;
+	letter-spacing: -0.02em;
+	color: var(--navy);
+}
+
+h1 {
+	font-size: clamp(2.5rem, 6.4vw, 4.6rem);
+}
+
+h2 {
+	font-size: clamp(2rem, 4.4vw, 3.4rem);
+}
+
+h3 {
+	font-size: clamp(1.2rem, 2vw, 1.5rem);
+	line-height: 1.15;
+}
+
+p {
+	margin: 0;
+}
+
+a {
+	color: inherit;
+}
+
+img {
+	max-width: 100%;
+	display: block;
+}
+
+button {
+	font: inherit;
+}
+
+::selection {
+	background: var(--green);
+	color: var(--white);
+}
+
+/* ---------- layout ---------- */
+
+.wrap {
+	max-width: var(--max-width);
+	margin: 0 auto;
+	padding-left: var(--edge-pad);
+	padding-right: var(--edge-pad);
+	position: relative;
+}
+
+.section {
+	position: relative;
+	padding: clamp(4rem, 9vw, 7rem) 0;
+}
+
+.lede {
+	font-size: 1.1rem;
+	color: var(--muted);
+	font-weight: 500;
+	max-width: 52ch;
+	line-height: 1.5;
+}
+
+.mono {
+	font-family: var(--font-mono);
+}
+
+/* ---------- buttons: chunky, pressable ---------- */
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	min-height: 54px;
+	padding: 14px 26px;
+	border: 0;
+	border-radius: 16px;
+	font-family: var(--font-sans);
+	font-size: 1rem;
+	font-weight: 800;
+	color: var(--white);
+	background: var(--green);
+	--btn-shadow: var(--green-dark);
+	box-shadow: 0 8px 0 var(--btn-shadow);
+	text-decoration: none;
+	cursor: pointer;
+	transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+.btn:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 10px 0 var(--btn-shadow);
+	filter: brightness(1.05);
+}
+
+.btn:active {
+	transform: translateY(6px);
+	box-shadow: 0 2px 0 var(--btn-shadow);
+	filter: brightness(0.97);
+}
+
+.btn:focus-visible {
+	outline: 3px solid var(--ink);
+	outline-offset: 3px;
+}
+
+.btn-deep {
+	background: var(--green-dark);
+	--btn-shadow: #14512b;
+}
+
+.btn-outline {
+	background: transparent;
+	color: var(--navy);
+	border: 3px solid var(--navy);
+	box-shadow: none;
+	padding: 11px 23px;
+}
+
+.btn-outline:hover {
+	background: var(--navy);
+	color: var(--paper);
+	transform: translateY(-2px);
+	box-shadow: none;
+}
+
+.btn-outline:active {
+	transform: translateY(1px);
+	box-shadow: none;
+}
+
+/* ---------- cards / surfaces ---------- */
+
+.card {
+	background: var(--white);
+	border-radius: 14px;
+	border: 2px solid var(--rule);
+	padding: 1.4rem;
+}
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*, *::before, *::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+@media (max-width: 640px) {
+	.section {
+		padding: 3rem 0;
+	}
+}
