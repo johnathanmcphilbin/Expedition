@@ -27,8 +27,8 @@
 			<div class="titles">
 				<h1><span class="light">a hack club ysws:</span> expedition</h1>
 				<p class="sub">
-					Build whatever you want and track the time you spend making it. Reach 40 hours and three
-					builders sail to Ireland.
+					Build whatever you want and track the time you spend making it. Every verified hour is worth
+					$5 of gear. Bank them, spend them, your call.
 				</p>
 			</div>
 		</div>

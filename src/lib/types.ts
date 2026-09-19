@@ -1,17 +1,17 @@
-export interface SupplyItem {
-	id: string;
+/**
+ * A supply drop on the Expedition route.
+ * Hours are the price: 1 verified hour = $5 of value, so `value` is always
+ * `hours * 5` and includes shipping. Swap `art` for real photography later.
+ */
+export interface Drop {
+	hours: number;
+	value: number;
 	name: string;
-	category: 'BUILD' | 'HARDWARE' | 'DESK' | 'TOOLS' | 'WEIRD STUFF';
-	credits: number;
-	hoursApprox: number;
-	blurb: string;
-	style: 'taped' | 'label' | 'rough' | 'type';
-}
-
-export interface VaultGrant {
-	id: string;
-	name: string;
-	description: string;
+	/** second item in the drop, if there is one */
+	extra?: string;
+	art: 'cap' | 'mouse' | 'charger' | 'earbuds' | 'mic' | 'speaker' | 'camera' | 'keyboard';
+	/** the 40 hour drop, which ends the trail */
+	finisher?: boolean;
 }
 
 export interface Project {

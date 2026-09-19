@@ -8,8 +8,8 @@
 		<div class="col links-col">
 			<a href="/#how-it-works">How it works</a>
 			<a href="/library">Library</a>
-			<a href="/rewards">What you get</a>
-			<a href="/ireland">Ireland</a>
+			<a href="/rewards">Your hours</a>
+			<a href="/ireland">Dublin</a>
 		</div>
 
 		<div class="col meta-col">

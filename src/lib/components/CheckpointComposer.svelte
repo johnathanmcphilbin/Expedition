@@ -26,8 +26,7 @@
 	<div class="wrap">
 		<h2>Show us what happened.</h2>
 		<p class="lede">
-			A screenshot or a video and a sentence or two. That's the whole thing. No essays. Your
-			rewards keep moving once it's posted.
+			A screenshot or a video and a sentence or two. That's the whole thing. No essays.
 		</p>
 
 		<div class="panel">
@@ -56,7 +55,7 @@
 				</button>
 
 				{#if posted}
-					<p class="posted">Posted. Your progress toward the vault keeps moving.</p>
+					<p class="posted">Posted. Your hours keep counting toward the next checkpoint.</p>
 				{/if}
 			</form>
 		</div>

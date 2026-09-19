@@ -1,4 +1,4 @@
-import type { SupplyItem, VaultGrant, Checkpoint, Builder } from './types';
+import type { Checkpoint, Builder, Drop } from './types';
 
 export const builders: Builder[] = [
 	{
@@ -227,108 +227,22 @@ export const checkpoints: Checkpoint[] = [
 	}
 ];
 
-export const supplyItems: SupplyItem[] = [
+/** 1 verified hour = $5. Values include shipping. Models may vary by country. */
+export const drops: Drop[] = [
+	{ hours: 5, value: 25, name: 'Custom Expedition cap', extra: 'Jukebox Expedition stickers', art: 'cap' },
+	{ hours: 10, value: 50, name: 'Nice wireless mouse', art: 'mouse' },
+	{ hours: 15, value: 75, name: '65W GaN charger', extra: 'USB-C cable', art: 'charger' },
+	{ hours: 20, value: 100, name: 'Wireless earbuds', art: 'earbuds' },
+	{ hours: 25, value: 125, name: 'Really nice microphone', art: 'mic' },
+	{ hours: 30, value: 150, name: 'Portable Bluetooth speaker', art: 'speaker' },
+	{ hours: 35, value: 175, name: 'Polaroid-style instant camera', art: 'camera' },
 	{
-		id: 'EXP-014',
-		name: 'Soldering Iron Kit',
-		category: 'TOOLS',
-		credits: 40,
-		hoursApprox: 8,
-		blurb: 'Temperature controlled. For when breadboards stop being enough.',
-		style: 'taped'
-	},
-	{
-		id: 'EXP-027',
-		name: 'Mechanical Keyboard Switches (x10)',
-		category: 'DESK',
-		credits: 25,
-		hoursApprox: 5,
-		blurb: 'Linear, tactile, or clicky. We are not going to tell you which is correct.',
-		style: 'label'
-	},
-	{
-		id: 'EXP-041',
-		name: 'Raspberry Pi 4 (4GB)',
-		category: 'HARDWARE',
-		credits: 90,
-		hoursApprox: 18,
-		blurb: 'Small computer. Big consequences.',
-		style: 'rough'
-	},
-	{
-		id: 'EXP-003',
-		name: 'Domain Name (1 year)',
-		category: 'BUILD',
-		credits: 15,
-		hoursApprox: 3,
-		blurb: 'Make it real. Make it yours.',
-		style: 'type'
-	},
-	{
-		id: 'EXP-052',
-		name: 'Desk Lamp, Slightly Too Bright',
-		category: 'DESK',
-		credits: 30,
-		hoursApprox: 6,
-		blurb: 'For 2am. You know the one.',
-		style: 'taped'
-	},
-	{
-		id: 'EXP-066',
-		name: 'Mystery Electronics Grab Bag',
-		category: 'WEIRD STUFF',
-		credits: 20,
-		hoursApprox: 4,
-		blurb: 'Resistors, LEDs, one thing we forgot to label. No refunds.',
-		style: 'label'
-	},
-	{
-		id: 'EXP-019',
-		name: 'Breadboard + Jumper Wire Pack',
-		category: 'HARDWARE',
-		credits: 18,
-		hoursApprox: 4,
-		blurb: 'The other kind of spaghetti code.',
-		style: 'rough'
-	},
-	{
-		id: 'EXP-038',
-		name: 'Hosting Credit ($50)',
-		category: 'BUILD',
-		credits: 55,
-		hoursApprox: 11,
-		blurb: 'Put your thing on the internet. Watch it not crash. Hopefully.',
-		style: 'type'
-	},
-	{
-		id: 'EXP-071',
-		name: 'Rubber Duck (Debugging Grade)',
-		category: 'WEIRD STUFF',
-		credits: 8,
-		hoursApprox: 2,
-		blurb: 'A very good listener. Says nothing. Fixes everything.',
-		style: 'taped'
-	}
-];
-
-export const vaultGrants: VaultGrant[] = [
-	{ id: 'V-01', name: 'MONITOR GRANT', description: 'Up to $200 toward a monitor.' },
-	{ id: 'V-02', name: 'HEADPHONE GRANT', description: 'Up to $200 toward headphones.' },
-	{ id: 'V-03', name: 'KEYBOARD GRANT', description: 'Up to $200 toward a keyboard / setup upgrade.' },
-	{
-		id: 'V-04',
-		name: 'MAKER GRANT',
-		description: 'Up to $200 toward electronics, soldering equipment, tools or components.'
-	},
-	{
-		id: 'V-05',
-		name: 'PROJECT GRANT',
-		description: 'Up to $200 toward whatever you need to build your next project.'
-	},
-	{
-		id: 'V-06',
-		name: 'HOME LAB GRANT',
-		description: 'Up to $200 toward SBCs, storage, networking gear or a small home server.'
+		hours: 40,
+		value: 200,
+		name: 'Mechanical keyboard',
+		extra: 'Exclusive Expedition finisher jersey',
+		art: 'keyboard',
+		finisher: true
 	}
 ];
 

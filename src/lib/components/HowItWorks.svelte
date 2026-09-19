@@ -4,8 +4,8 @@
 		{ t: 'Every 5 hours, show what happened.', d: 'A screenshot or a video, and a sentence about what you worked on. That’s a checkpoint.' },
 		{ t: 'Your checkpoint joins the library.', d: 'Everything gets posted publicly, so you can see what everyone else is finding along the way.' },
 		{ t: 'Start as many projects as you want.', d: 'Your hours carry across everything you build. Starting something new never resets you.' },
-		{ t: 'Earn supplies as you go.', d: 'Every verified hour becomes purchasing power in the Expedition Supply Co.' },
-		{ t: 'Reach 40 hours and the vault opens.', d: 'A grant worth up to $200, the jersey you can’t buy, and a shot at Ireland.' }
+		{ t: 'Every hour you build is worth $5.', d: 'Hours bank up as you go. There are no points or coins — the hours themselves are what you spend.' },
+		{ t: 'Take a drop, or keep going.', d: 'Claim gear at any point on the trail and it spends those hours. Bank them instead and they can count toward getting to Dublin.' }
 	];
 </script>
 

@@ -21,12 +21,12 @@
 					<span class="onward-desc">Every checkpoint people have posted so far.</span>
 				</a>
 				<a class="onward-link" href="/rewards">
-					<span class="onward-title">What you get</span>
-					<span class="onward-desc">Supplies, the vault, and the jersey you can't buy.</span>
+					<span class="onward-title">Your hours</span>
+					<span class="onward-desc">Eight supply drops. Spend your hours or bank them.</span>
 				</a>
 				<a class="onward-link" href="/ireland">
-					<span class="onward-title">Ireland</span>
-					<span class="onward-desc">Three builders are crossing the Atlantic in November.</span>
+					<span class="onward-title">Dublin</span>
+					<span class="onward-desc">A free, optional hackathon on December 5.</span>
 				</a>
 			</div>
 		</div>
