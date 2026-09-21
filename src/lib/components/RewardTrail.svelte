@@ -15,7 +15,7 @@
 	let spent = $derived([...claimed].reduce((a, b) => a + b, 0));
 	let available = $derived(hoursBuilt - spent);
 
-	// everything except the 40h finisher lives on the trail
+	// the 40h drop is its own destination section, not a bend on the route
 	const trailDrops = drops.filter((d) => !d.finisher);
 	let claimable = $derived(drops.filter((d) => !claimed.has(d.hours) && available >= d.hours));
 	let nextUp = $derived(drops.find((d) => !claimed.has(d.hours) && available < d.hours) ?? null);
@@ -45,43 +45,61 @@
 		pending = null;
 	}
 
-	// ---- desktop trail geometry ------------------------------------------
-	// Everything is positioned off these constants so the drawn route and the
-	// DOM markers can't drift apart.
-	const STOP_W = 330;
-	const MARKER_Y = 120; // where the route line runs
-	const ART_TOP = 200; // every stop's art starts here, so baselines line up
-	const FORK_Y = 575; // the gear/go lane, clear of the stops above it
-	const TRAIL_H = 740;
-	// slightly irregular: up, down, up, down
-	const OFFSETS = [0, -34, 20, -26, 12, -30, 18];
-	const trailW = trailDrops.length * STOP_W;
+	// ---- the winding route ------------------------------------------------
+	// Geometry is computed in real pixels off the measured width, so the drawn
+	// curve and the DOM markers can never drift apart.
+	let routeEl: HTMLDivElement;
+	let W = $state(1100);
 
-	const pt = (i: number) => ({
-		x: i * STOP_W + STOP_W / 2,
-		y: MARKER_Y + OFFSETS[i % OFFSETS.length]
+	let narrow = $derived(W < 760);
+	let amp = $derived(narrow ? 0.2 : 0.15); // how far the route sweeps toward each edge
+	let seg = $derived(narrow ? 300 : 370); // vertical distance between bends
+	const TOP = 220; // clearance so the first stop doesn't clip at the top
+	const TAIL = 240;
+
+	let pts = $derived(
+		trailDrops.map((_, i) => ({
+			x: i % 2 === 0 ? W * amp : W * (1 - amp),
+			y: TOP + i * seg
+		}))
+	);
+	let totalH = $derived(TOP + (trailDrops.length - 1) * seg + TAIL);
+
+	/** one continuous smooth line: each leg is a cubic with vertical tangents */
+	let routeD = $derived(
+		(() => {
+			if (!pts.length) return '';
+			const k = seg * 0.55;
+			let d = `M ${W / 2} 0 C ${W / 2} ${TOP * 0.5}, ${pts[0].x} ${pts[0].y - k}, ${pts[0].x} ${pts[0].y}`;
+			for (let i = 1; i < pts.length; i++) {
+				const a = pts[i - 1];
+				const b = pts[i];
+				d += ` C ${a.x} ${a.y + k}, ${b.x} ${b.y - k}, ${b.x} ${b.y}`;
+			}
+			const last = pts[pts.length - 1];
+			d += ` C ${last.x} ${last.y + k}, ${W * 0.62} ${totalH - 90}, ${W * 0.62} ${totalH}`;
+			return d;
+		})()
+	);
+
+	// how far down the route they've travelled
+	let progress = $derived(Math.max(0, Math.min(1, hoursBuilt / 40)));
+
+	let donePath = $state<SVGPathElement | null>(null);
+	let pathLen = $state(0);
+	let drawn = $state(false);
+
+	$effect(() => {
+		// recompute whenever the curve changes
+		routeD;
+		if (donePath) pathLen = donePath.getTotalLength();
 	});
 
-	const routeD =
-		trailDrops
-			.map((_, i) => {
-				const { x, y } = pt(i);
-				if (i === 0) return `M -40 ${MARKER_Y} L ${x} ${y}`;
-				const prev = pt(i - 1);
-				return `Q ${(prev.x + x) / 2} ${prev.y} ${x} ${y}`;
-			})
-			.join(' ') + ` L ${trailW + 60} ${MARKER_Y}`;
-
-	// the fork branches down off the 20h stop
-	const fork = pt(3);
-	const forkD = `M ${fork.x} ${fork.y} C ${fork.x + 30} ${fork.y + 190}, ${fork.x + 60} ${FORK_Y - 60}, ${fork.x + 110} ${FORK_Y - 18}`;
-
-	let sectionEl: HTMLElement;
-	let drawn = $state(false);
-	let primed = $state(false);
-
 	onMount(() => {
-		primed = true;
+		const ro = new ResizeObserver(() => (W = routeEl.clientWidth));
+		ro.observe(routeEl);
+		W = routeEl.clientWidth;
+
 		const io = new IntersectionObserver(
 			([e]) => {
 				if (e.isIntersecting) {
@@ -89,14 +107,18 @@
 					io.disconnect();
 				}
 			},
-			{ threshold: 0.08 }
+			{ threshold: 0.05 }
 		);
-		io.observe(sectionEl);
-		return () => io.disconnect();
+		io.observe(routeEl);
+
+		return () => {
+			ro.disconnect();
+			io.disconnect();
+		};
 	});
 </script>
 
-<section class="section trail-section" bind:this={sectionEl} id="rewards">
+<section class="section trail-section" id="rewards">
 	<div class="wrap">
 		<h2 class="big">Your hours.<br />Your call.</h2>
 		<p class="lede">
@@ -134,9 +156,7 @@
 				{#if claimable.length}
 					<div class="opt">
 						<span class="opt-k">You can claim</span>
-						<span class="opt-v">
-							{claimable.map((d) => `${d.hours}h drop`).join(', ')}
-						</span>
+						<span class="opt-v">{claimable.map((d) => `${d.hours}h drop`).join(', ')}</span>
 					</div>
 				{/if}
 				{#if nextUp}
@@ -156,61 +176,52 @@
 		</label>
 	</div>
 
-	<!-- ---------- the route ---------- -->
-	<div class="scroller">
-		<div
-			class="trail"
-			class:primed
-			class:drawn
-			style:--trail-w="{trailW}px"
-			style:--trail-h="{TRAIL_H}px"
-			style:--art-top="{ART_TOP}px"
-		>
-			<svg class="route" width={trailW} height={TRAIL_H} viewBox="0 0 {trailW} {TRAIL_H}" aria-hidden="true">
-				<path class="route-line" d={routeD} />
-				<path class="route-line fork" d={forkD} />
+	<!-- ---------- the route down the page ---------- -->
+	<div class="route-wrap">
+		<div class="route" bind:this={routeEl} style:height="{totalH}px" class:drawn>
+			<svg class="curve" width={W} height={totalH} viewBox="0 0 {W} {totalH}" aria-hidden="true">
+				<path class="lane" d={routeD} />
+				<path
+					class="lane done"
+					bind:this={donePath}
+					d={routeD}
+					style:stroke-dasharray={pathLen || 1}
+					style:stroke-dashoffset={pathLen ? pathLen * (1 - (drawn ? progress : 0)) : 1}
+				/>
 			</svg>
 
-			<div class="stops">
-				{#each trailDrops as d, i (d.hours)}
-					{@const status = statusOf(d)}
-					{@const p = pt(i)}
-					<div class="stop stop-{status}" style:--my="{p.y}px">
+			{#each trailDrops as d, i (d.hours)}
+				{@const status = statusOf(d)}
+				{@const p = pts[i]}
+				{@const side = i % 2 === 0 ? 'left' : 'right'}
+				<span
+					class="marker marker-{status}"
+					style:left="{p.x}px"
+					style:top="{p.y}px"
+					aria-hidden="true"
+				></span>
+
+				<div class="stop stop-{side} stop-{status}" style:top="{p.y}px" style:--bx="{p.x}px">
+					<div class="art"><DropArt kind={d.art} /></div>
+
+					<div class="info">
 						<p class="hrs">{d.hours}h</p>
-						<span class="marker" aria-hidden="true"></span>
+						<p class="name">{d.name}</p>
+						{#if d.extra}<p class="extra">+ {d.extra}</p>{/if}
+						<p class="value">${d.value} value</p>
 
-						<div class="body">
-							<div class="art-wrap"><DropArt kind={d.art} /></div>
-							<p class="name">{d.name}</p>
-							{#if d.extra}<p class="extra">+ {d.extra}</p>{/if}
-							<p class="value">${d.value} value</p>
-
-							{#if status === 'claimed'}
-								<p class="tag claimed">Claimed</p>
-							{:else if status === 'available'}
-								<button class="claim" onclick={() => (pending = d)}>
-									Claim for {d.hours} hours
-								</button>
-							{:else}
-								<p class="tag short">{d.hours - available} more hours</p>
-							{/if}
-						</div>
+						{#if status === 'claimed'}
+							<p class="tag claimed">Claimed</p>
+						{:else if status === 'available'}
+							<button class="claim" onclick={() => (pending = d)}>
+								Claim for {d.hours} hours
+							</button>
+						{:else}
+							<p class="tag short">{d.hours - available} more hours</p>
+						{/if}
 					</div>
-				{/each}
-			</div>
-
-			<!-- gear / go, in its own lane below the stops -->
-			<!-- the orange branch lands on Go; Gear points back up to the main trail -->
-			<div class="fork-lane" style:--fx="{fork.x}px" style:--fy="{FORK_Y}px">
-				<div class="fork-arm go">
-					<span class="fork-k">Go <span aria-hidden="true">↓</span></span>
-					<span class="fork-v">keep your hours banked for Dublin</span>
 				</div>
-				<div class="fork-arm gear">
-					<span class="fork-k">Gear <span aria-hidden="true">↑</span></span>
-					<span class="fork-v">keep following the trail</span>
-				</div>
-			</div>
+			{/each}
 		</div>
 	</div>
 
@@ -224,9 +235,7 @@
 <dialog bind:this={dialog} class="confirm" onclose={() => (pending = null)}>
 	{#if pending}
 		<p class="c-title">Claim the {pending.hours}h drop?</p>
-		<p class="c-item">
-			{pending.name}{pending.extra ? ` + ${pending.extra}` : ''}
-		</p>
+		<p class="c-item">{pending.name}{pending.extra ? ` + ${pending.extra}` : ''}</p>
 		<p class="c-cost">This will spend {pending.hours} of your available hours.</p>
 		<p class="c-math">
 			<strong>{available}h available</strong> → {available - pending.hours}h remaining
@@ -240,7 +249,7 @@
 
 <style>
 	.trail-section {
-		padding-bottom: 3rem;
+		padding-bottom: 2rem;
 	}
 
 	.big {
@@ -369,124 +378,111 @@
 	}
 
 	/* ---------- route ---------- */
-	.scroller {
-		margin-top: 3.5rem;
-		overflow-x: auto;
-		overflow-y: hidden;
-		padding: 0 var(--edge-pad) 1rem;
-		scrollbar-width: thin;
+	.route-wrap {
+		max-width: 1160px;
+		margin: clamp(3rem, 7vw, 6rem) auto 0;
+		padding: 0 var(--edge-pad);
 	}
-	.trail {
-		position: relative;
-		width: var(--trail-w);
-		height: var(--trail-h);
-	}
-
 	.route {
+		position: relative;
+		width: 100%;
+	}
+	.curve {
 		position: absolute;
 		top: 0;
 		left: 0;
+		pointer-events: none;
 	}
-	.route-line {
+
+	.lane {
 		fill: none;
-		stroke: var(--navy);
-		stroke-width: 3;
+		stroke: var(--rule-strong);
+		stroke-width: 5;
 		stroke-linecap: round;
-		opacity: 0.55;
 	}
-	.route-line.fork {
-		stroke-dasharray: 9 9;
-		stroke: var(--orange);
-		opacity: 0.85;
-	}
-	.trail.primed .route-line {
-		stroke-dasharray: 4000;
-		stroke-dashoffset: 4000;
-		transition: stroke-dashoffset 2.2s ease;
-	}
-	.trail.primed.drawn .route-line {
-		stroke-dashoffset: 0;
-	}
-	.trail.primed .route-line.fork {
-		stroke-dasharray: 9 9;
-		stroke-dashoffset: 0;
-	}
-
-	.stops {
-		position: relative;
-		display: flex;
-		height: 100%;
-	}
-	.stop {
-		position: relative;
-		width: 330px;
-		flex-shrink: 0;
-		padding: 0 1.4rem;
-	}
-
-	/* number and marker are pinned to the route; body starts at a shared baseline */
-	.hrs {
-		position: absolute;
-		top: calc(var(--my) - 74px);
-		font-size: 3rem;
-		font-weight: 800;
-		letter-spacing: -0.04em;
-		line-height: 1;
-		color: var(--navy);
-	}
-	.stop-short .hrs {
-		opacity: 0.4;
-	}
-	.stop-claimed .hrs {
-		color: var(--green-dark);
+	.lane.done {
+		stroke: var(--green);
+		transition: stroke-dashoffset 2.4s ease;
 	}
 
 	.marker {
 		position: absolute;
-		top: calc(var(--my) - 9px);
-		width: 18px;
-		height: 18px;
+		width: 26px;
+		height: 26px;
 		border-radius: 50%;
-		border: 4px solid var(--navy);
+		border: 6px solid var(--rule-strong);
 		background: var(--paper);
+		transform: translate(-50%, -50%);
+		z-index: 2;
 	}
-
-	.body {
-		position: absolute;
-		top: var(--art-top);
-		left: 1.4rem;
-		right: 1.4rem;
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		transition: transform 0.15s ease;
-	}
-	.stop-available .body:hover {
-		transform: translateY(-3px);
-	}
-	.stop-available .marker {
+	.marker-available {
 		border-color: var(--green);
 		background: var(--green);
 	}
-	.stop-claimed .marker {
+	.marker-claimed {
 		border-color: var(--green-dark);
 		background: var(--green-dark);
 	}
-	.stop-short .marker {
-		opacity: 0.4;
+
+	/* ---------- a stop at a bend ---------- */
+	.stop {
+		position: absolute;
+		left: 0;
+		right: 0;
+		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+		gap: clamp(1.5rem, 3vw, 2.8rem);
+	}
+	/* pad so the illustration centres on the bend the marker sits at */
+	.stop-left {
+		justify-content: flex-start;
+		padding-left: calc(var(--bx) - 115px);
+	}
+	/* row-reverse flips the main axis, so flex-start is what packs to the right */
+	.stop-right {
+		justify-content: flex-start;
+		flex-direction: row-reverse;
+		padding-right: calc(100% - var(--bx) - 115px);
 	}
 
-	.art-wrap {
-		width: 100%;
-		max-width: 200px;
-		margin: 0.4rem 0 0.8rem;
+	.art {
+		width: 230px;
+		flex-shrink: 0;
+		/* drop the object below the bend so the route passes above it,
+		   rather than the marker landing in the middle of the product */
+		transform: translateY(34px);
 	}
-	.stop-short .art-wrap {
-		opacity: 0.4;
+	.stop-short .art {
+		opacity: 0.45;
+	}
+
+	.info {
+		max-width: 300px;
+	}
+	.stop-right .info {
+		text-align: right;
+	}
+
+	.hrs {
+		font-size: clamp(3rem, 6vw, 4.6rem);
+		font-weight: 800;
+		letter-spacing: -0.045em;
+		line-height: 0.9;
+		color: var(--navy);
+	}
+	.stop-short .hrs {
+		color: var(--muted);
+		opacity: 0.6;
+	}
+	.stop-claimed .hrs,
+	.stop-available .hrs {
+		color: var(--green-dark);
 	}
 
 	.name {
-		font-size: 1.1rem;
+		margin-top: 0.6rem;
+		font-size: 1.2rem;
 		font-weight: 800;
 		color: var(--navy);
 		letter-spacing: -0.01em;
@@ -494,19 +490,19 @@
 	.extra {
 		font-weight: 700;
 		color: var(--muted);
-		font-size: 0.92rem;
+		font-size: 0.95rem;
 	}
 	.value {
 		margin-top: 0.3rem;
 		font-family: var(--font-mono);
-		font-size: 0.85rem;
+		font-size: 0.88rem;
 		font-weight: 600;
 		color: var(--muted);
 	}
 
 	.tag {
-		margin-top: 0.8rem;
-		font-size: 0.8rem;
+		margin-top: 0.9rem;
+		font-size: 0.82rem;
 		font-weight: 800;
 		text-transform: uppercase;
 		letter-spacing: 0.07em;
@@ -519,16 +515,16 @@
 	}
 
 	.claim {
-		margin-top: 0.8rem;
+		margin-top: 0.9rem;
 		background: var(--green);
 		color: var(--white);
 		border: 0;
 		border-radius: 12px;
 		box-shadow: 0 5px 0 var(--green-dark);
 		font-family: var(--font-sans);
-		font-size: 0.9rem;
+		font-size: 0.92rem;
 		font-weight: 800;
-		padding: 0.7em 1.1em;
+		padding: 0.75em 1.15em;
 		cursor: pointer;
 		transition: transform 0.12s ease, box-shadow 0.12s ease;
 	}
@@ -541,36 +537,8 @@
 		box-shadow: 0 1px 0 var(--green-dark);
 	}
 
-	/* ---------- fork ---------- */
-	.fork-lane {
-		position: absolute;
-		top: var(--fy);
-		left: calc(var(--fx) + 96px);
-		display: flex;
-		gap: 3rem;
-		width: 620px;
-	}
-	.fork-arm {
-		display: flex;
-		flex-direction: column;
-	}
-	.fork-k {
-		font-size: 1.5rem;
-		font-weight: 800;
-		letter-spacing: -0.02em;
-		color: var(--navy);
-	}
-	.fork-arm.go .fork-k {
-		color: var(--orange);
-	}
-	.fork-v {
-		font-size: 0.9rem;
-		font-weight: 600;
-		color: var(--muted);
-	}
-
 	.fineprint {
-		margin-top: 2rem;
+		margin-top: 3rem;
 		font-size: 0.85rem;
 		color: var(--muted);
 		max-width: 60ch;
@@ -645,66 +613,43 @@
 		box-shadow: 0 1px 0 var(--green-dark);
 	}
 
-	/* ---------- mobile: the trail goes vertical ---------- */
-	@media (max-width: 860px) {
-		.scroller {
-			overflow-x: hidden;
-			padding-left: var(--edge-pad);
-			padding-right: var(--edge-pad);
-		}
-		.trail {
-			width: 100%;
-			height: auto;
-		}
-		.route,
-		.fork-lane {
-			display: none;
-		}
-		.stops {
-			flex-direction: column;
-			height: auto;
-			border-left: 3px solid var(--rule-strong);
-			padding-left: 1.6rem;
-		}
-		/* undo the desktop pinning: everything flows normally down the route */
+	/* ---------- narrow: same winding route, tighter composition ---------- */
+	@media (max-width: 760px) {
 		.stop {
-			width: 100%;
-			padding: 0 0 3.5rem;
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.6rem;
+			padding-left: 0;
+			padding-right: 0;
+			transform: translateY(-40%);
 		}
-		.stop:nth-child(even) {
-			padding-left: 1.75rem;
+		.stop-left {
+			padding-left: 0;
+			align-items: flex-start;
 		}
-		.hrs,
-		.marker,
-		.body {
-			position: static;
+		.stop-right {
+			flex-direction: column;
+			padding-right: 0;
+			align-items: flex-end;
 		}
-		.hrs {
-			font-size: 2.4rem;
+		.stop-right .info {
+			text-align: right;
 		}
-		.body {
-			left: auto;
-			right: auto;
-			margin-top: 0.6rem;
-		}
-		.stop-available .body:hover {
+		.art {
+			width: 132px;
+			/* stacked layout: the downward nudge would collide with the number */
 			transform: none;
 		}
-		.marker {
-			position: absolute;
-			top: 18px;
-			left: -1.6rem;
-			transform: translateX(-50%);
+		.info {
+			max-width: 100%;
 		}
-		.art-wrap {
-			max-width: 170px;
+		.hrs {
+			font-size: 2.6rem;
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.trail.primed .route-line {
-			stroke-dasharray: none;
-			stroke-dashoffset: 0;
+		.lane.done {
 			transition: none;
 		}
 	}

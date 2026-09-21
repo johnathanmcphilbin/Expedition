@@ -1,9 +1,13 @@
+import type { UserRow } from '$lib/server/database.types';
+
 // See https://svelte.dev/docs/kit/types#app.d.ts
-// for information about these interfaces
 declare global {
 	namespace App {
+		interface Locals {
+			/** Current user, resolved from the session cookie in hooks.server.ts. */
+			user: UserRow | null;
+		}
 		// interface Error {}
-		// interface Locals {}
 		// interface PageData {}
 		// interface PageState {}
 		// interface Platform {}

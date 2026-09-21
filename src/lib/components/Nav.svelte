@@ -1,4 +1,8 @@
 <script lang="ts">
+	let {
+		currentUser = null
+	}: { currentUser?: { displayName: string | null; isReviewer: boolean } | null } = $props();
+
 	let open = $state(false);
 </script>
 
@@ -11,6 +15,12 @@
 			<a href="/library">Library</a>
 			<a href="/rewards">Your hours</a>
 			<a href="/ireland">Dublin</a>
+			{#if currentUser}
+				{#if currentUser.isReviewer}<a href="/admin/reviews">Reviews</a>{/if}
+				<a href="/dashboard">Dashboard</a>
+			{:else}
+				<a href="/auth/login">Sign in</a>
+			{/if}
 		</nav>
 
 		<div class="right">
