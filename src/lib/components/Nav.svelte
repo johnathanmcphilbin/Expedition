@@ -1,9 +1,20 @@
 <script lang="ts">
+	import { page } from '$app/state';
+
 	let {
 		currentUser = null
-	}: { currentUser?: { displayName: string | null; isReviewer: boolean } | null } = $props();
+	}: {
+		currentUser?: {
+			displayName: string | null;
+			isReviewer: boolean;
+			hackatimeConnected: boolean;
+		} | null;
+	} = $props();
 
 	let open = $state(false);
+
+	// Come back to whatever they were reading once Hack Club Auth is done.
+	const signInHref = $derived(`/auth/login?next=${encodeURIComponent(page.url.pathname)}`);
 </script>
 
 <header class="nav">
@@ -18,13 +29,24 @@
 			{#if currentUser}
 				{#if currentUser.isReviewer}<a href="/admin/reviews">Reviews</a>{/if}
 				<a href="/dashboard">Dashboard</a>
-			{:else}
-				<a href="/auth/login">Sign in</a>
 			{/if}
 		</nav>
 
 		<div class="right">
 			<span class="ages">[ ages 13&ndash;18 ]</span>
+
+			{#if currentUser}
+				{#if !currentUser.hackatimeConnected}
+					<a class="nav-btn nav-btn-hackatime" href="/auth/hackatime">Connect Hackatime</a>
+				{/if}
+				<!-- POST: a GET logout could be fired by any third-party <img> tag. -->
+				<form method="POST" action="/auth/logout">
+					<button class="nav-btn nav-btn-ghost" type="submit">Sign out</button>
+				</form>
+			{:else}
+				<a class="nav-btn" href={signInHref}>Sign in with Hack Club</a>
+			{/if}
+
 			<button class="burger" aria-label="Toggle menu" onclick={() => (open = !open)}>
 				<span></span><span></span><span></span>
 			</button>
@@ -76,6 +98,54 @@
 		gap: 0.75rem;
 		flex-shrink: 0;
 	}
+	.nav-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 40px;
+		padding: 8px 18px;
+		border: 0;
+		border-radius: 12px;
+		font-family: inherit;
+		font-size: 0.92rem;
+		font-weight: 800;
+		white-space: nowrap;
+		color: var(--white);
+		background: var(--green);
+		box-shadow: 0 5px 0 var(--green-dark);
+		text-decoration: none;
+		cursor: pointer;
+		transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+	}
+	.nav-btn:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 7px 0 var(--green-dark);
+		filter: brightness(1.05);
+	}
+	.nav-btn:active {
+		transform: translateY(4px);
+		box-shadow: 0 1px 0 var(--green-dark);
+	}
+	.nav-btn:focus-visible {
+		outline: 3px solid var(--ink);
+		outline-offset: 3px;
+	}
+	.nav-btn-ghost {
+		color: var(--navy);
+		background: transparent;
+		border: 2px solid var(--navy);
+		box-shadow: none;
+		padding: 6px 16px;
+	}
+	.nav-btn-ghost:hover {
+		background: var(--navy);
+		color: var(--paper);
+		box-shadow: none;
+	}
+	.nav-btn-ghost:active {
+		transform: translateY(1px);
+		box-shadow: none;
+	}
 	.ages {
 		font-size: 0.85rem;
 		font-weight: 700;
@@ -120,6 +190,18 @@
 			display: flex;
 		}
 		.ages {
+			display: none;
+		}
+		.nav-btn {
+			font-size: 0.85rem;
+			padding: 7px 14px;
+			min-height: 36px;
+		}
+	}
+
+	/* Too tight for two buttons — the dashboard still offers the connection. */
+	@media (max-width: 560px) {
+		.nav-btn-hackatime {
 			display: none;
 		}
 	}
