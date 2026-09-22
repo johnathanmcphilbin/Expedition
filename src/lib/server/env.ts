@@ -39,7 +39,13 @@ export const config = {
 		get clientSecret() {
 			return required('HCA_CLIENT_SECRET');
 		},
-		scope: 'openid profile email slack_id'
+		/**
+		 * Only what the issuer advertises in `scopes_supported`: openid, profile,
+		 * phone, birthdate. `email` and `slack_id` are NOT scopes here — they are
+		 * claims, returned under `profile`. Requesting them as scopes gets the
+		 * whole authorization rejected with `invalid_scope`.
+		 */
+		scope: 'openid profile'
 	},
 
 	/** Hackatime — coding-time evidence only, never an awarder of hours. */
