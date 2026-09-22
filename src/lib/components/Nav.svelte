@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '$lib/components/Icon.svelte';
 	import { page } from '$app/state';
 
 	let {
@@ -33,18 +34,28 @@
 		</nav>
 
 		<div class="right">
-			<span class="ages">[ ages 13&ndash;18 ]</span>
+			<!-- Metadata printed in the corner of a map, not a control. -->
+			<span class="ages" aria-label="Ages 13 to 18">
+				<span class="ages-num">13&mdash;18</span>
+				<span class="ages-unit">yrs</span>
+			</span>
 
 			{#if currentUser}
 				{#if !currentUser.hackatimeConnected}
-					<a class="nav-btn nav-btn-hackatime" href="/auth/hackatime">Connect Hackatime</a>
+					<a class="link-action nav-btn-hackatime" href="/auth/hackatime">
+						<span class="stamp"><Icon name="external" size={11} /></span>
+						Hackatime
+					</a>
 				{/if}
 				<!-- POST: a GET logout could be fired by any third-party <img> tag. -->
 				<form method="POST" action="/auth/logout">
-					<button class="nav-btn nav-btn-ghost" type="submit">Sign out</button>
+					<button class="link-action" type="submit">Sign out</button>
 				</form>
 			{:else}
-				<a class="nav-btn" href={signInHref}>Sign in with Hack Club</a>
+				<a class="link-action" href={signInHref}>
+					<span class="stamp"><Icon name="flag" size={11} /></span>
+					Connect Hack Club
+				</a>
 			{/if}
 
 			<button class="burger" aria-label="Toggle menu" onclick={() => (open = !open)}>
@@ -98,60 +109,29 @@
 		gap: 0.75rem;
 		flex-shrink: 0;
 	}
-	.nav-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 40px;
-		padding: 8px 18px;
-		border: 0;
-		border-radius: 12px;
-		font-family: inherit;
-		font-size: 0.92rem;
-		font-weight: 800;
-		white-space: nowrap;
-		color: var(--white);
-		background: var(--green);
-		box-shadow: 0 5px 0 var(--green-dark);
-		text-decoration: none;
-		cursor: pointer;
-		transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
-	}
-	.nav-btn:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 7px 0 var(--green-dark);
-		filter: brightness(1.05);
-	}
-	.nav-btn:active {
-		transform: translateY(4px);
-		box-shadow: 0 1px 0 var(--green-dark);
-	}
-	.nav-btn:focus-visible {
-		outline: 3px solid var(--ink);
-		outline-offset: 3px;
-	}
-	.nav-btn-ghost {
-		color: var(--navy);
-		background: transparent;
-		border: 2px solid var(--navy);
-		box-shadow: none;
-		padding: 6px 16px;
-	}
-	.nav-btn-ghost:hover {
-		background: var(--navy);
-		color: var(--paper);
-		box-shadow: none;
-	}
-	.nav-btn-ghost:active {
-		transform: translateY(1px);
-		box-shadow: none;
-	}
 	.ages {
-		font-size: 0.85rem;
-		font-weight: 700;
-		color: var(--green);
-		white-space: nowrap;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		font-family: var(--font-mono);
+		line-height: 1.05;
+		color: var(--muted);
+		border-right: 1.5px solid var(--rule-strong);
+		padding-right: 0.85rem;
+		margin-right: 0.1rem;
+		user-select: none;
 	}
+	.ages-num {
+		font-size: 0.72rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+	}
+	.ages-unit {
+		font-size: 0.58rem;
+		letter-spacing: 0.22em;
+		text-transform: uppercase;
+	}
+
 	.burger {
 		display: none;
 		flex-direction: column;
@@ -192,15 +172,7 @@
 		.ages {
 			display: none;
 		}
-		.nav-btn {
-			font-size: 0.85rem;
-			padding: 7px 14px;
-			min-height: 36px;
-		}
-	}
-
-	/* Too tight for two buttons — the dashboard still offers the connection. */
-	@media (max-width: 560px) {
+		/* Two text actions crowd the collapsed bar; the dashboard still offers it. */
 		.nav-btn-hackatime {
 			display: none;
 		}

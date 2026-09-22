@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '$lib/components/Icon.svelte';
 	import { page } from '$app/state';
 	import { builders, checkpoints } from '$lib/data';
 	import Checkpoint from '$lib/components/Checkpoint.svelte';
@@ -59,7 +60,7 @@
 			<div class="wrap">
 				<h1>Nobody here.</h1>
 				<p class="lede">No builder at that trailhead.</p>
-				<a class="btn" href="/library">Back to the library</a>
+				<a class="btn btn-outline btn-plain" href="/library"><Icon name="view-back" size={14} /> Back to the library</a>
 			</div>
 		</section>
 	{/if}

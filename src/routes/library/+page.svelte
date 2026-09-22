@@ -70,7 +70,7 @@
 	.filter {
 		background: transparent;
 		border: 2px solid var(--rule-strong);
-		border-radius: 999px;
+		border-radius: 0;
 		color: var(--slate);
 		padding: 0.45em 1em;
 		font-family: var(--font-sans);

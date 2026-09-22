@@ -28,7 +28,7 @@
 			<p class="go-big">
 				The hackathon is free.<br /><span class="dim">Getting there shouldn't stop you.</span>
 			</p>
-			<a class="btn" href="/ireland">Dublin, December 5 <span aria-hidden="true">→</span></a>
+			<a class="btn" href="/ireland">Dublin, December 5</a>
 			<p class="go-fine">
 				Travel support depends on actual travel cost, available programme budget and approval.
 				Banked hours don't guarantee a flight or a set amount.

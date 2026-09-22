@@ -65,6 +65,9 @@
 	--paper-soft: #e3ebdf;
 	--white: #ffffff;
 
+	/* warm document cream — button ink on navy, never a page background */
+	--cream: #f8f3e7;
+
 	--rule: rgba(23, 37, 63, 0.16);
 	--rule-strong: rgba(23, 37, 63, 0.3);
 
@@ -167,69 +170,132 @@ button {
 	font-family: var(--font-mono);
 }
 
-/* ---------- buttons: chunky, pressable ---------- */
+/* ---------- buttons ----------
+   Printed-guide, not component library. Flat fills, square corners, uppercase
+   signage type. No shadows, no gradients, no pill radii anywhere on the site.
+   The recurring device is a direction marker: a rule that draws outward into an
+   arrowhead on hover, so an action reads as a heading on a map.
+   -------------------------------------------------------------- */
 
 .btn {
 	display: inline-flex;
 	align-items: center;
-	justify-content: center;
-	gap: 10px;
-	min-height: 54px;
-	padding: 14px 26px;
-	border: 0;
-	border-radius: 16px;
+	gap: 14px;
+	min-height: 48px;
+	padding: 12px 18px;
+	border: 1.5px solid var(--navy);
+	border-radius: 0;
 	font-family: var(--font-sans);
-	font-size: 1rem;
-	font-weight: 800;
-	color: var(--white);
-	background: var(--green);
-	--btn-shadow: var(--green-dark);
-	box-shadow: 0 8px 0 var(--btn-shadow);
+	font-size: 0.9rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--cream);
+	background: var(--navy);
 	text-decoration: none;
 	cursor: pointer;
-	transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+	transition: background 120ms ease, color 120ms ease;
 }
 
 .btn:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 10px 0 var(--btn-shadow);
-	filter: brightness(1.05);
-}
-
-.btn:active {
-	transform: translateY(6px);
-	box-shadow: 0 2px 0 var(--btn-shadow);
-	filter: brightness(0.97);
+	background: transparent;
+	color: var(--navy);
 }
 
 .btn:focus-visible {
-	outline: 3px solid var(--ink);
+	outline: 2px solid var(--navy);
 	outline-offset: 3px;
 }
 
-.btn-deep {
-	background: var(--green-dark);
-	--btn-shadow: #14512b;
+/* The direction marker: a rule ending in an arrowhead, drawn with borders so it
+   inherits the button ink through currentColor on inversion. */
+.btn::after {
+	content: '';
+	width: 18px;
+	height: 0;
+	border-top: 1.5px solid currentColor;
+	position: relative;
+	transition: width 120ms ease;
 }
+
+.btn::before {
+	content: '';
+	order: 1;
+	width: 6px;
+	height: 6px;
+	margin-left: -9px;
+	border-top: 1.5px solid currentColor;
+	border-right: 1.5px solid currentColor;
+	transform: rotate(45deg);
+	transition: transform 120ms ease;
+}
+
+.btn:hover::after {
+	width: 30px;
+}
+
+/* Actions that are not a heading anywhere — no marker. */
+.btn-plain::after,
+.btn-plain::before {
+	display: none;
+}
+
+/* ---------- secondary: outlined, same geometry ---------- */
 
 .btn-outline {
 	background: transparent;
 	color: var(--navy);
-	border: 3px solid var(--navy);
-	box-shadow: none;
-	padding: 11px 23px;
+	border: 1.5px solid var(--navy);
 }
 
 .btn-outline:hover {
 	background: var(--navy);
-	color: var(--paper);
-	transform: translateY(-2px);
-	box-shadow: none;
+	color: var(--cream);
 }
 
-.btn-outline:active {
-	transform: translateY(1px);
-	box-shadow: none;
+/* ---------- text actions: underline, no container ---------- */
+
+.link-action {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 700;
+	font-size: 0.85rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--navy);
+	background: none;
+	border: 0;
+	padding: 0;
+	cursor: pointer;
+	text-decoration: none;
+	border-bottom: 1.5px solid var(--navy);
+	transition: border-color 120ms ease, color 120ms ease;
+}
+
+.link-action:hover {
+	color: var(--green-dark);
+	border-bottom-color: var(--green-dark);
+}
+
+/* A bordered square holding the glyph — a stamp, not a chip. */
+.link-action .stamp {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border: 1.5px solid currentColor;
+	border-radius: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.btn,
+	.btn::after,
+	.btn::before,
+	.link-action {
+		transition: none;
+	}
 }
 
 /* ---------- cards / surfaces ---------- */

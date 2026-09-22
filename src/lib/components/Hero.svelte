@@ -41,7 +41,7 @@
 				aria-label="Your email address"
 				required
 			/>
-			<button class="btn" type="submit">Get started <span aria-hidden="true">→</span></button>
+			<button class="btn" type="submit">Start expedition</button>
 		</form>
 
 		{#if joined}

@@ -1,3 +1,6 @@
+<script lang="ts">
+</script>
+
 <section class="section dublin-section" id="dublin">
 	<div class="wrap">
 		<h2>There's also a hackathon in Dublin.</h2>
@@ -29,7 +32,7 @@
 				costs, the budget available and approval. Banked hours don't guarantee a flight or a set
 				amount.
 			</p>
-			<a class="btn" href="/#how-it-works">Start logging hours <span aria-hidden="true">→</span></a>
+			<a class="btn" href="/#how-it-works">Start logging hours</a>
 		</div>
 
 		<p class="clarify">

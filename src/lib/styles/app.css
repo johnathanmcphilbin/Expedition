@@ -129,7 +129,7 @@ textarea:focus {
 	text-transform: uppercase;
 	letter-spacing: 0.07em;
 	padding: 0.25em 0.6em;
-	border-radius: 999px;
+	border-radius: 0;
 	border: 2px solid var(--rule-strong);
 	color: var(--muted);
 	white-space: nowrap;
