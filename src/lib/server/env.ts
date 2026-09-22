@@ -81,6 +81,29 @@ export const config = {
  * (http://localhost:5175) is used instead.
  */
 export function callbackUrl(origin: string, path: string): string {
-	const base = env.APP_ORIGIN?.trim().replace(/\/+$/, '') || origin;
-	return new URL(path, base).toString();
+	return new URL(path, publicOrigin() ?? origin).toString();
+}
+
+/**
+ * The origin to build callbacks from, or null to fall back to the request.
+ *
+ * `APP_ORIGIN` is the canonical knob. `HCA_REDIRECT_URI` is accepted as a
+ * second source because it is natural to configure the full registered
+ * callback rather than a bare origin; we take its origin so that Hackatime's
+ * callback is derived consistently from the same host.
+ */
+function publicOrigin(): string | null {
+	const explicit = env.APP_ORIGIN?.trim();
+	if (explicit) return explicit.replace(/\/+$/, '');
+
+	const registered = env.HCA_REDIRECT_URI?.trim();
+	if (registered) {
+		try {
+			return new URL(registered).origin;
+		} catch {
+			throw new Error('HCA_REDIRECT_URI is not a valid absolute URL');
+		}
+	}
+
+	return null;
 }
