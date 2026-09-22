@@ -65,7 +65,16 @@ export const config = {
 	}
 };
 
-/** Absolute callback URL, derived from the actual request origin. */
+/**
+ * Absolute callback URL for an OAuth `redirect_uri`.
+ *
+ * Providers match this byte-for-byte against what is registered, so in
+ * production we do not trust the request origin: behind a TLS-terminating
+ * proxy it arrives as `http://` or as an internal hostname, and either is a
+ * mismatch. `APP_ORIGIN` pins it. Left unset in dev, the request origin
+ * (http://localhost:5175) is used instead.
+ */
 export function callbackUrl(origin: string, path: string): string {
-	return new URL(path, origin).toString();
+	const base = env.APP_ORIGIN?.trim().replace(/\/+$/, '') || origin;
+	return new URL(path, base).toString();
 }

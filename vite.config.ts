@@ -3,6 +3,11 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+	// Pinned, not incremented: the OAuth redirect URIs registered with Hack Club
+	// Auth and Hackatime are absolute, so a drifting port breaks every login.
+	// strictPort makes a busy port a loud failure instead of a silent 5174.
+	server: { port: 5175, strictPort: true },
+
 	plugins: [
 		sveltekit({
 			compilerOptions: {

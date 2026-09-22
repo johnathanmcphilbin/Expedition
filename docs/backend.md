@@ -19,13 +19,27 @@ Fill in six values. `.env` is gitignored; never commit real values.
 | `SUPABASE_SERVICE_ROLE_KEY` | Same page. **Server-only, bypasses RLS.** |
 | `HCA_CLIENT_ID` / `HCA_CLIENT_SECRET` | OAuth client on `auth.hackclub.com` |
 | `HACKATIME_CLIENT_ID` / `HACKATIME_CLIENT_SECRET` | OAuth client on `hackatime.hackclub.com` |
+| `APP_ORIGIN` | Production only: `https://expedition.hackclub.com` |
 
-Redirect URIs to register:
+Redirect URIs to register. Both environments can be registered on the same
+OAuth client — Doorkeeper takes one URI per line:
 
 ```
-http://localhost:5175/auth/callback              (Hack Club Auth)
-http://localhost:5175/auth/hackatime/callback    (Hackatime)
+production
+https://expedition.hackclub.com/auth/callback              (Hack Club Auth)
+https://expedition.hackclub.com/auth/hackatime/callback    (Hackatime)
+
+development
+http://localhost:5175/auth/callback                        (Hack Club Auth)
+http://localhost:5175/auth/hackatime/callback              (Hackatime)
 ```
+
+The `redirect_uri` we send is built from `APP_ORIGIN` when it is set, and from
+the request origin otherwise. Set `APP_ORIGIN` in production: behind a
+TLS-terminating proxy the request origin can arrive as `http://` or as an
+internal hostname, and OAuth providers reject anything that is not a
+byte-for-byte match. The dev port is pinned to 5175 in `vite.config.ts` for the
+same reason — a drifting port silently breaks the registered URI.
 
 Hackatime scopes: `profile read`. **Never request `admin`.**
 
