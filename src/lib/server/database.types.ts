@@ -119,6 +119,29 @@ type Table<Row> = {
 	Relationships: [];
 };
 
+/** Per-project hours, derived from the ledger. See migration 0003. */
+export type ProjectHoursRow = {
+	project_id: string;
+	user_id: string;
+	title: string;
+	hackatime_project: string | null;
+	hours_earned: number;
+	checkpoints_approved: number;
+	last_checkpoint_at: string | null;
+}
+
+/** Totals across every project — how far around the expedition they are. */
+export type ExpeditionProgressRow = {
+	user_id: string;
+	hours_earned: number;
+	hours_target: number;
+	checkpoints_reached: number;
+	checkpoints_total: number;
+	percent_complete: number;
+	hours_remaining: number;
+	finished: boolean;
+}
+
 export interface Database {
 	public: {
 		Tables: {
@@ -133,6 +156,8 @@ export interface Database {
 		};
 		Views: {
 			user_hour_balances: { Row: HourBalanceRow; Relationships: [] };
+			project_hours: { Row: ProjectHoursRow; Relationships: [] };
+			user_expedition_progress: { Row: ExpeditionProgressRow; Relationships: [] };
 		};
 		Functions: {
 			review_submission: {

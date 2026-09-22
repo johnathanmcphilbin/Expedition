@@ -7,6 +7,8 @@ import type {
 	ReviewRow,
 	HourTransactionRow,
 	HourBalanceRow,
+	ProjectHoursRow,
+	ExpeditionProgressRow,
 	UserRow
 } from './database.types';
 
@@ -125,6 +127,44 @@ export async function listAttachments(submissionId: string): Promise<AttachmentR
 	return (data ?? []) as AttachmentRow[];
 }
 
+/**
+ * Projects with their earned hours attached.
+ *
+ * Two reads rather than an embedded join: `project_hours` is a view, and
+ * PostgREST will not traverse a foreign key into one. They are keyed by
+ * project id and merged here.
+ */
+export async function listProjectsWithHours(
+	userId: string
+): Promise<(ProjectRow & { hours: ProjectHoursRow | null })[]> {
+	const [projects, hours] = await Promise.all([
+		listProjects(userId),
+		db().from('project_hours').select('*').eq('user_id', userId)
+	]);
+
+	const byProject = new Map<string, ProjectHoursRow>(
+		((hours.data ?? []) as ProjectHoursRow[]).map((h) => [h.project_id, h])
+	);
+
+	return projects.map((p) => ({ ...p, hours: byProject.get(p.id) ?? null }));
+}
+
+/** Hackatime project names already claimed by this user's other projects. */
+export async function claimedHackatimeProjects(
+	userId: string,
+	exceptProjectId?: string
+): Promise<string[]> {
+	const { data } = await db()
+		.from('projects')
+		.select('id, hackatime_project')
+		.eq('user_id', userId)
+		.not('hackatime_project', 'is', null);
+
+	return ((data ?? []) as Pick<ProjectRow, 'id' | 'hackatime_project'>[])
+		.filter((p) => p.id !== exceptProjectId && p.hackatime_project)
+		.map((p) => p.hackatime_project as string);
+}
+
 // ------------------------------------------------------------------ hours ---
 
 /** Balances are derived from the ledger view, never from a stored column. */
@@ -141,6 +181,28 @@ export async function getBalance(userId: string): Promise<HourBalanceRow> {
 			hours_earned: 0,
 			hours_spent: 0,
 			hours_available: 0
+		}
+	);
+}
+
+/** How far around the expedition this user is, totalled across all projects. */
+export async function getProgress(userId: string): Promise<ExpeditionProgressRow> {
+	const { data } = await db()
+		.from('user_expedition_progress')
+		.select('*')
+		.eq('user_id', userId)
+		.maybeSingle();
+
+	return (
+		(data as ExpeditionProgressRow | null) ?? {
+			user_id: userId,
+			hours_earned: 0,
+			hours_target: 40,
+			checkpoints_reached: 0,
+			checkpoints_total: 8,
+			percent_complete: 0,
+			hours_remaining: 40,
+			finished: false
 		}
 	);
 }

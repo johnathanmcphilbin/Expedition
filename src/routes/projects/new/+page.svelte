@@ -43,11 +43,24 @@
 				{#if data.hackatimeProjects.length}
 					<select id="hackatime_project" name="hackatime_project">
 						<option value="">Not tracked in Hackatime</option>
-						{#each data.hackatimeProjects as name (name)}
-							<option value={name}>{name}</option>
+						{#each data.hackatimeProjects as p (p.name)}
+							<!-- already claimed by another project: selecting it would count
+							     the same hours twice, and the database would refuse anyway -->
+							<option value={p.name} disabled={p.taken}>
+								{p.name} — {p.tracked}{p.taken ? ' (already connected)' : ''}
+							</option>
 						{/each}
 					</select>
-					<span class="hint">Links your tracked coding time to this project for reviewers.</span>
+					<span class="hint">
+						Links your tracked coding time to this project for reviewers. You can run
+						several projects at once — your hours add up across all of them.
+					</span>
+				{:else if data.connected}
+					<input id="hackatime_project" name="hackatime_project" type="text" maxlength="200" />
+					<span class="hint">
+						Hackatime is connected but has no tracked projects yet. Type the name and it
+						will line up once time is logged.
+					</span>
 				{:else}
 					<input id="hackatime_project" name="hackatime_project" type="text" maxlength="200" />
 					<span class="hint">

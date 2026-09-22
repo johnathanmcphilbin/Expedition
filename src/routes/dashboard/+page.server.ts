@@ -1,15 +1,22 @@
 import type { PageServerLoad } from './$types';
 import { requireUser, isReviewer } from '$lib/server/guards';
-import { listProjects, listSubmissions, getBalance, countPendingReviews } from '$lib/server/queries';
+import {
+	listProjectsWithHours,
+	listSubmissions,
+	getBalance,
+	getProgress,
+	countPendingReviews
+} from '$lib/server/queries';
 import { connectionStatus } from '$lib/server/hackatime';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const user = requireUser(locals, '/dashboard');
 
-	const [projects, submissions, balance, hackatime] = await Promise.all([
-		listProjects(user.id),
+	const [projects, submissions, balance, progress, hackatime] = await Promise.all([
+		listProjectsWithHours(user.id),
 		listSubmissions(user.id),
 		getBalance(user.id),
+		getProgress(user.id),
 		connectionStatus(user.id)
 	]);
 
@@ -22,6 +29,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		projects,
 		submissions,
 		balance,
+		// totalled across every project — one expedition, many projects
+		progress,
 		// connectionStatus deliberately returns no tokens
 		hackatime,
 		pendingReviews: isReviewer(user) ? await countPendingReviews() : null,

@@ -51,6 +51,7 @@ Run the migrations in order against your Supabase project (SQL Editor, or
 ```
 supabase/migrations/0001_init.sql
 supabase/migrations/0002_review_submission.sql
+supabase/migrations/0003_project_progress.sql
 ```
 
 ### 3. Storage bucket
@@ -118,6 +119,25 @@ and `BEFORE DELETE` triggers raise an exception. Not a convention; enforced.
 V1 only writes `checkpoint_approved` credits. `reward_claimed` and
 `travel_allocation` already exist in the enum with a sign constraint (credits
 positive, debits negative), so spending can be added without a migration.
+
+### Many projects, one expedition
+
+A participant runs as many projects as they like. Each may map to one Hackatime
+project, enforced by `projects_one_hackatime_per_user` — without it two projects
+could claim the same tracked time and count it twice.
+
+Progress is **not** stored. Two views in migration 0003 derive it from the
+ledger:
+
+| View | Answers |
+| --- | --- |
+| `project_hours` | hours and checkpoints earned per project |
+| `user_expedition_progress` | hours, checkpoints, percent and hours remaining across all projects |
+
+Both count hours **earned**, not the net balance: spending hours on gear must
+not un-travel the expedition. The 40-hour target and the 5-hour checkpoint
+interval are defined in `user_expedition_progress` so every page reads the same
+numbers rather than hard-coding them.
 
 ### Approval is atomic and idempotent
 
