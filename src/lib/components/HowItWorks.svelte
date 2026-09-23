@@ -35,6 +35,12 @@
 	.how-it-works {
 		background: url('/wave-texture.jpg');
 		background-size: 65px auto;
+		/* The bottom wave (::after, below) overlaps down into the next section
+		   in the DOM. A later sibling paints on top of an earlier one by
+		   default, so once that next section has its own opaque background,
+		   it silently buries the wave underneath it unless this is lifted
+		   into its own stacking layer above the default one. */
+		z-index: 1;
 	}
 
 	/* The wave crests overlap upward into whatever section comes before this
