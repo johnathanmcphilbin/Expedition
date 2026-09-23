@@ -18,11 +18,7 @@
 	<div class="wrap hero-inner">
 		<div class="panel">
 			<div class="mark" aria-hidden="true">
-				<svg viewBox="0 0 40 40">
-					<path d="M6 27 h28 l-5 8 H11 Z" fill="var(--navy)" />
-					<path d="M20 5 v20" stroke="var(--navy)" stroke-width="3" stroke-linecap="round" />
-					<path d="M22 8 l10 14 H22 Z" fill="var(--green)" />
-				</svg>
+				<img src="/logo.png" alt="" width="46" height="43" />
 			</div>
 			<div class="titles">
 				<h1><span class="light">a hack club ysws:</span> expedition</h1>
@@ -86,9 +82,10 @@
 		border-right: 3px solid var(--navy);
 		padding: 1rem;
 	}
-	.mark svg {
+	.mark img {
 		width: 100%;
-		max-width: 44px;
+		max-width: 46px;
+		height: auto;
 	}
 
 	.titles {

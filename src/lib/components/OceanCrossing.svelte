@@ -11,6 +11,16 @@
 		const ctx = canvas.getContext('2d');
 		if (!ctx) return;
 
+		// The Expedition mark, drawn in place of the old vector boat. The
+		// artwork's own sail/hull split sits at ~58% down the image — that line
+		// is treated as the waterline so the mark rides the wave the same way
+		// the drawn boat did, instead of bobbing centred on empty sail.
+		const LOGO_WATERLINE = 0.58;
+		const logo = new Image();
+		let logoReady = false;
+		logo.onload = () => (logoReady = true);
+		logo.src = '/logo.png';
+
 		const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 		let w = 0;
@@ -104,40 +114,24 @@
 		}
 
 		function drawBoat() {
+			if (!logoReady) return;
+
 			ctx!.save();
 			ctx!.translate(boat.x, boat.y);
 			ctx!.rotate(boat.angle);
 
 			const s = BOAT_W / 46;
-			ctx!.lineWidth = 3 * s;
-			ctx!.lineCap = 'round';
-			ctx!.lineJoin = 'round';
-
-			// mast
-			ctx!.beginPath();
-			ctx!.moveTo(0, -4 * s);
-			ctx!.lineTo(0, -34 * s);
-			ctx!.strokeStyle = '#f6f1e3';
-			ctx!.stroke();
-
-			// sail
-			ctx!.beginPath();
-			ctx!.moveTo(2 * s, -32 * s);
-			ctx!.lineTo(20 * s, -8 * s);
-			ctx!.lineTo(2 * s, -6 * s);
-			ctx!.closePath();
-			ctx!.fillStyle = '#2f9e57';
-			ctx!.fill();
-
-			// hull
-			ctx!.beginPath();
-			ctx!.moveTo(-22 * s, -4 * s);
-			ctx!.lineTo(20 * s, -4 * s);
-			ctx!.lineTo(12 * s, 9 * s);
-			ctx!.lineTo(-14 * s, 9 * s);
-			ctx!.closePath();
-			ctx!.fillStyle = '#f6f1e3';
-			ctx!.fill();
+			// same on-screen height the old hand-drawn boat occupied (mast tip to
+			// hull base), so the mark neither dwarfs nor shrinks against the waves
+			const targetH = 43 * s;
+			const targetW = targetH * (logo.naturalWidth / logo.naturalHeight);
+			ctx!.drawImage(
+				logo,
+				-targetW / 2,
+				-targetH * LOGO_WATERLINE,
+				targetW,
+				targetH
+			);
 
 			ctx!.restore();
 		}

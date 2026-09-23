@@ -20,7 +20,10 @@
 
 <header class="nav">
 	<div class="wrap nav-inner">
-		<a href="/" class="logo">Expedition</a>
+		<a href="/" class="logo">
+			<img src="/logo.png" alt="" width="28" height="26" />
+			Expedition
+		</a>
 
 		<nav class="links" class:open>
 			<a href="/#how-it-works">How it works</a>
@@ -82,12 +85,19 @@
 		padding-bottom: 1rem;
 	}
 	.logo {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
 		font-size: 1.3rem;
 		font-weight: 800;
 		letter-spacing: -0.02em;
 		color: var(--navy);
 		text-decoration: none;
 		flex-shrink: 0;
+	}
+	.logo img {
+		height: 26px;
+		width: auto;
 	}
 	.links {
 		display: flex;

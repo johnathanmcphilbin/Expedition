@@ -1,7 +1,10 @@
 <footer class="footer">
 	<div class="wrap footer-inner">
 		<div class="col">
-			<span class="brand">Expedition</span>
+			<span class="brand">
+				<img src="/logo.png" alt="" width="26" height="24" />
+				Expedition
+			</span>
 			<p class="tag">A Hack Club YSWS. Build something worth exploring.</p>
 		</div>
 
@@ -33,10 +36,17 @@
 	}
 
 	.brand {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
 		font-size: 1.25rem;
 		font-weight: 800;
 		letter-spacing: -0.02em;
 		color: var(--navy);
+	}
+	.brand img {
+		height: 24px;
+		width: auto;
 	}
 
 	.tag {
