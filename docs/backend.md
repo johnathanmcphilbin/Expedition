@@ -55,6 +55,8 @@ supabase/migrations/0001_init.sql
 supabase/migrations/0002_review_submission.sql
 supabase/migrations/0003_project_progress.sql
 supabase/migrations/0004_hackclub_submissions.sql
+supabase/migrations/0005_mailing_signups.sql
+supabase/migrations/0006_reward_claims.sql
 ```
 
 0004 drops the tables 0002/0003 built the old submission system on top of
@@ -145,10 +147,28 @@ be deleted, only offset with an equal and opposite `manual_adjustment` from
 `/admin`.
 
 `checkpoint_approved` is the only credit type produced automatically, and only
-by `review_hackclub_submission()` on an approval. `reward_claimed` and
-`travel_allocation` are debits an admin enters by hand from the roster on
-`/admin`, once a spend has been agreed some other way — there is currently no
-self-service way for a participant to redeem hours for gear.
+by `review_hackclub_submission()` on an approval. `reward_claimed` debits are
+written by `claim_reward()` when a participant spends hours on `/claim`.
+`travel_allocation` and one-off corrections are entered by an admin from the
+roster on `/admin`.
+
+### Spending hours
+
+`/claim` shows the catalogue from `src/lib/data.ts` (the same eight drops the
+public rewards page shows) priced in hours. Claiming runs `claim_reward()`,
+which — in one transaction — locks the user row, recomputes their balance
+from the ledger, refuses if they can't afford it, then writes the claim and
+its debit together. Two tabs cannot overdraw a balance, because the check and
+the debit are never separated.
+
+Price and name are always read from the catalogue **server-side**; the form
+only submits which tier was picked, so a tampered request cannot invent a
+cheaper price.
+
+Cancelling a claim (`/admin` → "Cancel & refund") cannot delete the original
+debit — the ledger is append-only — so `cancel_reward_claim()` writes a
+compensating credit instead. The history stays honest: the spend happened,
+then it was refunded.
 
 ### Tracked, submitted, approved — not the same number
 
@@ -196,14 +216,30 @@ things down before deciding.
 
 ### Writing back to Airtable
 
-After a review is saved, the server writes it into a **separate table
-Expedition owns** — `Expedition Reviews` (`tblPXbJtyA6i9XjeU`, same base) —
-never into Hack Club's own `YSWS Project Submission` fields.
-`src/lib/server/airtable.ts::writeReviewToAirtable` upserts by matching on the
-`Expedition Review ID` field, so saving the same review twice updates one
-Airtable row instead of creating duplicates. `AIRTABLE_API_KEY` is read only
-in `src/lib/server/env.ts` and only ever used from server code — it is never
-sent to the browser.
+After a review is saved, the server fills the answer **directly onto Hack
+Club's own submission row** — an ordinary `PATCH` by record id against
+`YSWS Project Submission`, into fields Expedition added to that table:
+
+```
+Expedition Hackatime Project        the project this review is scoped to
+Expedition Approved Hours           the reviewer's number
+Expedition Review Status            Pending / Approved / Needs Changes / Rejected
+Expedition Reviewer Notes           internal
+Expedition Feedback to Participant  shown to them
+Expedition Reviewer
+Expedition Reviewed At
+```
+
+That's where this org already looks for an answer, so the review goes there
+rather than into a table of Expedition's own. Hack Club's own fields are
+never touched — only the `Expedition …` ones.
+
+`AIRTABLE_API_KEY` is read only in `src/lib/server/env.ts` and only ever used
+from server code — it is never sent to the browser.
+
+(An earlier `Expedition Reviews` table, `tblPXbJtyA6i9XjeU`, was created for
+this and is now unused. Airtable's API cannot delete a table, so it is left
+in place — delete it by hand if you want it gone.)
 
 If the Airtable write fails, the review and any ledger credit are **already
 committed** — the action reports the Airtable failure separately rather than
@@ -233,7 +269,7 @@ without tokens.
 | `/auth/logout` | POST only (a GET logout is CSRF-able) |
 | `/auth/hackatime`, `/auth/hackatime/callback` | signed in |
 | `/onboarding` | signed in, connect Hackatime — skipped automatically once connected |
-| `/dashboard`, `/your-hours`, `/submit-to-hackclub` | signed in |
+| `/dashboard`, `/your-hours`, `/submit-to-hackclub`, `/claim` | signed in |
 | `/admin`, `/admin/reviews` | admin only (404 otherwise) |
 
 Admin routes return **404, not 403**, so their existence isn't confirmed to
@@ -271,8 +307,8 @@ ever been recorded through them.
   corrected by a human (the participant implicitly by what they submit, the
   reviewer explicitly by picking from a dropdown). Nothing about *approved*
   hours depends on this matching being right; it only affects display.
-- **No self-service reward redemption.** `reward_claimed` and
-  `travel_allocation` ledger debits are entered by hand on `/admin` — there is
-  no form for a participant to request gear for banked hours yet.
+- **Reward fulfilment is manual.** Claiming debits the ledger immediately and
+  records the request; actually posting the gear is off-platform, tracked by
+  the "Mark sent" action on `/admin`.
 - **Rate limiting.** No throttling on the review-save action or the Airtable
   sync yet.

@@ -72,8 +72,11 @@ export const config = {
 	 */
 	airtable: {
 		baseId: 'appGcYrt3CFYab05y',
-		submissionTableId: 'tblfwLewpflB3hH1Y', // "YSWS Project Submission" — Hack Club's, read-only
-		reviewTableId: 'tblPXbJtyA6i9XjeU', // "Expedition Reviews" — Expedition's own, read+write
+		// "YSWS Project Submission" — Hack Club's own table. Read AND written:
+		// Expedition's review answer is filled directly into the
+		// "Expedition …" fields on the submission row itself, not into a
+		// separate table — that's where this org already looks.
+		submissionTableId: 'tblfwLewpflB3hH1Y',
 		get apiKey() {
 			return required('AIRTABLE_API_KEY');
 		}

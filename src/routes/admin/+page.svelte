@@ -56,6 +56,45 @@
 			</p>
 		</section>
 
+		<p class="section-label">Reward claims</p>
+		{#if data.claims.length}
+			<div class="row-list roster" style="margin-bottom:2.5rem">
+				{#each data.claims as c (c.id)}
+					<div class="roster-row">
+						<div class="roster-id">
+							<span class="row-title">{c.reward_name}</span>
+							<span class="row-meta">
+								{c.owner?.display_name ?? 'unknown'}{c.owner?.email ? ` · ${c.owner.email}` : ''}
+							</span>
+							{#if c.note}<span class="row-meta">“{c.note}”</span>{/if}
+						</div>
+						<div class="roster-balance">
+							<span class="row-title">{c.hours_cost}h</span>
+							<span class="row-meta">{new Date(c.created_at).toLocaleDateString()}</span>
+						</div>
+						<span class="status status-{c.status === 'fulfilled'
+							? 'approved'
+							: c.status === 'cancelled'
+								? 'rejected'
+								: 'pending'}">{c.status}</span>
+
+						{#if c.status === 'requested'}
+							<form method="POST" action="?/fulfil" use:enhance style="display:inline">
+								<input type="hidden" name="claim_id" value={c.id} />
+								<button class="btn btn-outline" type="submit">Mark sent</button>
+							</form>
+							<form method="POST" action="?/cancel" use:enhance style="display:inline">
+								<input type="hidden" name="claim_id" value={c.id} />
+								<button class="link-action" type="submit">Cancel &amp; refund</button>
+							</form>
+						{/if}
+					</div>
+				{/each}
+			</div>
+		{:else}
+			<p class="empty" style="margin-bottom:2.5rem">No claims yet.</p>
+		{/if}
+
 		<p class="section-label">Everyone's hours</p>
 		<div class="row-list roster">
 			{#each data.users as u (u.id)}

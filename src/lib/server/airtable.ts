@@ -4,9 +4,11 @@ import type { HackClubSubmissionRow, SubmissionReviewRow, UserRow } from './data
 
 /**
  * Hack Club's Unified YSWS Airtable — the canonical record of what was
- * submitted. Everything here either reads the (Hack Club-owned) submission
- * table, or writes into a separate (Expedition-owned) review table. Nothing
- * ever writes into Hack Club's own submission fields.
+ * submitted, and where Expedition's review answer is filled in directly.
+ * Expedition's review fields (`Expedition Approved Hours`, `Expedition
+ * Review Status`, etc.) live as columns on Hack Club's own submission row —
+ * not in a table of Expedition's own — because that's where this org
+ * already looks for this kind of answer.
  *
  * All calls are server-side only. `AIRTABLE_API_KEY` is read through
  * `$lib/server/env`, which SvelteKit refuses to bundle into client code.
@@ -35,6 +37,14 @@ interface SubmissionFields {
 	'Justification - Submitter Hackatime ID'?: string;
 	'Justification - Hackatime Project Name(s) + Date Range(s)'?: string;
 	'Automation - Status'?: string;
+	// Expedition's own review answer, filled in directly on this row
+	'Expedition Hackatime Project'?: string;
+	'Expedition Approved Hours'?: number;
+	'Expedition Review Status'?: string;
+	'Expedition Reviewer Notes'?: string;
+	'Expedition Feedback to Participant'?: string;
+	'Expedition Reviewer'?: string;
+	'Expedition Reviewed At'?: string;
 }
 
 /**
@@ -128,22 +138,16 @@ export async function syncHackClubSubmissions(
 }
 
 /**
- * Write one review decision into Expedition's own "Expedition Reviews"
- * table — never into Hack Club's submission table. Upserted on "Expedition
- * Review ID", so saving the same review twice updates one Airtable row
- * instead of creating duplicates.
+ * Write one review decision directly onto Hack Club's own submission row —
+ * an ordinary update by record id, not an upsert into a table of
+ * Expedition's own. `submission.airtable_record_id` is exactly the record
+ * this updates; there is nothing to match or create.
  */
 export async function writeReviewToAirtable(
 	review: SubmissionReviewRow,
 	submission: HackClubSubmissionRow,
 	reviewer: UserRow | null
 ): Promise<void> {
-	const participant =
-		[submission.first_name, submission.last_name].filter(Boolean).join(' ') ||
-		submission.email ||
-		submission.hackatime_user_id ||
-		'Unknown';
-
 	const statusLabel: Record<SubmissionReviewRow['status'], string> = {
 		pending: 'Pending',
 		in_review: 'Pending',
@@ -152,33 +156,25 @@ export async function writeReviewToAirtable(
 		rejected: 'Rejected'
 	};
 
-	const res = await fetch(`${API_BASE}/${config.airtable.baseId}/${config.airtable.reviewTableId}`, {
-		method: 'PATCH',
-		headers: headers(),
-		signal: AbortSignal.timeout(15000),
-		body: JSON.stringify({
-			performUpsert: { fieldsToMergeOn: ['Expedition Review ID'] },
-			records: [
-				{
-					fields: {
-						'Expedition Review ID': review.id,
-						Participant: participant,
-						Project: review.hackatime_project,
-						'Hack Club Submission': [{ id: submission.airtable_record_id }],
-						'Expedition User ID': review.user_id,
-						'Hackatime User ID': submission.hackatime_user_id ?? '',
-						'Submitted Hours': review.submitted_hours ?? undefined,
-						'Approved Hours': review.approved_hours ?? undefined,
-						'Review Status': statusLabel[review.status],
-						Reviewer: reviewer?.display_name ?? reviewer?.email ?? '',
-						'Internal Notes': review.internal_notes ?? '',
-						'Participant Feedback': review.participant_feedback ?? '',
-						'Reviewed At': review.reviewed_at ?? undefined
-					}
+	const res = await fetch(
+		`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${submission.airtable_record_id}`,
+		{
+			method: 'PATCH',
+			headers: headers(),
+			signal: AbortSignal.timeout(15000),
+			body: JSON.stringify({
+				fields: {
+					'Expedition Hackatime Project': review.hackatime_project,
+					'Expedition Approved Hours': review.approved_hours ?? undefined,
+					'Expedition Review Status': statusLabel[review.status],
+					'Expedition Reviewer Notes': review.internal_notes ?? '',
+					'Expedition Feedback to Participant': review.participant_feedback ?? '',
+					'Expedition Reviewer': reviewer?.display_name ?? reviewer?.email ?? '',
+					'Expedition Reviewed At': review.reviewed_at ?? undefined
 				}
-			]
-		})
-	});
+			})
+		}
+	);
 
 	if (!res.ok) {
 		const body = await res.text();

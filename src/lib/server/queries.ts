@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import { db } from './supabase';
 import type {
 	MailingSignupRow,
+	RewardClaimRow,
 	HackClubSubmissionRow,
 	SubmissionReviewRow,
 	HourTransactionRow,
@@ -211,6 +212,99 @@ export async function listTransactions(userId: string): Promise<HourTransactionR
 		.eq('user_id', userId)
 		.order('created_at', { ascending: false });
 	return (data ?? []) as HourTransactionRow[];
+}
+
+// ------------------------------------------------------------- claims -----
+
+/**
+ * Spend approved hours on a reward. The affordability check, the claim row
+ * and the ledger debit all happen inside `claim_reward()` in one
+ * transaction — never checked here, where two concurrent requests could both
+ * pass a balance check before either had written its debit.
+ */
+export type ClaimOutcome = { ok: true; claimId: string } | { ok: false; message: string };
+
+export async function claimReward(params: {
+	userId: string;
+	rewardKey: string;
+	rewardName: string;
+	hoursCost: number;
+	note: string | null;
+}): Promise<ClaimOutcome> {
+	const { data, error: e } = await db().rpc('claim_reward', {
+		p_user_id: params.userId,
+		p_reward_key: params.rewardKey,
+		p_reward_name: params.rewardName,
+		p_hours_cost: params.hoursCost,
+		p_note: params.note
+	});
+
+	if (e) {
+		if (/not enough hours/i.test(e.message)) {
+			return { ok: false, message: "You don't have enough approved hours for that yet." };
+		}
+		return { ok: false, message: 'Could not record that claim. Try again.' };
+	}
+	return { ok: true, claimId: data as unknown as string };
+}
+
+export async function listOwnClaims(userId: string): Promise<RewardClaimRow[]> {
+	const { data, error: e } = await db()
+		.from('reward_claims')
+		.select('*')
+		.eq('user_id', userId)
+		.order('created_at', { ascending: false });
+	if (e) throw new Error(e.message);
+	return (data ?? []) as RewardClaimRow[];
+}
+
+export type AdminClaim = RewardClaimRow & {
+	owner: Pick<UserRow, 'display_name' | 'email'> | null;
+};
+
+export async function listAllClaims(): Promise<AdminClaim[]> {
+	const { data, error: e } = await db()
+		.from('reward_claims')
+		.select('*, users(display_name, email)')
+		.order('created_at', { ascending: false });
+	if (e) throw new Error(e.message);
+	return (
+		(data ?? []) as unknown as (RewardClaimRow & {
+			users: Pick<UserRow, 'display_name' | 'email'> | null;
+		})[]
+	).map((c) => ({ ...c, owner: c.users }));
+}
+
+export async function fulfilClaim(claimId: string, adminNotes: string | null): Promise<void> {
+	const { error: e } = await db()
+		.from('reward_claims')
+		.update({
+			status: 'fulfilled',
+			fulfilled_at: new Date().toISOString(),
+			admin_notes: adminNotes
+		})
+		.eq('id', claimId);
+	if (e) throw new Error(e.message);
+}
+
+/** Cancelling refunds via a compensating credit — the debit itself is immutable. */
+export async function cancelClaim(
+	claimId: string,
+	adminId: string,
+	adminNotes: string | null
+): Promise<{ ok: true } | { ok: false; message: string }> {
+	const { error: e } = await db().rpc('cancel_reward_claim', {
+		p_claim_id: claimId,
+		p_admin_id: adminId,
+		p_admin_notes: adminNotes
+	});
+	if (e) {
+		if (/already cancelled/i.test(e.message)) {
+			return { ok: false, message: 'That claim was already cancelled.' };
+		}
+		return { ok: false, message: 'Could not cancel that claim.' };
+	}
+	return { ok: true };
 }
 
 // ----------------------------------------------------------------- admin ---

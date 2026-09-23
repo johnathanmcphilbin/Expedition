@@ -106,6 +106,22 @@ export type SessionRow = {
 	ip: string | null;
 }
 
+export type ClaimStatus = 'requested' | 'fulfilled' | 'cancelled';
+
+export type RewardClaimRow = {
+	id: string;
+	user_id: string;
+	reward_key: string;
+	reward_name: string;
+	hours_cost: number;
+	status: ClaimStatus;
+	note: string | null;
+	admin_notes: string | null;
+	created_at: string;
+	updated_at: string;
+	fulfilled_at: string | null;
+}
+
 export type MailingSignupRow = {
 	email: string;
 	created_at: string;
@@ -145,6 +161,7 @@ export interface Database {
 			hackclub_submissions: Table<HackClubSubmissionRow>;
 			submission_reviews: Table<SubmissionReviewRow>;
 			mailing_signups: Table<MailingSignupRow>;
+			reward_claims: Table<RewardClaimRow>;
 			hour_transactions: Table<HourTransactionRow>;
 			hackatime_connections: Table<HackatimeConnectionRow>;
 		};
@@ -153,6 +170,24 @@ export interface Database {
 			user_expedition_progress: { Row: ExpeditionProgressRow; Relationships: [] };
 		};
 		Functions: {
+			claim_reward: {
+				Args: {
+					p_user_id: string;
+					p_reward_key: string;
+					p_reward_name: string;
+					p_hours_cost: number;
+					p_note?: string | null;
+				};
+				Returns: string;
+			};
+			cancel_reward_claim: {
+				Args: {
+					p_claim_id: string;
+					p_admin_id: string;
+					p_admin_notes?: string | null;
+				};
+				Returns: void;
+			};
 			review_hackclub_submission: {
 				Args: {
 					p_review_id: string;
@@ -171,6 +206,7 @@ export interface Database {
 			submission_status: SubmissionStatus;
 			review_decision: ReviewDecision;
 			hour_transaction_type: HourTransactionType;
+			claim_status: ClaimStatus;
 		};
 	};
 }
