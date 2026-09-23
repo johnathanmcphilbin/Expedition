@@ -30,15 +30,24 @@
 </footer>
 
 <style>
+	/* Footer.svelte is shared across every page, so what's directly above it
+	   varies — a background-colour behind the wave PNG (not just relying on
+	   true transparency) means the crest reads the same light-blue everywhere
+	   instead of only matching on the one page that happens to have --sea-mid
+	   right above it. */
 	.footer-wave {
 		height: 64px;
-		background: url('/wave-band-up.png') repeat-x;
+		background-color: var(--sea-mid);
+		background-image: url('/wave-band-up.png');
+		background-repeat: repeat-x;
 		background-size: auto 100%;
 		margin-bottom: -2px;
 	}
+	/* The deep end — the darkest stop of "the sea gets deeper as you scroll",
+	   so text below flips to light-on-dark rather than the site's usual navy
+	   on pale water. */
 	.footer {
-		background: url('/wave-texture.jpg');
-		background-size: 65px auto;
+		background: var(--navy);
 		padding: 3rem 0 3.5rem;
 	}
 
@@ -55,7 +64,7 @@
 		font-size: 1.4rem;
 		font-weight: 800;
 		letter-spacing: -0.02em;
-		color: var(--navy);
+		color: var(--cream);
 	}
 	.brand img {
 		height: 47px;
@@ -64,7 +73,7 @@
 
 	.tag {
 		margin-top: 0.6rem;
-		color: var(--muted);
+		color: var(--sea-deep);
 		font-size: 0.95rem;
 		max-width: 32ch;
 	}
@@ -79,15 +88,15 @@
 
 	.links-col a {
 		text-decoration: none;
-		color: var(--slate);
+		color: var(--cream);
 		font-weight: 700;
 	}
 	.links-col a:hover {
-		color: var(--green);
+		color: var(--green-bright);
 	}
 
 	.meta-col {
-		color: var(--muted);
+		color: var(--sea-deep);
 		font-weight: 500;
 	}
 	.hc-credit {
@@ -100,7 +109,7 @@
 	}
 
 	.signoff {
-		color: var(--rule-strong);
+		color: var(--navy-soft);
 		font-size: 0.85rem;
 	}
 

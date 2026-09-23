@@ -40,9 +40,16 @@
 <style>
 	/* How It Works hangs a 90px wave down over the top of this section, so
 	   clear it before the heading starts rather than letting the waves crowd
-	   "Where to next." */
+	   "Where to next." Also the next beat of "the sea gets deeper as you go":
+	   Hero starts pale, this section is where it visibly steps darker on the
+	   way down to the footer's navy. */
 	.onward {
+		background: var(--sea-mid);
 		padding-top: calc(90px + clamp(2.5rem, 5vw, 4rem));
+		padding-bottom: clamp(3rem, 6vw, 5rem);
+	}
+	.onward h2 {
+		color: var(--navy);
 	}
 
 	.links {
@@ -57,11 +64,11 @@
 		flex-direction: column;
 		gap: 0.35rem;
 		text-decoration: none;
-		border-top: 3px solid var(--rule-strong);
+		border-top: 3px solid var(--navy);
 		padding-top: 0.9rem;
 	}
 	.onward-link:hover {
-		border-top-color: var(--green);
+		border-top-color: var(--navy-soft);
 	}
 
 	.onward-title {
@@ -76,7 +83,8 @@
 
 	.onward-desc {
 		font-size: 0.95rem;
-		color: var(--muted);
+		/* --muted reads at ~1.6:1 on --sea-mid — far under AA. --ink holds 4.87:1. */
+		color: var(--ink);
 		line-height: 1.45;
 	}
 </style>
