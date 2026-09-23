@@ -14,9 +14,18 @@
 
 	let open = $state(false);
 
+	// The waves are a welcome, not furniture — they roll away as soon as you
+	// start reading so the sticky bar stays out of the way.
+	let scrolled = $state(false);
+	function onScroll() {
+		scrolled = window.scrollY > 24;
+	}
+
 	// Come back to whatever they were reading once Hack Club Auth is done.
 	const signInHref = $derived(`/auth/login?next=${encodeURIComponent(page.url.pathname)}`);
 </script>
+
+<svelte:window onscroll={onScroll} />
 
 <header class="nav">
 	<div class="wrap nav-inner">
@@ -84,7 +93,7 @@
 
 	<!-- The nav's own edge, not a border — waves hang down out of the water
 	     the nav bar represents into the page below. -->
-	<div class="nav-wave" aria-hidden="true"></div>
+	<div class="nav-wave" class:rolled={scrolled} aria-hidden="true"></div>
 </header>
 
 <style>
@@ -100,6 +109,17 @@
 		background: url('/wave-band-down.png') repeat-x;
 		background-size: auto 100%;
 		margin-top: -2px;
+		transition: height 260ms ease, opacity 200ms ease;
+	}
+	/* rolled away once you start scrolling, so the sticky bar stays slim */
+	.nav-wave.rolled {
+		height: 0;
+		opacity: 0;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.nav-wave {
+			transition: none;
+		}
 	}
 	.nav-inner {
 		display: flex;
@@ -201,19 +221,35 @@
 	}
 
 	@media (max-width: 900px) {
+		/* Hangs off the bottom of the bar itself rather than a hard-coded
+		   offset, so it stays put as the nav's own height changes. */
 		.links {
-			position: fixed;
-			top: 65px;
+			position: absolute;
+			top: 100%;
 			left: 0;
 			right: 0;
-			background: var(--paper);
-			border-bottom: 2px solid var(--rule);
+			background: url('/wave-texture.jpg');
+			background-size: 340px auto;
 			flex-direction: column;
 			align-items: flex-start;
 			padding: 1.2rem var(--edge-pad);
 			gap: 1rem;
 			transform: translateY(-140%);
 			transition: transform 0.2s ease;
+			z-index: -1;
+		}
+		/* the menu's own edge — the same waves the bar hangs, not a rule */
+		.links::after {
+			content: '';
+			position: absolute;
+			left: 0;
+			right: 0;
+			top: 100%;
+			height: 48px;
+			background: url('/wave-band-down.png') repeat-x;
+			background-size: auto 100%;
+			margin-top: -2px;
+			pointer-events: none;
 		}
 		.links.open {
 			transform: translateY(0);

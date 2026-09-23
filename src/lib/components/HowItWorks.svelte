@@ -49,6 +49,7 @@
 		background: url('/wave-band-up.png') repeat-x bottom;
 		background-size: auto 100%;
 		margin-bottom: -2px;
+		pointer-events: none;
 	}
 
 	/* The bottom edge, mirroring the nav bar's own bottom edge — waves hang
@@ -63,6 +64,7 @@
 		background: url('/wave-band-down.png') repeat-x top;
 		background-size: auto 100%;
 		margin-top: -2px;
+		pointer-events: none;
 	}
 
 	.heading {

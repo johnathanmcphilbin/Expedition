@@ -38,6 +38,13 @@
 <Footer />
 
 <style>
+	/* How It Works hangs a 90px wave down over the top of this section, so
+	   clear it before the heading starts rather than letting the waves crowd
+	   "Where to next." */
+	.onward {
+		padding-top: calc(90px + clamp(2.5rem, 5vw, 4rem));
+	}
+
 	.links {
 		margin-top: 2.5rem;
 		display: grid;

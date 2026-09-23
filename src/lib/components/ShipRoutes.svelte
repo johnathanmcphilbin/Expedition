@@ -15,19 +15,19 @@
 	}
 
 	const swell = [
-		{ y: 110, amp: 16, wl: 320, colour: 'var(--slate)', o: 0.13, w: 6, dur: 15, dir: 1 },
-		{ y: 215, amp: 26, wl: 420, colour: 'var(--green)', o: 0.2, w: 9, dur: 19, dir: -1 },
-		{ y: 330, amp: 18, wl: 280, colour: 'var(--navy)', o: 0.12, w: 6, dur: 12, dir: 1 },
-		{ y: 450, amp: 30, wl: 500, colour: 'var(--green-dark)', o: 0.16, w: 10, dur: 24, dir: -1 },
-		{ y: 565, amp: 22, wl: 360, colour: 'var(--slate)', o: 0.12, w: 7, dur: 17, dir: 1 },
-		{ y: 680, amp: 26, wl: 440, colour: 'var(--green)', o: 0.18, w: 9, dur: 21, dir: -1 },
-		{ y: 770, amp: 16, wl: 300, colour: 'var(--navy)', o: 0.11, w: 6, dur: 14, dir: 1 }
+		{ y: 110, amp: 16, wl: 320, colour: 'var(--navy-soft)', o: 0.16, w: 6, dur: 15, dir: 1 },
+		{ y: 215, amp: 26, wl: 420, colour: 'var(--blue)', o: 0.26, w: 9, dur: 19, dir: -1 },
+		{ y: 330, amp: 18, wl: 280, colour: 'var(--navy)', o: 0.14, w: 6, dur: 12, dir: 1 },
+		{ y: 450, amp: 30, wl: 500, colour: 'var(--blue-dark)', o: 0.22, w: 10, dur: 24, dir: -1 },
+		{ y: 565, amp: 22, wl: 360, colour: 'var(--navy-soft)', o: 0.15, w: 7, dur: 17, dir: 1 },
+		{ y: 680, amp: 26, wl: 440, colour: 'var(--blue)', o: 0.24, w: 9, dur: 21, dir: -1 },
+		{ y: 770, amp: 16, wl: 300, colour: 'var(--navy)', o: 0.13, w: 6, dur: 14, dir: 1 }
 	];
 
 	// the two crossings, riding on top of the swell
 	const lanes = [
-		{ y: 285, amp: 24, wl: 400, colour: 'var(--green)', w: 8, drift: 20, flow: 5, dir: -1 },
-		{ y: 620, amp: 28, wl: 460, colour: 'var(--green-dark)', w: 8, drift: 26, flow: 7, dir: 1 }
+		{ y: 285, amp: 24, wl: 400, colour: 'var(--blue-dark)', w: 8, drift: 20, flow: 5, dir: -1 },
+		{ y: 620, amp: 28, wl: 460, colour: 'var(--navy)', w: 8, drift: 26, flow: 7, dir: 1 }
 	];
 </script>
 
@@ -51,7 +51,7 @@
 			d={wave(l.y, l.amp, l.wl)}
 			stroke={l.colour}
 			stroke-width={l.w}
-			opacity="0.14"
+			opacity="0.18"
 			style:--shift="{l.dir * l.wl}px"
 			style:animation-duration="{l.drift}s"
 		/>

@@ -65,6 +65,11 @@
 	--paper-soft: #e3ebdf;
 	--white: #ffffff;
 
+	/* open water — sampled from the wave texture so the hero, the nav and the
+	   footer all read as the same sea */
+	--sea: #c9dcec;
+	--sea-deep: #8fb4d2;
+
 	/* warm document cream — button ink on navy, never a page background */
 	--cream: #f8f3e7;
 

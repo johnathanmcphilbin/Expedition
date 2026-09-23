@@ -67,7 +67,8 @@
 		display: flex;
 		align-items: center;
 		padding: 3rem 0;
-		border-bottom: 2px solid var(--rule);
+		/* open water, the same blue the wave texture and nav are cut from */
+		background: linear-gradient(180deg, var(--sea) 0%, var(--sea-deep) 100%);
 	}
 
 	.hero-inner {
@@ -146,10 +147,11 @@
 		margin-top: 0.9rem;
 		font-size: 0.92rem;
 		font-weight: 600;
-		color: var(--muted);
+		/* navy, not muted grey — this sits on the blue sea, not on paper */
+		color: var(--navy);
 	}
 	.form-error {
-		color: var(--red);
+		color: var(--red-dark);
 	}
 
 	@media (max-width: 560px) {
