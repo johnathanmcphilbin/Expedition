@@ -1,12 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin } from '$lib/server/guards';
-import {
-	listAllProjects,
-	listUsersWithBalances,
-	grantHours,
-	countPendingReviews
-} from '$lib/server/queries';
+import { listUsersWithBalances, grantHours, countPendingReviews } from '$lib/server/queries';
 import { signedHours, text, oneOf, uuid, ValidationError } from '$lib/server/validate';
 
 const GRANT_TYPES = ['manual_adjustment', 'reward_claimed', 'travel_allocation'] as const;
@@ -14,13 +9,9 @@ const GRANT_TYPES = ['manual_adjustment', 'reward_claimed', 'travel_allocation']
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
 
-	const [projects, users, pendingReviews] = await Promise.all([
-		listAllProjects(),
-		listUsersWithBalances(),
-		countPendingReviews()
-	]);
+	const [users, pendingReviews] = await Promise.all([listUsersWithBalances(), countPendingReviews()]);
 
-	return { projects, users, pendingReviews };
+	return { users, pendingReviews };
 };
 
 export const actions: Actions = {

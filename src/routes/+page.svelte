@@ -2,6 +2,9 @@
 	import Hero from '$lib/components/Hero.svelte';
 	import HowItWorks from '$lib/components/HowItWorks.svelte';
 	import Footer from '$lib/components/Footer.svelte';
+	import type { ActionData } from './$types';
+
+	let { form }: { form: ActionData } = $props();
 </script>
 
 <svelte:head>
@@ -9,7 +12,7 @@
 </svelte:head>
 
 <main>
-	<Hero />
+	<Hero {form} />
 	<HowItWorks />
 
 	<section class="section onward">

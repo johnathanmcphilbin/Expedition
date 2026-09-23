@@ -118,9 +118,10 @@ export interface HackatimeProjectTime {
 }
 
 /**
- * The Hackatime projects behind this user's OAuth token — the list a
- * participant picks "what you're building" from during onboarding, and the
- * source of truth `getOwnedProject` submissions are checked against.
+ * The Hackatime projects behind this user's OAuth token — what a participant
+ * sees on their dashboard and picks from when submitting to Hack Club, and
+ * what the admin review panel cross-references a submission's claimed
+ * project name against to compute submitted hours.
  *
  * `/authenticated/projects` is scoped to the token itself, unlike the old
  * `/users/{id}/stats` call this replaced, which needed `hackatime_user_id`

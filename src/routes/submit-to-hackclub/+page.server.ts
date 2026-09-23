@@ -1,21 +1,34 @@
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { requireUser } from '$lib/server/guards';
-import { listProjects } from '$lib/server/queries';
+import { connectionStatus, fetchProjectTimes, formatHours } from '$lib/server/hackatime';
 
 /**
- * Hack Club's Unified YSWS submission — a separate, one-time thing per
- * project from Expedition's own checkpoint system. It goes straight to
- * Hack Club's own review/shipping pipeline; nothing here reads its status
- * back or touches this app's ledger. See docs/backend.md for why.
+ * The one place a participant submits a project — Hack Club's own Unified
+ * YSWS form, embedded with their Hackatime ID and chosen project prefilled.
+ * There is no Expedition-specific submission here; the resulting Airtable
+ * row is what the admin review queue picks up (see src/lib/server/airtable.ts).
  */
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const user = requireUser(locals, '/submit-to-hackclub');
-	const projects = await listProjects(user.id);
 
-	// Just restores a picked project across reloads — an unrecognised or
-	// malformed id simply means nothing is pre-selected, not a 500.
-	const requestedId = url.searchParams.get('project');
-	const selected = projects.find((p) => p.id === requestedId) ?? null;
+	const hackatime = await connectionStatus(user.id);
+	if (!hackatime.connected) {
+		redirect(303, '/auth/hackatime?next=/submit-to-hackclub');
+	}
 
-	return { projects, selected };
+	const times = await fetchProjectTimes(user.id);
+	const projects = (times ?? [])
+		.filter((t) => !t.archived)
+		.map((t) => ({ name: t.name, tracked: formatHours(t.totalSeconds) }));
+
+	const requestedName = url.searchParams.get('project');
+	const selected = projects.find((p) => p.name === requestedName) ?? null;
+
+	return {
+		hackatimeUserId: hackatime.hackatimeUserId,
+		hackatimeUnavailable: times === null,
+		projects,
+		selected
+	};
 };

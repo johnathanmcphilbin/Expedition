@@ -64,10 +64,19 @@ export const config = {
 		scope: 'profile read'
 	},
 
-	storage: {
-		bucket: 'submission-evidence',
-		maxBytes: 10 * 1024 * 1024,
-		allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const
+	/**
+	 * Hack Club's Unified YSWS Airtable base — the source of truth for whether
+	 * a project has been submitted. Expedition reads from it and writes its own
+	 * review decisions into a separate table Expedition owns; it never writes
+	 * into Hack Club's own submission fields.
+	 */
+	airtable: {
+		baseId: 'appGcYrt3CFYab05y',
+		submissionTableId: 'tblfwLewpflB3hH1Y', // "YSWS Project Submission" — Hack Club's, read-only
+		reviewTableId: 'tblPXbJtyA6i9XjeU', // "Expedition Reviews" — Expedition's own, read+write
+		get apiKey() {
+			return required('AIRTABLE_API_KEY');
+		}
 	}
 };
 

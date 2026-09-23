@@ -91,6 +91,19 @@ export function signedHours(value: FormDataEntryValue | null, field: string): nu
 	return Math.round(n * 4) / 4;
 }
 
+/**
+ * A plausible email address — deliberately loose (no DNS/MX check, no
+ * confirmation send). Good enough for a mailing-list capture; not a claim
+ * that the address is real or reachable.
+ */
+export function email(value: FormDataEntryValue | null, field: string): string {
+	const raw = text(value, field, { max: 320, required: true })!;
+	if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
+		throw new ValidationError(`${field} must be a valid email address`, field);
+	}
+	return raw.toLowerCase();
+}
+
 export function uuid(value: string | undefined, field: string): string {
 	const re = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 	if (!value || !re.test(value)) throw new ValidationError(`Invalid ${field}`, field);

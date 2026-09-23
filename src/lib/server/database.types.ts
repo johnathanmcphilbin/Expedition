@@ -32,47 +32,48 @@ export type UserRow = {
 	updated_at: string;
 }
 
-export type ProjectRow = {
-	id: string;
-	user_id: string;
-	title: string;
+/**
+ * A cached row from Hack Club's own "YSWS Project Submission" Airtable table.
+ * Hack Club is the source of truth for whether a project was submitted —
+ * this is only a local copy, refreshed on demand. `user_id` is null when the
+ * submitter's Hackatime ID didn't match a known Expedition account.
+ */
+export type HackClubSubmissionRow = {
+	airtable_record_id: string;
+	user_id: string | null;
+	hackatime_user_id: string | null;
+	first_name: string | null;
+	last_name: string | null;
+	email: string | null;
+	github_username: string | null;
+	code_url: string | null;
+	playable_url: string | null;
 	description: string | null;
-	repo_url: string | null;
-	demo_url: string | null;
-	hackatime_project: string | null;
-	created_at: string;
-	updated_at: string;
+	project_names_raw: string | null;
+	airtable_status: string | null;
+	airtable_created_at: string | null;
+	synced_at: string;
 }
 
-export type SubmissionRow = {
+/**
+ * Expedition's own review of one Hack Club submission, scoped to one
+ * Hackatime project. This — not HackClubSubmissionRow — is what makes hours
+ * spendable.
+ */
+export type SubmissionReviewRow = {
 	id: string;
-	project_id: string;
+	airtable_record_id: string;
 	user_id: string;
-	hours_requested: number;
-	description: string;
+	hackatime_project: string;
+	submitted_hours: number | null;
+	approved_hours: number | null;
 	status: SubmissionStatus;
-	submitted_at: string;
+	internal_notes: string | null;
+	participant_feedback: string | null;
+	reviewer_id: string | null;
+	reviewed_at: string | null;
+	created_at: string;
 	updated_at: string;
-}
-
-export type AttachmentRow = {
-	id: string;
-	submission_id: string;
-	storage_key: string;
-	content_type: string;
-	filename: string;
-	size_bytes: number;
-	created_at: string;
-}
-
-export type ReviewRow = {
-	id: string;
-	submission_id: string;
-	reviewer_id: string;
-	decision: ReviewDecision;
-	hours_approved: number | null;
-	feedback: string | null;
-	created_at: string;
 }
 
 export type HourTransactionRow = {
@@ -105,6 +106,11 @@ export type SessionRow = {
 	ip: string | null;
 }
 
+export type MailingSignupRow = {
+	email: string;
+	created_at: string;
+}
+
 export type HourBalanceRow = {
 	user_id: string;
 	hours_earned: number;
@@ -118,17 +124,6 @@ type Table<Row> = {
 	Update: Partial<Row>;
 	Relationships: [];
 };
-
-/** Per-project hours, derived from the ledger. See migration 0003. */
-export type ProjectHoursRow = {
-	project_id: string;
-	user_id: string;
-	title: string;
-	hackatime_project: string | null;
-	hours_earned: number;
-	checkpoints_approved: number;
-	last_checkpoint_at: string | null;
-}
 
 /** Totals across every project — how far around the expedition they are. */
 export type ExpeditionProgressRow = {
@@ -147,26 +142,26 @@ export interface Database {
 		Tables: {
 			users: Table<UserRow>;
 			sessions: Table<SessionRow>;
-			projects: Table<ProjectRow>;
-			submissions: Table<SubmissionRow>;
-			attachments: Table<AttachmentRow>;
-			reviews: Table<ReviewRow>;
+			hackclub_submissions: Table<HackClubSubmissionRow>;
+			submission_reviews: Table<SubmissionReviewRow>;
+			mailing_signups: Table<MailingSignupRow>;
 			hour_transactions: Table<HourTransactionRow>;
 			hackatime_connections: Table<HackatimeConnectionRow>;
 		};
 		Views: {
 			user_hour_balances: { Row: HourBalanceRow; Relationships: [] };
-			project_hours: { Row: ProjectHoursRow; Relationships: [] };
 			user_expedition_progress: { Row: ExpeditionProgressRow; Relationships: [] };
 		};
 		Functions: {
-			review_submission: {
+			review_hackclub_submission: {
 				Args: {
-					p_submission_id: string;
+					p_review_id: string;
 					p_reviewer_id: string;
-					p_decision: ReviewDecision;
-					p_hours_approved?: number | null;
-					p_feedback?: string | null;
+					p_status: SubmissionStatus;
+					p_approved_hours?: number | null;
+					p_internal_notes?: string | null;
+					p_participant_feedback?: string | null;
+					p_submitted_hours?: number | null;
 				};
 				Returns: string;
 			};

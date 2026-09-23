@@ -6,16 +6,18 @@
 	let { data }: { data: PageData } = $props();
 
 	// Airtable prefills a form field by its exact display name in the query
-	// string — https://support.airtable.com/docs/prefilling-a-form. Passing
-	// nothing for a field just leaves it blank for them to fill in.
+	// string — https://support.airtable.com/docs/prefilling-a-form. The
+	// Hackatime ID is what lets Expedition match the resulting submission back
+	// to this account without the participant typing anything themselves.
 	const embedSrc = $derived.by(() => {
-		if (!data.selected) return null;
+		if (!data.selected || !data.hackatimeUserId) return null;
 		const p = new URLSearchParams();
-		if (data.selected.repo_url) p.set('prefill_Code URL', data.selected.repo_url);
-		if (data.selected.demo_url) p.set('prefill_Playable URL', data.selected.demo_url);
-		if (data.selected.description) p.set('prefill_Description', data.selected.description);
-		const qs = p.toString();
-		return `https://airtable.com/embed/appGcYrt3CFYab05y/pagB6M1gck9F0Pq3c/form${qs ? `?${qs}` : ''}`;
+		p.set('prefill_Justification - Submitter Hackatime ID', data.hackatimeUserId);
+		p.set(
+			'prefill_Justification - Hackatime Project Name(s) + Date Range(s)',
+			data.selected.name
+		);
+		return `https://airtable.com/embed/appGcYrt3CFYab05y/pagB6M1gck9F0Pq3c/form?${p.toString()}`;
 	});
 </script>
 
@@ -26,31 +28,36 @@
 		<div class="app-head"><h1 class="app-title">Submit to Hack Club</h1></div>
 
 		<p class="hint" style="max-width:60ch; margin-bottom:2rem">
-			This is Hack Club's own project submission for their Unified YSWS pipeline — separate
-			from Expedition's checkpoints. It goes straight to Hack Club for review and any reward
-			shipping; nothing here changes your Expedition hours or balance.
+			This is Hack Club's own Unified YSWS submission — the one, real submission for your
+			project. Expedition picks it up from here to review, using your Hackatime ID and project
+			name, prefilled below.
 		</p>
 
-		{#if !data.projects.length}
+		{#if data.hackatimeUnavailable}
+			<p class="empty error">
+				Couldn't reach Hackatime just now, so your projects aren't loading. Try again in a
+				moment.
+			</p>
+		{:else if !data.projects.length}
 			<p class="empty">
-				Nothing to submit yet — <a href="/projects/new">start a project</a> first.
+				Nothing tracked in Hackatime yet — start coding with it running, then come back.
 			</p>
 		{:else}
 			<div class="field" style="max-width:24rem">
 				<label for="project">Which project?</label>
 				<select
 					id="project"
-					value={data.selected?.id ?? ''}
+					value={data.selected?.name ?? ''}
 					onchange={(e) => {
-						const id = e.currentTarget.value;
+						const name = e.currentTarget.value;
 						const url = new URL(location.href);
-						if (id) url.searchParams.set('project', id);
+						if (name) url.searchParams.set('project', name);
 						else url.searchParams.delete('project');
 						location.href = url.toString();
 					}}>
 					<option value="">Choose a project&hellip;</option>
-					{#each data.projects as p (p.id)}
-						<option value={p.id}>{p.title}</option>
+					{#each data.projects as p (p.name)}
+						<option value={p.name}>{p.name} — {p.tracked}</option>
 					{/each}
 				</select>
 			</div>
@@ -59,7 +66,7 @@
 				<div class="panel embed-panel">
 					<iframe
 						class="airtable-embed"
-						title="Submit {data.selected?.title} to Hack Club"
+						title="Submit {data.selected?.name} to Hack Club"
 						src={embedSrc}
 						frameborder="0"
 						width="100%"
@@ -68,8 +75,8 @@
 					></iframe>
 				</div>
 				<p class="hint" style="margin-top:0.8rem">
-					Code URL, playable URL and description were filled in from {data.selected?.title} —
-					check them over, Hack Club also asks for a screenshot and a shipping address.
+					Your Hackatime ID and this project's name are filled in — Hack Club also asks for
+					code and demo links, a screenshot, a description and a shipping address.
 				</p>
 			{/if}
 		{/if}
@@ -89,5 +96,8 @@
 		display: block;
 		width: 100%;
 		border: 0;
+	}
+	.error {
+		color: var(--red);
 	}
 </style>

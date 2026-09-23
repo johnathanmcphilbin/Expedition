@@ -1,7 +1,8 @@
 # Expedition backend
 
-SvelteKit server routes + Supabase Postgres + Supabase Storage.
-Identity is **Hack Club Auth**. Supabase Auth is not used.
+SvelteKit server routes + Supabase Postgres, reviewing submissions that live
+in Hack Club's own Airtable. Identity is **Hack Club Auth**. Supabase Auth is
+not used.
 
 ## Local setup
 
@@ -11,7 +12,7 @@ Identity is **Hack Club Auth**. Supabase Auth is not used.
 cp .env.example .env
 ```
 
-Fill in six values. `.env` is gitignored; never commit real values.
+`.env` is gitignored; never commit real values.
 
 | Variable | Where it comes from |
 | --- | --- |
@@ -19,8 +20,8 @@ Fill in six values. `.env` is gitignored; never commit real values.
 | `SUPABASE_SERVICE_ROLE_KEY` | Same page. **Server-only, bypasses RLS.** |
 | `HCA_CLIENT_ID` / `HCA_CLIENT_SECRET` | OAuth client on `auth.hackclub.com` |
 | `HACKATIME_CLIENT_ID` / `HACKATIME_CLIENT_SECRET` | OAuth client on `hackatime.hackclub.com` |
+| `AIRTABLE_API_KEY` | Personal access token on base `appGcYrt3CFYab05y` — `data.records:read`, `data.records:write`, `schema.bases:read`. Create at [airtable.com/create/tokens](https://airtable.com/create/tokens). |
 | `APP_ORIGIN` | Production only: `https://expedition.hackclub.com` |
-| `AIRTABLE_API_KEY` | Personal access token, `data.records:read` + `schema.bases:read` on the Unified YSWS base. Not currently read by the running app — see "Hack Club submission" below. |
 
 Redirect URIs to register. Both environments can be registered on the same
 OAuth client — Doorkeeper takes one URI per line:
@@ -53,16 +54,14 @@ Run the migrations in order against your Supabase project (SQL Editor, or
 supabase/migrations/0001_init.sql
 supabase/migrations/0002_review_submission.sql
 supabase/migrations/0003_project_progress.sql
+supabase/migrations/0004_hackclub_submissions.sql
 ```
 
-### 3. Storage bucket
+0004 drops the tables 0002/0003 built the old submission system on top of
+(`projects`, `submissions`, `attachments`, `reviews`) — see "History" below
+before running it on a database that has real rows in those tables.
 
-Create a **private** bucket named `submission-evidence`
-(Supabase → Storage → New bucket → Public = off).
-
-Leave it private. Reviewers get short-lived signed URLs generated server-side.
-
-### 4. Make yourself a reviewer
+### 3. Make yourself an admin
 
 Roles live in the database and are never accepted from a client. Sign in once
 so your user row exists, then:
@@ -71,7 +70,11 @@ so your user row exists, then:
 update users set role = 'admin' where email = 'you@example.com';
 ```
 
-### 5. Run
+Only `admin` can see `/admin` or `/admin/reviews` — there is no separate
+`reviewer` role wired to anything in the app (the enum value still exists in
+the schema, unused, in case that changes).
+
+### 4. Run
 
 ```bash
 npm install
@@ -82,29 +85,50 @@ npm run dev
 
 ```
 Browser ──▶ SvelteKit server (trusted) ──▶ Supabase (service role)
-                    │
-                    ├── auth.hackclub.com      identity
-                    └── hackatime.hackclub.com coding-time evidence
+                    │                            ▲
+                    ├── auth.hackclub.com         │  cache
+                    │       identity              │
+                    ├── hackatime.hackclub.com     │
+                    │       coding-time evidence   │
+                    └── api.airtable.com ──────────┘
+                            Hack Club's Unified YSWS —
+                            THE submission, read + reviews written back
 ```
 
-The browser never talks to Supabase. There is no client-side Supabase key of
-any kind — all reads and writes go through server load functions and form
-actions.
+The browser never talks to Supabase or Airtable directly. There is no
+client-side key of any kind — all reads and writes go through server load
+functions and form actions.
 
-### Sessions
+### There is exactly one submission
 
-Opaque, server-side. The cookie holds a random 256-bit token; only its SHA-256
-hash is stored, so a database leak does not yield live sessions. Sessions are
-revocable and expire after 30 days. `hooks.server.ts` resolves `locals.user`
-once per request, and that is the only source of identity anywhere.
+Hack Club's own **Unified YSWS** Airtable base (`appGcYrt3CFYab05y`, table
+`YSWS Project Submission`) is the canonical record of what a participant
+submitted. Expedition does not have — and must not grow — a second,
+Expedition-specific submission form. `/submit-to-hackclub` embeds that real
+Hack Club form, prefilled with the participant's Hackatime ID and chosen
+project so the resulting row can be matched back automatically.
+
+Expedition's own tables only **cache** and **review** that submission:
+
+- **`hackclub_submissions`** — a local copy of relevant Airtable rows,
+  refreshed live (`src/lib/server/airtable.ts::syncHackClubSubmissions`)
+  whenever a participant's dashboard or the admin queue loads. A row missing
+  from this cache means *not synced yet*, never *not submitted* — the code
+  always re-syncs rather than trusting an empty cache as an answer.
+- **`submission_reviews`** — Expedition's own opinion: which Hackatime project
+  a submission is for, how many of its tracked hours are approved, and the
+  review's status/notes/feedback. This is the *only* thing that makes hours
+  spendable.
+
+Nothing about "has this been submitted" is ever decided by an Expedition
+database row on its own — only by what's synced from Airtable.
 
 ### Roles
 
-`participant` | `reviewer` | `admin`, stored on `users.role`.
-
-Roles are never read from a token, a form field or a query string. `upsertUser`
-deliberately omits `role` from both insert and update, so signing in can never
-change your own role.
+`participant` | `reviewer` | `admin`, stored on `users.role`. Roles are never
+read from a token, a form field or a query string. `upsertUser` deliberately
+omits `role` from both insert and update, so signing in can never change your
+own role.
 
 ### The hour ledger
 
@@ -115,81 +139,75 @@ select * from user_hour_balances;  -- SUM(hour_transactions.amount) per user
 ```
 
 `hour_transactions` is **append-only at the database level** — `BEFORE UPDATE`
-and `BEFORE DELETE` triggers raise an exception. Not a convention; enforced.
+and `BEFORE DELETE` triggers raise an exception, including on a cascaded
+delete. Not a convention; enforced. This also means a wrong credit can never
+be deleted, only offset with an equal and opposite `manual_adjustment` from
+`/admin`.
 
-V1 only writes `checkpoint_approved` credits. `reward_claimed` and
-`travel_allocation` already exist in the enum with a sign constraint (credits
-positive, debits negative), so spending can be added without a migration.
+`checkpoint_approved` is the only credit type produced automatically, and only
+by `review_hackclub_submission()` on an approval. `reward_claimed` and
+`travel_allocation` are debits an admin enters by hand from the roster on
+`/admin`, once a spend has been agreed some other way — there is currently no
+self-service way for a participant to redeem hours for gear.
 
-### Many projects, one expedition
+### Tracked, submitted, approved — not the same number
 
-A participant runs as many projects as they like. Each may map to one Hackatime
-project, enforced by `projects_one_hackatime_per_user` — without it two projects
-could claim the same tracked time and count it twice.
+Three different figures appear across the app, and they're kept visually and
+functionally distinct on purpose (see `/dashboard`):
 
-### Hack Club submission, separately from Expedition's hours
+| Term | Comes from | Meaning |
+| --- | --- | --- |
+| **Tracked** | Hackatime, live | Time logged in the editor. Anyone can see this the moment they connect Hackatime — it proves nothing on its own. |
+| **Submitted** | `hackclub_submissions` (cached from Airtable) | A Hack Club submission exists that seems to name this project — a best-effort match against Hack Club's free-text field, shown as a status only. |
+| **Approved** | `submission_reviews.approved_hours`, credited via `hour_transactions` | What an Expedition reviewer actually accepted after looking at the submission. |
 
-`/submit-to-hackclub` embeds Hack Club's own **Unified YSWS** Airtable form
-(base `appGcYrt3CFYab05y`, table `YSWS Project Submission`) with a project's
-repo/demo URL and description prefilled via Airtable's
-[form-prefill query params](https://support.airtable.com/docs/prefilling-a-form).
-That's a public, unauthenticated embed — it needs no API key.
+**Only approved hours ever become spendable balance.** Raw Hackatime time is
+never awarded directly — someone can track 100 hours and have 0 approved if
+nothing's been submitted and reviewed yet.
 
-This is Hack Club's own end-of-program review and reward pipeline, shared
-across every YSWS program, not something Expedition built or controls. It is
-deliberately **not** wired to Expedition's ledger:
+### Reviewing is atomic and idempotent
 
-- The table has no field Expedition sets or can reliably match a synced row
-  against — `Automation - YSWS Record ID` is assigned by Hack Club's own
-  automation after the fact, not by us.
-- The closest thing to a status, `Automation - Status`, only reflects whether
-  the row was successfully handed off to Hack Club's backend
-  (`1–Pending Submission` / `1.5–Processing` / `2–Submitted` /
-  `0–Error`), not whether anyone has reviewed or approved it. Crediting hours
-  off that would mean crediting unverified self-reported work.
+`review_hackclub_submission()` (migration 0004) does all of this in **one
+transaction**:
 
-`AIRTABLE_API_KEY` was used once, ad hoc, to inspect this schema — the app
-doesn't read it at runtime. To build a real status readback later (e.g. "not
-yet submitted" / "submitted" badges, still never touching the ledger), the
-Airtable table would need a hidden field Expedition can prefill with the
-project id, so a synced row can be matched exactly instead of guessed at by
-name or URL.
-
-Progress is **not** stored. Two views in migration 0003 derive it from the
-ledger:
-
-| View | Answers |
-| --- | --- |
-| `project_hours` | hours and checkpoints earned per project |
-| `user_expedition_progress` | hours, checkpoints, percent and hours remaining across all projects |
-
-Both count hours **earned**, not the net balance: spending hours on gear must
-not un-travel the expedition. The 40-hour target and the 5-hour checkpoint
-interval are defined in `user_expedition_progress` so every page reads the same
-numbers rather than hard-coding them.
-
-### Approval is atomic and idempotent
-
-`review_submission()` (migration 0002) does all of this in **one transaction**:
-
-1. re-reads the reviewer's role **from the database**
-2. `SELECT … FOR UPDATE` on the submission, so concurrent approvals serialise
+1. re-reads the reviewer's role **from the database** — admin only
+2. `SELECT … FOR UPDATE` on the review row, so concurrent decisions serialise
 3. refuses self-review (`v_owner_id = p_reviewer_id`)
-4. refuses an already-settled submission
-5. inserts the review
-6. updates the submission status
-7. inserts the ledger credit — only on approval
+4. refuses an already-settled review (`approved`/`rejected` are terminal;
+   `changes_requested` is not — a reviewer can come back to it)
+5. writes the decision, notes and feedback
+6. inserts the ledger credit — only on approval
 
-Double-clicking cannot pay twice, and this is guaranteed by two unique indexes
-rather than by application logic:
+Double-clicking cannot pay twice, guaranteed by unique indexes rather than
+application logic:
 
 ```
-reviews_one_approval_per_submission          unique (submission_id) where decision = 'approved'
-hour_transactions_one_credit_per_submission  unique (reference_id)  where type = 'checkpoint_approved'
+submission_reviews_one_per_project           unique (airtable_record_id, hackatime_project)
+hour_transactions_one_credit_per_submission   unique (reference_id) where type = 'checkpoint_approved'
 ```
 
 A retry hits one of those, Postgres raises `23505`, and the whole transaction
 rolls back. `submitReview()` translates that into "already decided".
+
+Saving without a final decision (the "Save Review" button, status left as
+`pending`) is the same function call with `p_status = 'pending'` — it updates
+notes/hours as a draft without touching the ledger, so a reviewer can jot
+things down before deciding.
+
+### Writing back to Airtable
+
+After a review is saved, the server writes it into a **separate table
+Expedition owns** — `Expedition Reviews` (`tblPXbJtyA6i9XjeU`, same base) —
+never into Hack Club's own `YSWS Project Submission` fields.
+`src/lib/server/airtable.ts::writeReviewToAirtable` upserts by matching on the
+`Expedition Review ID` field, so saving the same review twice updates one
+Airtable row instead of creating duplicates. `AIRTABLE_API_KEY` is read only
+in `src/lib/server/env.ts` and only ever used from server code — it is never
+sent to the browser.
+
+If the Airtable write fails, the review and any ledger credit are **already
+committed** — the action reports the Airtable failure separately rather than
+pretending the whole save failed.
 
 ### RLS
 
@@ -198,19 +216,14 @@ keys can therefore read and write nothing. Only the service-role key used by
 the server (which bypasses RLS) has access. If a publishable key is ever
 exposed, it grants nothing — this fails closed.
 
-### Uploads
-
-Private bucket, random UUID paths (`{userId}/{uuid}`), MIME allowlist and a
-10MB cap, all validated server-side before the file is stored. Binaries never
-enter Postgres — only the storage key.
-
 ### Hackatime
 
-Evidence only. Nothing in `src/lib/server/hackatime.ts` writes to the ledger. A
-reviewer sees the tracked time and decides the number themselves. Tokens live
-in `hackatime_connections`, are read only by the server, and are never included
-in anything a load function returns — `connectionStatus()` exists specifically
-to return connection state without tokens.
+Evidence only. Nothing in `src/lib/server/hackatime.ts` writes to the ledger.
+`fetchProjectTimes` calls `/authenticated/projects`, scoped to the
+participant's own OAuth token. Tokens live in `hackatime_connections`, are
+read only by the server, and are never included in anything a load function
+returns — `connectionStatus()` exists specifically to return connection state
+without tokens.
 
 ## Routes
 
@@ -219,12 +232,28 @@ to return connection state without tokens.
 | `/auth/login`, `/auth/callback` | public |
 | `/auth/logout` | POST only (a GET logout is CSRF-able) |
 | `/auth/hackatime`, `/auth/hackatime/callback` | signed in |
-| `/dashboard`, `/your-hours` | signed in |
-| `/projects/new`, `/projects/[id]`, `/projects/[id]/submit` | owner only (404 otherwise) |
-| `/admin/reviews`, `/admin/reviews/[id]` | reviewer/admin (404 otherwise) |
+| `/onboarding` | signed in, connect Hackatime — skipped automatically once connected |
+| `/dashboard`, `/your-hours`, `/submit-to-hackclub` | signed in |
+| `/admin`, `/admin/reviews` | admin only (404 otherwise) |
 
-Reviewer routes return **404, not 403**, so their existence isn't confirmed to
+Admin routes return **404, not 403**, so their existence isn't confirmed to
 participants.
+
+## History: the duplicate submission system this replaced
+
+Earlier versions of Expedition had participants create a project row in this
+app (`/projects/new`), then submit a "checkpoint" through a second,
+Expedition-only form (`/projects/[id]/submit`) with its own evidence upload,
+reviewed through `/admin/reviews/[id]` and credited via `review_submission()`.
+
+That was a duplicate of Hack Club's real Unified YSWS submission, which every
+participant has to go through anyway. Migration 0004 removed it entirely —
+`projects`, `submissions`, `attachments`, `reviews`, `review_submission()` and
+the Supabase Storage evidence bucket are all gone, replaced by the
+cache-and-review model described above. Nothing of real value was lost: at
+the time of the migration those tables held either nothing or leftover rows
+from onboarding UI that no longer exists — no real submission or review had
+ever been recorded through them.
 
 ## Known gaps / next steps
 
@@ -235,4 +264,15 @@ participants.
 - **Token encryption at rest.** Hackatime tokens rely on Supabase's disk
   encryption plus service-role-only access. Application-level encryption would
   need a key-management decision.
-- **Rate limiting.** No throttling on submission creation or uploads yet.
+- **Project matching is best-effort.** Hack Club's `Justification - Hackatime
+  Project Name(s) + Date Range(s)` field is free text, not a structured
+  reference — the dashboard's "submitted" status and the admin panel's
+  project suggestion are both substring matches against it, confirmed or
+  corrected by a human (the participant implicitly by what they submit, the
+  reviewer explicitly by picking from a dropdown). Nothing about *approved*
+  hours depends on this matching being right; it only affects display.
+- **No self-service reward redemption.** `reward_claimed` and
+  `travel_allocation` ledger debits are entered by hand on `/admin` — there is
+  no form for a participant to request gear for banked hours yet.
+- **Rate limiting.** No throttling on the review-save action or the Airtable
+  sync yet.

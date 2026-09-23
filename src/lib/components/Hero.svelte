@@ -1,15 +1,10 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import ShipRoutes from './ShipRoutes.svelte';
 
-	let email = $state('');
-	let joined = $state(false);
+	let { form = null }: { form?: { message: string } | null } = $props();
 
-	function submit(e: Event) {
-		e.preventDefault();
-		if (!email.includes('@')) return;
-		// no backend yet: this just confirms locally
-		joined = true;
-	}
+	let submitting = $state(false);
 </script>
 
 <section class="hero">
@@ -29,21 +24,36 @@
 			</div>
 		</div>
 
-		<form class="signup" onsubmit={submit}>
+		<form
+			class="signup"
+			method="POST"
+			action="/?/join"
+			use:enhance={() => {
+				submitting = true;
+				// no need to reset submitting on success — a real submit
+				// redirects away to Hack Club Auth
+				return async ({ update }) => {
+					await update();
+					submitting = false;
+				};
+			}}>
 			<input
 				type="email"
-				bind:value={email}
+				name="email"
 				placeholder="your@email.com"
 				aria-label="Your email address"
 				required
 			/>
-			<button class="btn" type="submit">Start expedition</button>
+			<button class="btn" type="submit" disabled={submitting}>Start expedition</button>
 		</form>
 
-		{#if joined}
-			<p class="joined">You're on the list. We'll be in touch before the first checkpoint.</p>
+		{#if form?.message}
+			<p class="form-error">{form.message}</p>
 		{:else}
-			<p class="note">For teens aged 13 to 18. Free to join, free to ship.</p>
+			<p class="note">
+				For teens aged 13 to 18. Free to join, free to ship. Submitting signs you in with Hack
+				Club.
+			</p>
 		{/if}
 	</div>
 </section>
@@ -136,14 +146,14 @@
 	}
 
 	.note,
-	.joined {
+	.form-error {
 		margin-top: 0.9rem;
 		font-size: 0.92rem;
 		font-weight: 600;
 		color: var(--muted);
 	}
-	.joined {
-		color: var(--green-dark);
+	.form-error {
+		color: var(--red);
 	}
 
 	@media (max-width: 560px) {

@@ -1,13 +1,11 @@
 import { error } from '@sveltejs/kit';
 import { db } from './supabase';
 import type {
-	ProjectRow,
-	SubmissionRow,
-	AttachmentRow,
-	ReviewRow,
+	MailingSignupRow,
+	HackClubSubmissionRow,
+	SubmissionReviewRow,
 	HourTransactionRow,
 	HourBalanceRow,
-	ProjectHoursRow,
 	ExpeditionProgressRow,
 	UserRow,
 	HourTransactionType
@@ -17,168 +15,151 @@ import type {
  * Data access. Every function that reads or writes something owned by a
  * participant takes an explicit `userId` from the session and filters on it —
  * ownership is never inferred from a value the browser supplied.
+ *
+ * There is deliberately no "create a project" or "create a submission" here.
+ * Hack Club's own Unified YSWS submission is the only submission; Expedition
+ * only caches it (hackclub_submissions) and reviews it (submission_reviews).
+ * See docs/backend.md.
  */
 
-/** Does this user own at least one project? Used to gate onboarding. */
-export async function hasAnyProject(userId: string): Promise<boolean> {
-	const { count } = await db()
-		.from('projects')
-		.select('id', { count: 'exact', head: true })
-		.eq('user_id', userId);
-	return (count ?? 0) > 0;
+// ------------------------------------------------------------ mailing list -
+
+/** Best-effort, idempotent — resubmitting the same address is a no-op. */
+export async function saveMailingSignup(email: string): Promise<void> {
+	const { error: e } = await db()
+		.from('mailing_signups')
+		.upsert({ email } satisfies Partial<MailingSignupRow>, { onConflict: 'email' });
+	if (e) throw new Error(e.message);
 }
 
-export async function listProjects(userId: string): Promise<ProjectRow[]> {
+// ------------------------------------------------------- hack club cache ---
+
+/** This user's cached Hack Club submissions. Sync first if this might be stale. */
+export async function listHackClubSubmissions(userId: string): Promise<HackClubSubmissionRow[]> {
 	const { data, error: e } = await db()
-		.from('projects')
+		.from('hackclub_submissions')
 		.select('*')
 		.eq('user_id', userId)
-		.order('created_at', { ascending: false });
+		.order('airtable_created_at', { ascending: false });
 	if (e) throw new Error(e.message);
-	return (data ?? []) as ProjectRow[];
+	return (data ?? []) as HackClubSubmissionRow[];
 }
 
-/** Throws 404 when the project is missing OR owned by someone else. */
-export async function getOwnedProject(projectId: string, userId: string): Promise<ProjectRow> {
+/** Every cached submission, matched or not — for the admin queue. */
+export async function listAllHackClubSubmissions(): Promise<
+	(HackClubSubmissionRow & { owner: Pick<UserRow, 'display_name' | 'email'> | null })[]
+> {
+	const { data, error: e } = await db()
+		.from('hackclub_submissions')
+		.select('*, users(display_name, email)')
+		.order('airtable_created_at', { ascending: false });
+	if (e) throw new Error(e.message);
+	return (
+		(data ?? []) as unknown as (HackClubSubmissionRow & {
+			users: Pick<UserRow, 'display_name' | 'email'> | null;
+		})[]
+	).map((r) => ({ ...r, owner: r.users }));
+}
+
+/** Throws 404 when the submission isn't in the local cache. */
+export async function getHackClubSubmission(
+	airtableRecordId: string
+): Promise<HackClubSubmissionRow> {
 	const { data } = await db()
-		.from('projects')
+		.from('hackclub_submissions')
 		.select('*')
-		.eq('id', projectId)
-		.eq('user_id', userId)
+		.eq('airtable_record_id', airtableRecordId)
 		.maybeSingle();
-
-	if (!data) error(404, 'Project not found');
-	return data as ProjectRow;
+	if (!data) error(404, 'Submission not found');
+	return data as HackClubSubmissionRow;
 }
 
-export async function createProject(
-	userId: string,
-	input: {
-		title: string;
-		description: string | null;
-		repo_url: string | null;
-		demo_url: string | null;
-		hackatime_project: string | null;
-	}
-): Promise<ProjectRow> {
+// ------------------------------------------------------------- reviews -----
+
+/** This user's review status across their submissions, for their dashboard. */
+export async function listOwnReviews(userId: string): Promise<SubmissionReviewRow[]> {
 	const { data, error: e } = await db()
-		.from('projects')
-		.insert({ user_id: userId, ...input })
+		.from('submission_reviews')
 		.select('*')
-		.single();
-	if (e) throw new Error(e.message);
-	return data as ProjectRow;
-}
-
-export async function updateOwnedProject(
-	projectId: string,
-	userId: string,
-	input: Partial<Pick<ProjectRow, 'title' | 'description' | 'repo_url' | 'demo_url' | 'hackatime_project'>>
-): Promise<void> {
-	await getOwnedProject(projectId, userId);
-	const { error: e } = await db()
-		.from('projects')
-		.update(input)
-		.eq('id', projectId)
-		.eq('user_id', userId);
-	if (e) throw new Error(e.message);
-}
-
-export async function listSubmissions(
-	userId: string
-): Promise<(SubmissionRow & { projects: { title: string } | null })[]> {
-	const { data, error: e } = await db()
-		.from('submissions')
-		.select('*, projects(title)')
 		.eq('user_id', userId)
-		.order('submitted_at', { ascending: false });
+		.order('updated_at', { ascending: false });
 	if (e) throw new Error(e.message);
-	return (data ?? []) as unknown as (SubmissionRow & { projects: { title: string } | null })[];
+	return (data ?? []) as SubmissionReviewRow[];
 }
 
-export async function listProjectSubmissions(projectId: string): Promise<SubmissionRow[]> {
+export type QueueItem = SubmissionReviewRow & {
+	submission: HackClubSubmissionRow | null;
+	owner: Pick<UserRow, 'display_name' | 'email'> | null;
+};
+
+/** Every review, joined to its cached submission + owner — the review queue's data. */
+export async function listAllReviewsWithSubmissions(): Promise<QueueItem[]> {
 	const { data, error: e } = await db()
-		.from('submissions')
-		.select('*')
-		.eq('project_id', projectId)
-		.order('submitted_at', { ascending: false });
+		.from('submission_reviews')
+		.select('*, hackclub_submissions(*), users!user_id(display_name, email)')
+		.order('created_at', { ascending: true });
 	if (e) throw new Error(e.message);
-	return (data ?? []) as SubmissionRow[];
+	return (
+		(data ?? []) as unknown as (SubmissionReviewRow & {
+			hackclub_submissions: HackClubSubmissionRow | null;
+			users: Pick<UserRow, 'display_name' | 'email'> | null;
+		})[]
+	).map((r) => ({ ...r, submission: r.hackclub_submissions, owner: r.users }));
 }
 
-export async function createSubmission(
-	userId: string,
-	input: { project_id: string; hours_requested: number; description: string }
-): Promise<SubmissionRow> {
-	// Re-assert ownership of the project server-side before accepting the work.
-	await getOwnedProject(input.project_id, userId);
-
-	const { data, error: e } = await db()
-		.from('submissions')
-		.insert({ user_id: userId, ...input, status: 'pending' })
-		.select('*')
-		.single();
-	if (e) throw new Error(e.message);
-	return data as SubmissionRow;
-}
-
-export async function addAttachment(
-	submissionId: string,
-	input: { storage_key: string; content_type: string; filename: string; size_bytes: number }
-): Promise<void> {
-	const { error: e } = await db()
-		.from('attachments')
-		.insert({ submission_id: submissionId, ...input });
-	if (e) throw new Error(e.message);
-}
-
-export async function listAttachments(submissionId: string): Promise<AttachmentRow[]> {
-	const { data } = await db().from('attachments').select('*').eq('submission_id', submissionId);
-	return (data ?? []) as AttachmentRow[];
+export async function getReviewForAdmin(reviewId: string): Promise<QueueItem> {
+	const { data } = await db()
+		.from('submission_reviews')
+		.select('*, hackclub_submissions(*), users!user_id(display_name, email)')
+		.eq('id', reviewId)
+		.maybeSingle();
+	if (!data) error(404, 'Review not found');
+	const row = data as unknown as SubmissionReviewRow & {
+		hackclub_submissions: HackClubSubmissionRow | null;
+		users: Pick<UserRow, 'display_name' | 'email'> | null;
+	};
+	return { ...row, submission: row.hackclub_submissions, owner: row.users };
 }
 
 /**
- * Projects with their earned hours attached.
- *
- * Two reads rather than an embedded join: `project_hours` is a view, and
- * PostgREST will not traverse a foreign key into one. They are keyed by
- * project id and merged here.
+ * Find or create the review row for one (submission, project) pair. Creating
+ * one does not decide anything — it starts 'pending' with no hours — so this
+ * is safe to call just from opening a submission to look at it.
  */
-export async function listProjectsWithHours(
-	userId: string
-): Promise<(ProjectRow & { hours: ProjectHoursRow | null })[]> {
-	const [projects, hours] = await Promise.all([
-		listProjects(userId),
-		db().from('project_hours').select('*').eq('user_id', userId)
-	]);
-
-	const byProject = new Map<string, ProjectHoursRow>(
-		((hours.data ?? []) as ProjectHoursRow[]).map((h) => [h.project_id, h])
-	);
-
-	return projects.map((p) => ({ ...p, hours: byProject.get(p.id) ?? null }));
-}
-
-/** One project's earned hours, or a zeroed row if nothing has been credited yet. */
-export async function getProjectHours(projectId: string): Promise<ProjectHoursRow | null> {
-	const { data } = await db().from('project_hours').select('*').eq('project_id', projectId).maybeSingle();
-	return data as ProjectHoursRow | null;
-}
-
-/** Hackatime project names already claimed by this user's other projects. */
-export async function claimedHackatimeProjects(
+export async function getOrCreateReview(
+	airtableRecordId: string,
 	userId: string,
-	exceptProjectId?: string
-): Promise<string[]> {
-	const { data } = await db()
-		.from('projects')
-		.select('id, hackatime_project')
-		.eq('user_id', userId)
-		.not('hackatime_project', 'is', null);
+	hackatimeProject: string,
+	submittedHours: number | null
+): Promise<SubmissionReviewRow> {
+	const existing = await db()
+		.from('submission_reviews')
+		.select('*')
+		.eq('airtable_record_id', airtableRecordId)
+		.eq('hackatime_project', hackatimeProject)
+		.maybeSingle();
+	if (existing.data) return existing.data as SubmissionReviewRow;
 
-	return ((data ?? []) as Pick<ProjectRow, 'id' | 'hackatime_project'>[])
-		.filter((p) => p.id !== exceptProjectId && p.hackatime_project)
-		.map((p) => p.hackatime_project as string);
+	const { data, error: e } = await db()
+		.from('submission_reviews')
+		.insert({
+			airtable_record_id: airtableRecordId,
+			user_id: userId,
+			hackatime_project: hackatimeProject,
+			submitted_hours: submittedHours
+		})
+		.select('*')
+		.single();
+	if (e) throw new Error(e.message);
+	return data as SubmissionReviewRow;
+}
+
+export async function countPendingReviews(): Promise<number> {
+	const { count } = await db()
+		.from('submission_reviews')
+		.select('id', { count: 'exact', head: true })
+		.in('status', ['pending', 'in_review', 'changes_requested']);
+	return count ?? 0;
 }
 
 // ------------------------------------------------------------------ hours ---
@@ -201,7 +182,7 @@ export async function getBalance(userId: string): Promise<HourBalanceRow> {
 	);
 }
 
-/** How far around the expedition this user is, totalled across all projects. */
+/** How far around the expedition this user is — approved hours only. */
 export async function getProgress(userId: string): Promise<ExpeditionProgressRow> {
 	const { data } = await db()
 		.from('user_expedition_progress')
@@ -232,74 +213,7 @@ export async function listTransactions(userId: string): Promise<HourTransactionR
 	return (data ?? []) as HourTransactionRow[];
 }
 
-// ----------------------------------------------------------------- review ---
-
-export type QueueItem = SubmissionRow & {
-	users: Pick<UserRow, 'display_name' | 'email'> | null;
-	projects: Pick<ProjectRow, 'title'> | null;
-};
-
-export async function listReviewQueue(): Promise<QueueItem[]> {
-	const { data, error: e } = await db()
-		.from('submissions')
-		.select('*, users(display_name, email), projects(title)')
-		.in('status', ['pending', 'in_review'])
-		.order('submitted_at', { ascending: true });
-	if (e) throw new Error(e.message);
-	return (data ?? []) as unknown as QueueItem[];
-}
-
-export type ReviewDetail = SubmissionRow & {
-	users: UserRow | null;
-	projects: ProjectRow | null;
-};
-
-export async function getSubmissionForReview(submissionId: string): Promise<ReviewDetail> {
-	const { data } = await db()
-		.from('submissions')
-		.select('*, users(*), projects(*)')
-		.eq('id', submissionId)
-		.maybeSingle();
-
-	if (!data) error(404, 'Submission not found');
-	return data as unknown as ReviewDetail;
-}
-
-export async function listReviews(submissionId: string): Promise<ReviewRow[]> {
-	const { data } = await db()
-		.from('reviews')
-		.select('*')
-		.eq('submission_id', submissionId)
-		.order('created_at', { ascending: false });
-	return (data ?? []) as ReviewRow[];
-}
-
 // ----------------------------------------------------------------- admin ---
-
-export type AdminProject = ProjectRow & {
-	hours: ProjectHoursRow | null;
-	owner: Pick<UserRow, 'display_name' | 'email'> | null;
-};
-
-/** Every project across every user, for the admin roster. Not owner-scoped. */
-export async function listAllProjects(): Promise<AdminProject[]> {
-	const [{ data: projects, error: pe }, { data: hours }] = await Promise.all([
-		db()
-			.from('projects')
-			.select('*, users(display_name, email)')
-			.order('created_at', { ascending: false }),
-		db().from('project_hours').select('*')
-	]);
-	if (pe) throw new Error(pe.message);
-
-	const byProject = new Map<string, ProjectHoursRow>(
-		((hours ?? []) as ProjectHoursRow[]).map((h) => [h.project_id, h])
-	);
-
-	return ((projects ?? []) as unknown as (ProjectRow & {
-		users: Pick<UserRow, 'display_name' | 'email'> | null;
-	})[]).map((p) => ({ ...p, owner: p.users, hours: byProject.get(p.id) ?? null }));
-}
 
 export type AdminUser = UserRow & { balance: HourBalanceRow };
 
@@ -327,11 +241,11 @@ export async function listUsersWithBalances(): Promise<AdminUser[]> {
 }
 
 /**
- * A free-standing ledger entry, outside the checkpoint-review flow —
- * fulfilling an Airtable claim, a travel allocation, or a manual correction.
- * `checkpoint_approved` is deliberately not grantable here: that type stays
- * exclusively tied to a reviewed submission via `review_submission()`, so
- * every hour credited that way has a submission behind it in the audit trail.
+ * A free-standing ledger entry, outside the review flow — a correction, or a
+ * reward/travel deduction agreed some other way. `checkpoint_approved` is
+ * deliberately not grantable here: that type stays exclusively tied to a
+ * reviewed Hack Club submission via `review_hackclub_submission()`, so every
+ * hour credited that way has a submission behind it in the audit trail.
  */
 export async function grantHours(
 	userId: string,
@@ -343,12 +257,4 @@ export async function grantHours(
 		.from('hour_transactions')
 		.insert({ user_id: userId, amount, type, note });
 	if (e) throw new Error(e.message);
-}
-
-export async function countPendingReviews(): Promise<number> {
-	const { count } = await db()
-		.from('submissions')
-		.select('id', { count: 'exact', head: true })
-		.in('status', ['pending', 'in_review']);
-	return count ?? 0;
 }

@@ -34,10 +34,6 @@
 				<span class="n">{data.users.length}</span>
 				<span class="k">builders</span>
 			</div>
-			<div class="stat-big">
-				<span class="n">{data.projects.length}</span>
-				<span class="k">projects</span>
-			</div>
 			<div class="stat-big green">
 				<span class="n">{totalBanked}h</span>
 				<span class="k">banked, all accounts</span>
@@ -48,48 +44,17 @@
 			</div>
 		</div>
 
-		<!-- "YSWS Project Submission" in this base is Hack Club's own Unified YSWS
-		     pipeline (/submit-to-hackclub) — a separate track from Expedition's
-		     hours, not a source of reward-claim requests. There is currently no
-		     self-service way for a builder to request gear for banked hours; the
-		     grant/deduct tool below is the only way to record one, by hand, once
-		     you've agreed to it some other way (Slack, email, in person). -->
+		<!-- There is currently no self-service way for a builder to request gear
+		     for banked hours; the grant/deduct tool below is the only way to
+		     record one, by hand, once you've agreed to it some other way (Slack,
+		     email, in person). Submissions and reviews live at /admin/reviews. -->
 		<section class="claims-note panel" style="margin-bottom:2.5rem">
-			<p class="section-label">Hack Club submissions</p>
+			<p class="section-label">Reviewing submissions</p>
 			<p class="hint">
-				Builders can send a finished project to Hack Club's own Unified YSWS review — separate
-				from Expedition's hours, and not something this app reads back. Check submissions there
-				if you need to.
+				Hack Club submissions and Expedition's own review decisions are handled on the
+				<a href="/admin/reviews">review queue</a>, not here. This page is only the hours ledger.
 			</p>
-			<a
-				class="link-action"
-				href="https://airtable.com/appGcYrt3CFYab05y"
-				target="_blank"
-				rel="noopener noreferrer">
-				Open the Airtable base ↗
-			</a>
 		</section>
-
-		<p class="section-label">Every project</p>
-		{#if data.projects.length}
-			<div class="row-list" style="margin-bottom:2.5rem">
-				{#each data.projects as p (p.id)}
-					<div class="row">
-						<span class="row-title">{p.title}</span>
-						<span class="row-meta">
-							{p.owner?.display_name ?? 'unknown'}{p.owner?.email ? ` · ${p.owner.email}` : ''}
-						</span>
-						<span class="row-meta">
-							{p.hours?.hours_earned ?? 0}h verified &middot;
-							{p.hours?.checkpoints_approved ?? 0} checkpoints &middot;
-							{p.hackatime_project ?? 'no Hackatime project'}
-						</span>
-					</div>
-				{/each}
-			</div>
-		{:else}
-			<p class="empty" style="margin-bottom:2.5rem">No projects yet.</p>
-		{/if}
 
 		<p class="section-label">Everyone's hours</p>
 		<div class="row-list roster">

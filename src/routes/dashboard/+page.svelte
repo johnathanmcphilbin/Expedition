@@ -6,9 +6,17 @@
 	let { data }: { data: PageData } = $props();
 
 	const flashText: Record<string, string> = {
-		connected: 'Hackatime connected. Your coding time will show up for reviewers.',
+		connected: 'Hackatime connected. Your coding time will show up here.',
 		denied: 'Hackatime connection was cancelled.',
 		failed: 'Hackatime connection failed. Try again.'
+	};
+
+	const statusLabel: Record<string, string> = {
+		pending: 'Submitted, awaiting review',
+		in_review: 'In review',
+		approved: 'Approved',
+		changes_requested: 'Needs changes',
+		rejected: 'Not approved'
 	};
 </script>
 
@@ -27,7 +35,7 @@
 						Review queue{data.pendingReviews ? ` (${data.pendingReviews})` : ''}
 					</a>
 				{/if}
-				<a class="btn" href="/projects/new">New project</a>
+				<a class="btn" href="/submit-to-hackclub">Submit project</a>
 			</div>
 		</div>
 
@@ -35,13 +43,13 @@
 			<p class="notice">{flashText[data.flash]}</p>
 		{/if}
 
-		<!-- One expedition, however many projects. Progress is the sum of every
-		     project's verified hours; spending gear does not move it back. -->
+		<!-- Approved hours only — this is the ledger, not raw Hackatime time.
+		     Spending gear does not move it back. -->
 		<section class="progress">
 			<div class="progress-head">
 				<p class="section-label">Expedition progress</p>
 				<p class="progress-figure">
-					<strong>{data.progress.hours_earned}</strong> / {data.progress.hours_target}h
+					<strong>{data.progress.hours_earned}</strong> / {data.progress.hours_target}h approved
 					&middot; checkpoint {data.progress.checkpoints_reached} of {data.progress
 						.checkpoints_total}
 				</p>
@@ -57,10 +65,9 @@
 			</div>
 			<p class="hint">
 				{#if data.progress.finished}
-					Expedition complete — all {data.progress.hours_target} hours verified.
+					Expedition complete — all {data.progress.hours_target} hours approved.
 				{:else}
-					{data.progress.hours_remaining}h left to reach Dublin. Hours from every project
-					count towards the same journey.
+					{data.progress.hours_remaining}h left to reach Dublin, once approved.
 				{/if}
 			</p>
 		</section>
@@ -72,13 +79,17 @@
 			</div>
 			<div class="stat-big">
 				<span class="n">{data.balance.hours_earned}h</span>
-				<span class="k">verified</span>
+				<span class="k">approved</span>
 			</div>
 			<div class="stat-big">
 				<span class="n">{data.balance.hours_spent}h</span>
 				<span class="k">spent</span>
 			</div>
 		</div>
+		<p class="hint" style="margin-top:0.6rem; margin-bottom:2rem">
+			Only <strong>approved</strong> hours count here — see below for tracked and submitted time
+			on each project.
+		</p>
 
 		<div class="grid-2">
 			<section>
@@ -86,18 +97,13 @@
 				<div class="panel">
 					{#if data.hackatime.connected}
 						<p class="row-title">Connected</p>
-						<p class="hint">
-							Reviewers can see your tracked coding time as evidence. Hackatime never awards
-							hours on its own.
-						</p>
+						<p class="hint">Your projects and tracked time below come straight from here.</p>
 						<p style="margin-top:1rem">
 							<a class="btn btn-outline" href="/auth/hackatime">Reconnect</a>
 						</p>
 					{:else}
 						<p class="row-title">Not connected</p>
-						<p class="hint">
-							Connect Hackatime so reviewers can see the coding time behind your checkpoints.
-						</p>
+						<p class="hint">Connect Hackatime so Expedition can show your projects and hours.</p>
 						<p style="margin-top:1rem">
 							<a class="btn" href="/auth/hackatime">Connect Hackatime</a>
 						</p>
@@ -109,65 +115,58 @@
 				<p class="section-label">Your hours</p>
 				<div class="panel">
 					<p class="hint">
-						Every approved checkpoint adds to your ledger. Nothing is ever removed unless you
-						spend it.
+						Every approved review adds to your ledger. Nothing is ever removed unless you spend
+						it.
 					</p>
 					<p style="margin-top:1rem">
 						<a class="btn btn-outline" href="/your-hours">See the ledger</a>
 					</p>
 				</div>
 			</section>
-
-			<section>
-				<p class="section-label">Submit to Hack Club</p>
-				<div class="panel">
-					<p class="hint">
-						Separate from checkpoints — send a finished project to Hack Club's own review and
-						reward pipeline. Doesn't touch your Expedition hours.
-					</p>
-					<p style="margin-top:1rem">
-						<a class="btn btn-outline" href="/submit-to-hackclub">Submit a project</a>
-					</p>
-				</div>
-			</section>
 		</div>
 
 		<section style="margin-top:2.5rem">
-			<p class="section-label">Projects</p>
-			{#if data.projects.length}
-				<div class="row-list">
-					{#each data.projects as p (p.id)}
-						<a class="row" href="/projects/{p.id}">
-							<span class="row-title">{p.title}</span>
-							<span class="row-meta">
-								{p.hours?.hours_earned ?? 0}h verified &middot;
-								{p.hours?.checkpoints_approved ?? 0} checkpoints &middot;
-								{p.hackatime_project ?? 'no Hackatime project'}
-							</span>
-						</a>
-					{/each}
-				</div>
-			{:else}
-				<p class="empty">No projects yet. Start one and log your first checkpoint.</p>
-			{/if}
-		</section>
+			<p class="section-label">Your projects</p>
+			<p class="hint" style="margin-bottom:1rem">
+				From Hackatime, live. <strong>Tracked</strong> is time logged; <strong>submitted</strong>
+				means a Hack Club submission mentions it; <strong>approved</strong> is what an Expedition
+				reviewer accepted — only that counts toward your balance above.
+			</p>
 
-		<section style="margin-top:2.5rem">
-			<p class="section-label">Recent checkpoints</p>
-			{#if data.submissions.length}
+			{#if !data.hackatime.connected}
+				<p class="empty">Connect Hackatime above to see your projects.</p>
+			{:else if data.hackatimeUnavailable}
+				<p class="empty error">Couldn't reach Hackatime just now. Try reloading in a moment.</p>
+			{:else if data.projects.length}
 				<div class="row-list">
-					{#each data.submissions.slice(0, 10) as s (s.id)}
-						<div class="row">
-							<span class="row-title">{s.projects?.title ?? 'Project'}</span>
+					{#each data.projects as p (p.name)}
+						<div class="row project-row">
+							<span class="row-title">{p.name}</span>
+							<span class="row-meta">{p.tracked} tracked</span>
 							<span class="row-meta">
-								{s.hours_requested}h requested · {new Date(s.submitted_at).toLocaleDateString()}
+								{#if p.review}
+									{p.review.approved_hours ?? 0}h approved &middot; {statusLabel[p.review.status]}
+								{:else if p.submitted}
+									Submitted, awaiting review
+								{:else}
+									Not submitted
+								{/if}
 							</span>
-							<span class="status status-{s.status}">{s.status.replace('_', ' ')}</span>
+							{#if !p.submitted}
+								<a
+									class="btn btn-outline"
+									href="/submit-to-hackclub?project={encodeURIComponent(p.name)}">
+									Submit
+								</a>
+							{/if}
 						</div>
 					{/each}
 				</div>
 			{:else}
-				<p class="empty">No checkpoints submitted yet.</p>
+				<p class="empty">
+					Nothing tracked in Hackatime yet — start coding with it running and your projects will
+					show up here.
+				</p>
 			{/if}
 		</section>
 
@@ -221,5 +220,13 @@
 		display: flex;
 		gap: 0.8rem;
 		flex-wrap: wrap;
+	}
+
+	.project-row {
+		flex-wrap: wrap;
+		gap: 0.6rem 1rem;
+	}
+	.error {
+		color: var(--red);
 	}
 </style>

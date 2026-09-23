@@ -6,7 +6,7 @@
 	let { data }: { data: PageData } = $props();
 
 	const label: Record<string, string> = {
-		checkpoint_approved: 'Checkpoint approved',
+		checkpoint_approved: 'Submission approved',
 		reward_claimed: 'Reward claimed',
 		travel_allocation: 'Travel support',
 		manual_adjustment: 'Adjustment'
@@ -24,7 +24,7 @@
 				<span class="n">{data.balance.hours_available}h</span><span class="k">banked</span>
 			</div>
 			<div class="stat-big">
-				<span class="n">{data.balance.hours_earned}h</span><span class="k">verified</span>
+				<span class="n">{data.balance.hours_earned}h</span><span class="k">approved</span>
 			</div>
 			<div class="stat-big">
 				<span class="n">{data.balance.hours_spent}h</span><span class="k">spent</span>
@@ -43,7 +43,7 @@
 				{/each}
 			</div>
 		{:else}
-			<p class="empty">Nothing on the ledger yet. Get a checkpoint approved and it shows up here.</p>
+			<p class="empty">Nothing on the ledger yet. Submit a project to Hack Club and get it reviewed, and it shows up here.</p>
 		{/if}
 
 		<p style="margin-top:2.5rem"><a href="/dashboard">← Back to dashboard</a></p>
