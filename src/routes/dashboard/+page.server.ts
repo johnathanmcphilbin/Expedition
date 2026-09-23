@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { requireUser, isReviewer } from '$lib/server/guards';
+import { requireUser, isAdmin } from '$lib/server/guards';
 import {
 	listProjectsWithHours,
 	listSubmissions,
@@ -33,7 +33,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		progress,
 		// connectionStatus deliberately returns no tokens
 		hackatime,
-		pendingReviews: isReviewer(user) ? await countPendingReviews() : null,
+		pendingReviews: isAdmin(user) ? await countPendingReviews() : null,
 		flash: url.searchParams.get('hackatime')
 	};
 };

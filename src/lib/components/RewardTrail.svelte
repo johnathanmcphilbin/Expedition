@@ -26,24 +26,17 @@
 	}
 
 	// ---- claim flow -------------------------------------------------------
+	// This trail is a preview (drag the slider below to see any hour count) —
+	// it was never wired to a real balance, so "claiming" here used to just
+	// flip local state and show a fake success banner. The confirm dialog now
+	// hands off to the real claim page instead of pretending anything happened.
 	let pending = $state<Drop | null>(null);
-	let justClaimed = $state<{ hours: number; left: number } | null>(null);
 	let dialog: HTMLDialogElement;
 
 	$effect(() => {
 		if (pending) dialog?.showModal();
 		else dialog?.close();
 	});
-
-	function confirmClaim() {
-		if (!pending) return;
-		const hrs = pending.hours;
-		// read the balance before mutating `claimed`, since `available` is derived from it
-		const left = available - hrs;
-		claimed = new Set(claimed).add(hrs);
-		justClaimed = { hours: hrs, left };
-		pending = null;
-	}
 
 	// ---- the winding route ------------------------------------------------
 	// Geometry is computed in real pixels off the measured width, so the drawn
@@ -142,15 +135,6 @@
 				</div>
 			</div>
 
-			{#if justClaimed}
-				<div class="claimed-banner">
-					<p class="cb-1">Drop claimed.</p>
-					<p class="cb-2">
-						{justClaimed.hours} hours spent. {justClaimed.left} hours still banked.
-					</p>
-				</div>
-			{/if}
-
 			<p class="prompt">What are you doing with them?</p>
 			<div class="options">
 				{#if claimable.length}
@@ -236,13 +220,10 @@
 	{#if pending}
 		<p class="c-title">Claim the {pending.hours}h drop?</p>
 		<p class="c-item">{pending.name}{pending.extra ? ` + ${pending.extra}` : ''}</p>
-		<p class="c-cost">This will spend {pending.hours} of your available hours.</p>
-		<p class="c-math">
-			<strong>{available}h available</strong> → {available - pending.hours}h remaining
-		</p>
+		<p class="c-cost">This preview is just for browsing — claiming for real spends hours from your actual ledger, not this slider.</p>
 		<div class="c-actions">
-			<button class="keep" onclick={() => (pending = null)}>Keep banking</button>
-			<button class="take" onclick={confirmClaim}>Claim reward</button>
+			<button class="keep" onclick={() => (pending = null)}>Keep browsing</button>
+			<a class="take" href="/claim">Claim for real →</a>
 		</div>
 	{/if}
 </dialog>
@@ -603,9 +584,13 @@
 		color: var(--paper);
 	}
 	.take {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		background: var(--green);
 		border: 0;
 		color: var(--white);
+		text-decoration: none;
 		box-shadow: 0 5px 0 var(--green-dark);
 	}
 	.take:active {

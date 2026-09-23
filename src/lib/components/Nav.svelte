@@ -7,7 +7,6 @@
 	}: {
 		currentUser?: {
 			displayName: string | null;
-			isReviewer: boolean;
 			isAdmin: boolean;
 			hackatimeConnected: boolean;
 		} | null;
@@ -44,8 +43,10 @@
 			<a href="/rewards">Your hours</a>
 			<a href="/ireland">Dublin</a>
 			{#if currentUser}
-				{#if currentUser.isReviewer}<a href="/admin/reviews">Reviews</a>{/if}
-				{#if currentUser.isAdmin}<a href="/admin">Admin</a>{/if}
+				{#if currentUser.isAdmin}
+					<a href="/admin/reviews">Reviews</a>
+					<a href="/admin">Admin</a>
+				{/if}
 				<a href="/dashboard">Dashboard</a>
 			{/if}
 		</nav>

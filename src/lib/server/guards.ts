@@ -16,23 +16,12 @@ export function requireUser(locals: App.Locals, returnTo?: string): UserRow {
 	return locals.user;
 }
 
-export function requireReviewer(locals: App.Locals): UserRow {
-	const user = requireUser(locals);
-	if (user.role !== 'reviewer' && user.role !== 'admin') {
-		// 404 rather than 403: don't confirm the route exists to a participant
-		error(404, 'Not found');
-	}
-	return user;
-}
-
-export function isReviewer(user: UserRow | null): boolean {
-	return user?.role === 'reviewer' || user?.role === 'admin';
-}
-
 /**
- * Admin only — deliberately stricter than requireReviewer. Reviewers judge
- * checkpoints; only admin can grant hours outright or see every user's
- * balance, and that role is granted by nobody but an operator running SQL.
+ * Admin only. Reviewing checkpoints, granting hours outright and seeing
+ * every user's balance are all gated here — the `reviewer` role exists in
+ * the schema but nothing in the app currently grants access through it, by
+ * request: the review queue and admin panel are admin-only, and that role is
+ * granted by nobody but an operator running SQL.
  */
 export function requireAdmin(locals: App.Locals): UserRow {
 	const user = requireUser(locals);

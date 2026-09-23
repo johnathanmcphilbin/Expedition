@@ -1,6 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { requireReviewer } from '$lib/server/guards';
+import { requireAdmin } from '$lib/server/guards';
 import {
 	getSubmissionForReview,
 	listAttachments,
@@ -16,7 +16,7 @@ import type { ReviewDecision } from '$lib/server/database.types';
 const DECISIONS = ['approved', 'changes_requested', 'rejected'] as const;
 
 export const load: PageServerLoad = async ({ locals, params }) => {
-	const reviewer = requireReviewer(locals);
+	const reviewer = requireAdmin(locals);
 	const submissionId = uuid(params.id, 'submission');
 
 	const submission = await getSubmissionForReview(submissionId);
@@ -60,7 +60,7 @@ export const actions: Actions = {
 	default: async ({ request, locals, params }) => {
 		// Role comes from the session; the database re-checks it again inside
 		// review_submission() before anything is written.
-		const reviewer = requireReviewer(locals);
+		const reviewer = requireAdmin(locals);
 		const submissionId = uuid(params.id, 'submission');
 		const form = await request.formData();
 
