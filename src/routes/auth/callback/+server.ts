@@ -31,7 +31,14 @@ export const GET: RequestHandler = async ({ url, cookies, request, getClientAddr
 	// Without Hackatime connected there is nothing to show on the dashboard —
 	// walk them through connecting it first, even if `next` pointed somewhere
 	// else. Anyone already connected goes straight where they were headed.
-	const hackatime = await connectionStatus(user.id);
+	let hackatime: Awaited<ReturnType<typeof connectionStatus>>;
+	try {
+		hackatime = await connectionStatus(user.id);
+	} catch {
+		// Auth and the local session are already complete. A temporary status
+		// lookup failure must not turn a successful sign-in into a 500.
+		redirect(303, next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard');
+	}
 	if (!hackatime.connected) {
 		redirect(303, '/onboarding');
 	}
