@@ -51,6 +51,20 @@
 		margin-bottom: -2px;
 	}
 
+	/* The bottom edge, mirroring the nav bar's own bottom edge — waves hang
+	   down out of this section into whatever comes after it. */
+	.how-it-works::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 100%;
+		height: 90px;
+		background: url('/wave-band-down.png') repeat-x top;
+		background-size: auto 100%;
+		margin-top: -2px;
+	}
+
 	.heading {
 		margin-bottom: 1rem;
 	}
