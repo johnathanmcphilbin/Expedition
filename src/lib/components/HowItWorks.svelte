@@ -34,7 +34,7 @@
 <style>
 	.how-it-works {
 		background: url('/wave-texture.jpg');
-		background-size: 340px auto;
+		background-size: 65px auto;
 	}
 
 	/* The wave crests overlap upward into whatever section comes before this

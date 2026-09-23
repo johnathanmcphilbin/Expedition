@@ -38,7 +38,7 @@
 	}
 	.footer {
 		background: url('/wave-texture.jpg');
-		background-size: 340px auto;
+		background-size: 65px auto;
 		padding: 3rem 0 3.5rem;
 	}
 
