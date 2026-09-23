@@ -2,6 +2,7 @@ import { redirect, type RequestHandler } from '@sveltejs/kit';
 import { exchangeCode, fetchClaims, upsertUser } from '$lib/server/hca';
 import { consumeOAuthState, createSession } from '$lib/server/session';
 import { callbackUrl } from '$lib/server/env';
+import { hasAnyProject } from '$lib/server/queries';
 
 export const GET: RequestHandler = async ({ url, cookies, request, getClientAddress }) => {
 	const error = url.searchParams.get('error');
@@ -26,6 +27,14 @@ export const GET: RequestHandler = async ({ url, cookies, request, getClientAddr
 		userAgent: request.headers.get('user-agent'),
 		ip: getClientAddress()
 	});
+
+	// Nobody with zero projects has anything to do on the dashboard yet — walk
+	// them through connecting Hackatime and picking a project first, even if
+	// `next` pointed somewhere else. Anyone who already has a project goes
+	// straight where they were headed, dashboard by default.
+	if (!(await hasAnyProject(user.id))) {
+		redirect(303, '/onboarding');
+	}
 
 	redirect(303, next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard');
 };

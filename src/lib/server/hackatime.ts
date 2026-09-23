@@ -111,12 +111,21 @@ export async function connectionStatus(
 export interface HackatimeProjectTime {
 	name: string;
 	totalSeconds: number;
+	languages: string[];
+	archived: boolean;
 }
 
 /**
- * Per-project coding time for a user. Returns null when there is no connection
- * or Hackatime is unreachable, so a reviewer sees "unavailable" rather than a
- * crashed page — this is supporting evidence, not a hard dependency.
+ * The Hackatime projects behind this user's OAuth token — the list a
+ * participant picks "what you're building" from during onboarding, and the
+ * source of truth `getOwnedProject` submissions are checked against.
+ *
+ * `/authenticated/projects` is scoped to the token itself, unlike the old
+ * `/users/{id}/stats` call this replaced, which needed `hackatime_user_id`
+ * looked up first and only returned the numbers, not language or archived
+ * state. Returns null when there is no connection or Hackatime is
+ * unreachable, so a reviewer sees "unavailable" rather than a crashed page —
+ * this is supporting evidence, not a hard dependency.
  */
 export async function fetchProjectTimes(userId: string): Promise<HackatimeProjectTime[] | null> {
 	const { data: conn } = await db()
@@ -126,15 +135,10 @@ export async function fetchProjectTimes(userId: string): Promise<HackatimeProjec
 		.maybeSingle();
 
 	const connection = conn as HackatimeConnectionRow | null;
-	if (!connection?.hackatime_user_id) return null;
+	if (!connection) return null;
 
 	try {
-		const u = new URL(
-			`${config.hackatime.apiUrl}/users/${encodeURIComponent(connection.hackatime_user_id)}/stats`
-		);
-		u.searchParams.set('features', 'projects');
-
-		const res = await fetch(u, {
+		const res = await fetch(`${config.hackatime.apiUrl}/authenticated/projects`, {
 			headers: {
 				Authorization: `Bearer ${connection.access_token}`,
 				Accept: 'application/json'
@@ -144,12 +148,22 @@ export async function fetchProjectTimes(userId: string): Promise<HackatimeProjec
 		if (!res.ok) return null;
 
 		const json = (await res.json()) as {
-			data?: { projects?: Array<{ name?: string; total_seconds?: number }> };
+			projects?: Array<{
+				name?: string;
+				total_seconds?: number;
+				languages?: string[];
+				archived?: boolean;
+			}>;
 		};
 
-		return (json.data?.projects ?? [])
+		return (json.projects ?? [])
 			.filter((p) => p.name)
-			.map((p) => ({ name: p.name as string, totalSeconds: Number(p.total_seconds ?? 0) }))
+			.map((p) => ({
+				name: p.name as string,
+				totalSeconds: Number(p.total_seconds ?? 0),
+				languages: p.languages ?? [],
+				archived: !!p.archived
+			}))
 			.sort((a, b) => b.totalSeconds - a.totalSeconds);
 	} catch {
 		return null;

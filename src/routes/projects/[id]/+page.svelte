@@ -22,8 +22,31 @@
 					</p>
 				{/if}
 			</div>
-			<a class="btn" href="/projects/{data.project.id}/submit">Submit a checkpoint</a>
+			<div class="head-actions">
+				<a class="btn btn-outline btn-plain" href="/projects/new">+ Start another project</a>
+				<a class="btn" href="/projects/{data.project.id}/submit">Submit a checkpoint</a>
+			</div>
 		</div>
+
+		<!-- Verified hours, and the next checkpoint this project is working
+		     towards — the numbers a builder actually lands here to check. -->
+		<div class="stat-row" style="margin-bottom:2rem">
+			<div class="stat-big green">
+				<span class="n">{data.progress.hoursEarned}h</span>
+				<span class="k">verified</span>
+			</div>
+			<div class="stat-big">
+				<span class="n">{data.progress.checkpointsApproved}</span>
+				<span class="k">checkpoints</span>
+			</div>
+			<div class="stat-big">
+				<span class="n">${data.progress.rewardValue}</span>
+				<span class="k">in gear earned</span>
+			</div>
+		</div>
+		<p class="hint" style="margin-bottom:2rem">
+			{data.progress.hoursToNextCheckpoint}h to the {data.progress.nextCheckpointAt}h checkpoint.
+		</p>
 
 		{#if data.project.description}
 			<div class="panel" style="margin-bottom:2rem">
@@ -62,6 +85,12 @@
 					tracked coding time.
 				</p>
 			{/if}
+			{#if data.connected && !data.project.hackatime_project}
+				<p class="hint">
+					Nothing tracked under this project yet. Start coding with Hackatime running, then
+					<button type="button" class="link-action" onclick={() => location.reload()}>check again</button>.
+				</p>
+			{/if}
 		</div>
 
 		<div class="stack" style="margin-bottom:2.5rem">
@@ -94,6 +123,12 @@
 <Footer />
 
 <style>
+	.head-actions {
+		display: flex;
+		gap: 0.8rem;
+		flex-wrap: wrap;
+	}
+
 	.connect-row {
 		display: flex;
 		gap: 0.75rem;

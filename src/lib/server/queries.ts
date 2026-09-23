@@ -18,6 +18,15 @@ import type {
  * ownership is never inferred from a value the browser supplied.
  */
 
+/** Does this user own at least one project? Used to gate onboarding. */
+export async function hasAnyProject(userId: string): Promise<boolean> {
+	const { count } = await db()
+		.from('projects')
+		.select('id', { count: 'exact', head: true })
+		.eq('user_id', userId);
+	return (count ?? 0) > 0;
+}
+
 export async function listProjects(userId: string): Promise<ProjectRow[]> {
 	const { data, error: e } = await db()
 		.from('projects')
@@ -147,6 +156,12 @@ export async function listProjectsWithHours(
 	);
 
 	return projects.map((p) => ({ ...p, hours: byProject.get(p.id) ?? null }));
+}
+
+/** One project's earned hours, or a zeroed row if nothing has been credited yet. */
+export async function getProjectHours(projectId: string): Promise<ProjectHoursRow | null> {
+	const { data } = await db().from('project_hours').select('*').eq('project_id', projectId).maybeSingle();
+	return data as ProjectHoursRow | null;
 }
 
 /** Hackatime project names already claimed by this user's other projects. */
