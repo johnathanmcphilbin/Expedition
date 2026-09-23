@@ -28,8 +28,8 @@
 		let dpr = 1;
 
 		// ---- scene constants -------------------------------------------------
-		const BOAT_W = 46;
-		const PUSH_RADIUS = 86;
+		const BOAT_W = 78;
+		const PUSH_RADIUS = 130;
 		const FRICTION = 0.972;
 		const MAX_SPEED = 26;
 

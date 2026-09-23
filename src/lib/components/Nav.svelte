@@ -20,10 +20,22 @@
 
 <header class="nav">
 	<div class="wrap nav-inner">
-		<a href="/" class="logo">
-			<img src="/logo.png" alt="" width="28" height="26" />
-			Expedition
-		</a>
+		<div class="brand-group">
+			<!-- Credits the program, not part of Expedition's own nav — goes to
+			     hackclub.com rather than anywhere in this app. -->
+			<a
+				class="hc-mark"
+				href="https://hackclub.com"
+				target="_blank"
+				rel="noopener noreferrer"
+				aria-label="Hack Club">
+				<img src="/hackclub-flag.svg" alt="" width="42" height="24" />
+			</a>
+			<a href="/" class="logo">
+				<img src="/logo.png" alt="" width="38" height="35" />
+				Expedition
+			</a>
+		</div>
 
 		<nav class="links" class:open>
 			<a href="/#how-it-works">How it works</a>
@@ -84,11 +96,28 @@
 		padding-top: 1rem;
 		padding-bottom: 1rem;
 	}
+	.brand-group {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.7rem;
+		flex-shrink: 0;
+	}
+	.hc-mark {
+		display: inline-flex;
+		align-items: center;
+		padding-right: 0.7rem;
+		border-right: 1.5px solid var(--rule-strong);
+		opacity: 0.85;
+		transition: opacity 120ms ease;
+	}
+	.hc-mark:hover {
+		opacity: 1;
+	}
 	.logo {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.5rem;
-		font-size: 1.3rem;
+		font-size: 1.5rem;
 		font-weight: 800;
 		letter-spacing: -0.02em;
 		color: var(--navy);
@@ -96,7 +125,7 @@
 		flex-shrink: 0;
 	}
 	.logo img {
-		height: 26px;
+		height: 35px;
 		width: auto;
 	}
 	.links {

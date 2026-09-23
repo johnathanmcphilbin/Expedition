@@ -2,7 +2,7 @@
 	<div class="wrap footer-inner">
 		<div class="col">
 			<span class="brand">
-				<img src="/logo.png" alt="" width="26" height="24" />
+				<img src="/logo.png" alt="" width="34" height="32" />
 				Expedition
 			</span>
 			<p class="tag">A Hack Club YSWS. Build something worth exploring.</p>
@@ -16,7 +16,10 @@
 		</div>
 
 		<div class="col meta-col">
-			<span>Hack Club · YSWS program</span>
+			<span class="hc-credit">
+				<img src="/hackclub-flag.svg" alt="" width="46" height="26" />
+				Hack Club · YSWS program
+			</span>
 			<span>For teens aged 13&ndash;18</span>
 			<span class="signoff">johnny was here</span>
 		</div>
@@ -38,14 +41,14 @@
 	.brand {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		font-size: 1.25rem;
+		gap: 0.6rem;
+		font-size: 1.4rem;
 		font-weight: 800;
 		letter-spacing: -0.02em;
 		color: var(--navy);
 	}
 	.brand img {
-		height: 24px;
+		height: 32px;
 		width: auto;
 	}
 
@@ -76,6 +79,14 @@
 	.meta-col {
 		color: var(--muted);
 		font-weight: 500;
+	}
+	.hc-credit {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.hc-credit img {
+		flex-shrink: 0;
 	}
 
 	.signoff {

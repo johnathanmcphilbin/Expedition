@@ -18,7 +18,7 @@
 	<div class="wrap hero-inner">
 		<div class="panel">
 			<div class="mark" aria-hidden="true">
-				<img src="/logo.png" alt="" width="46" height="43" />
+				<img src="/logo.png" alt="" width="72" height="67" />
 			</div>
 			<div class="titles">
 				<h1><span class="light">a hack club ysws:</span> expedition</h1>
@@ -76,7 +76,7 @@
 
 	.mark {
 		flex-shrink: 0;
-		width: 92px;
+		width: 132px;
 		display: grid;
 		place-items: center;
 		border-right: 3px solid var(--navy);
@@ -84,7 +84,7 @@
 	}
 	.mark img {
 		width: 100%;
-		max-width: 46px;
+		max-width: 76px;
 		height: auto;
 	}
 
