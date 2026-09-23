@@ -81,6 +81,10 @@
 			</button>
 		</div>
 	</div>
+
+	<!-- The nav's own edge, not a border — waves hang down out of the water
+	     the nav bar represents into the page below. -->
+	<div class="nav-wave" aria-hidden="true"></div>
 </header>
 
 <style>
@@ -88,8 +92,14 @@
 		position: sticky;
 		top: 0;
 		z-index: 500;
-		background: var(--paper);
-		border-bottom: 2px solid var(--rule);
+		background: url('/wave-texture.jpg');
+		background-size: 340px auto;
+	}
+	.nav-wave {
+		height: 22px;
+		background: url('/wave-band-down.png') repeat-x;
+		background-size: auto 100%;
+		margin-top: -2px;
 	}
 	.nav-inner {
 		display: flex;
@@ -187,7 +197,7 @@
 		width: 22px;
 		height: 2.5px;
 		background: var(--navy);
-		border-radius: 2px;
+		border-radius: 0;
 	}
 
 	@media (max-width: 900px) {

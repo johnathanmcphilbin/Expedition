@@ -42,7 +42,7 @@
 	.checkpoint {
 		background: var(--white);
 		border: 2px solid var(--rule);
-		border-radius: 14px;
+		border-radius: 0;
 		overflow: hidden;
 		break-inside: avoid;
 		display: flex;

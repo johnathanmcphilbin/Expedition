@@ -72,7 +72,7 @@
 		margin-top: 2.5rem;
 		background: var(--white);
 		border: 2px solid var(--rule);
-		border-radius: 16px;
+		border-radius: 0;
 		padding: 1.8rem;
 		max-width: 520px;
 	}
@@ -109,7 +109,7 @@
 	.dropzone {
 		background: var(--paper-soft);
 		border: 2px dashed var(--rule-strong);
-		border-radius: 12px;
+		border-radius: 0;
 		color: var(--muted);
 		font-weight: 700;
 		padding: 1.2rem;
@@ -127,7 +127,7 @@
 	textarea {
 		background: var(--white);
 		border: 2px solid var(--rule-strong);
-		border-radius: 12px;
+		border-radius: 0;
 		color: var(--ink);
 		padding: 0.75em 0.85em;
 		font-family: var(--font-sans);

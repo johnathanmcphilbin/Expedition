@@ -9,7 +9,7 @@
 	];
 </script>
 
-<section class="section" id="how-it-works">
+<section class="section how-it-works" id="how-it-works">
 	<div class="wrap">
 		<h2 class="heading">From an idea to 40 hours.</h2>
 		<p class="lede">
@@ -32,6 +32,25 @@
 </section>
 
 <style>
+	.how-it-works {
+		background: url('/wave-texture.jpg');
+		background-size: 340px auto;
+	}
+
+	/* The wave crests overlap upward into whatever section comes before this
+	   one — the seam between them, not a border. */
+	.how-it-works::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 100%;
+		height: 34px;
+		background: url('/wave-band-up.png') repeat-x bottom;
+		background-size: auto 100%;
+		margin-bottom: -2px;
+	}
+
 	.heading {
 		margin-bottom: 1rem;
 	}

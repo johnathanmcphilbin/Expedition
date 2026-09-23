@@ -80,7 +80,7 @@
 	.person {
 		background: var(--white);
 		border: 2px solid var(--rule);
-		border-radius: 14px;
+		border-radius: 0;
 		padding: 1.2rem;
 	}
 

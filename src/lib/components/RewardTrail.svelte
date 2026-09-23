@@ -392,7 +392,7 @@
 		position: absolute;
 		width: 26px;
 		height: 26px;
-		border-radius: 50%;
+		border-radius: 0;
 		border: 6px solid var(--rule-strong);
 		background: var(--paper);
 		transform: translate(-50%, -50%);
@@ -502,7 +502,7 @@
 		background: var(--green);
 		color: var(--white);
 		border: 0;
-		border-radius: 12px;
+		border-radius: 0;
 		box-shadow: 0 5px 0 var(--green-dark);
 		font-family: var(--font-sans);
 		font-size: 0.92rem;
@@ -530,6 +530,7 @@
 	/* ---------- confirmation ---------- */
 	.confirm {
 		border: 3px solid var(--navy);
+		border-radius: 0;
 		background: var(--paper);
 		color: var(--ink);
 		padding: 2rem;
@@ -572,7 +573,7 @@
 		font-weight: 800;
 		font-size: 0.95rem;
 		padding: 0.85em 1.3em;
-		border-radius: 12px;
+		border-radius: 0;
 		cursor: pointer;
 	}
 	.keep {

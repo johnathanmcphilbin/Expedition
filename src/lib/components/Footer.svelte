@@ -1,3 +1,6 @@
+<!-- Waves crest up out of the page into the footer, then the footer itself
+     is the same water the page has been sailing on the whole way down. -->
+<div class="footer-wave" aria-hidden="true"></div>
 <footer class="footer">
 	<div class="wrap footer-inner">
 		<div class="col">
@@ -27,8 +30,15 @@
 </footer>
 
 <style>
+	.footer-wave {
+		height: 22px;
+		background: url('/wave-band-up.png') repeat-x;
+		background-size: auto 100%;
+		margin-bottom: -2px;
+	}
 	.footer {
-		border-top: 2px solid var(--rule);
+		background: url('/wave-texture.jpg');
+		background-size: 340px auto;
 		padding: 3rem 0 3.5rem;
 	}
 

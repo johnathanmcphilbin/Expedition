@@ -25,7 +25,7 @@
 .panel {
 	background: var(--white);
 	border: 2px solid var(--rule);
-	border-radius: 14px;
+	border-radius: 0;
 	padding: 1.4rem;
 }
 
@@ -75,6 +75,8 @@
 input[type='text'],
 input[type='url'],
 input[type='number'],
+input[type='email'],
+input[type='search'],
 input[type='file'],
 select,
 textarea {
@@ -84,7 +86,7 @@ textarea {
 	color: var(--ink);
 	background: var(--white);
 	border: 2px solid var(--rule-strong);
-	border-radius: 10px;
+	border-radius: 0;
 	padding: 0.7em 0.85em;
 	width: 100%;
 }
@@ -92,6 +94,13 @@ textarea {
 textarea {
 	resize: vertical;
 	min-height: 7rem;
+}
+
+/* Safari/Chrome round a search field's corners in their UA stylesheet no
+   matter what border-radius says, unless appearance is reset first. */
+input[type='search'] {
+	appearance: none;
+	-webkit-appearance: none;
 }
 
 input:focus,
@@ -105,7 +114,7 @@ textarea:focus {
 .error-box {
 	background: #fdeceb;
 	border: 2px solid var(--red);
-	border-radius: 10px;
+	border-radius: 0;
 	padding: 0.9rem 1.1rem;
 	color: #8f2b1e;
 	font-weight: 600;
