@@ -1,6 +1,12 @@
 import type { PageServerLoad } from './$types';
 import { requireUser, isAdmin } from '$lib/server/guards';
-import { getBalance, getProgress, listOwnReviews, countPendingReviews } from '$lib/server/queries';
+import {
+	getBalance,
+	getProgress,
+	listOwnReviews,
+	countPendingReviews,
+	listHackClubSubmissions
+} from '$lib/server/queries';
 import { connectionStatus, fetchProjectTimes, formatHours } from '$lib/server/hackatime';
 import { syncHackClubSubmissions } from '$lib/server/airtable';
 import type { SubmissionReviewRow } from '$lib/server/database.types';
@@ -29,14 +35,23 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	let projects: DashboardProject[] = [];
 	let hackatimeUnavailable = false;
+	let syncError = false;
 
 	if (hackatime.connected) {
 		// Sync just this user's submissions — cheap, and keeps their own
 		// status fresh without waiting for an admin to open the full queue.
+		// A sync failure (Airtable down/rate-limited/misconfigured) must not
+		// turn "check your dashboard" into a 500 — fall back to whatever was
+		// cached before and say so, same as /admin/reviews does.
 		const [times, submissions] = await Promise.all([
 			fetchProjectTimes(user.id),
 			hackatime.hackatimeUserId
-				? syncHackClubSubmissions(hackatime.hackatimeUserId)
+				? syncHackClubSubmissions(hackatime.hackatimeUserId).catch(() => {
+						syncError = true;
+						// fall back to whatever was cached from the last
+						// successful sync, rather than showing nothing
+						return listHackClubSubmissions(user.id);
+					})
 				: Promise.resolve([])
 		]);
 
@@ -69,6 +84,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		progress,
 		hackatime,
 		hackatimeUnavailable,
+		syncError,
 		projects,
 		pendingReviews,
 		flash: url.searchParams.get('hackatime')

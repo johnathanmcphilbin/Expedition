@@ -134,6 +134,13 @@
 				reviewer accepted — only that counts toward your balance above.
 			</p>
 
+			{#if data.syncError}
+				<p class="hint error" style="margin-bottom:1rem">
+					Couldn't refresh submission status from Hack Club just now — "submitted" below may be
+					out of date.
+				</p>
+			{/if}
+
 			{#if !data.hackatime.connected}
 				<p class="empty">Connect Hackatime above to see your projects.</p>
 			{:else if data.hackatimeUnavailable}
