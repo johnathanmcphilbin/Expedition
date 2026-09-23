@@ -37,7 +37,8 @@
 		margin-bottom: -2px;
 	}
 	.footer {
-		background: var(--sea-band);
+		background: url('/wave-texture.jpg');
+		background-size: 340px auto;
 		padding: 3rem 0 3.5rem;
 	}
 

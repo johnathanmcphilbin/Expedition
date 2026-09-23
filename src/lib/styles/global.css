@@ -69,11 +69,6 @@
 	   footer all read as the same sea */
 	--sea: #c9dcec;
 	--sea-deep: #8fb4d2;
-	/* Matched to the flat edge of the wave band PNGs (#bad3e4 / #c0d7e7) so a
-	   band can butt against a panel with no seam. Using the texture here
-	   instead put two different tile scales next to each other, which read as
-	   a hard straight line exactly where the waves were meant to blend. */
-	--sea-band: #bdd5e5;
 
 	/* warm document cream — button ink on navy, never a page background */
 	--cream: #f8f3e7;

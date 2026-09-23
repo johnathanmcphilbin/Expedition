@@ -101,13 +101,25 @@
 		position: sticky;
 		top: 0;
 		z-index: 500;
-		background: var(--sea-band);
+		background: url('/wave-texture.jpg');
+		background-size: 340px auto;
 	}
+	/* Overlapping past the nav's own bottom edge, the same way How It Works'
+	   bottom wave overlaps past ITS bottom edge — the transparent gaps in the
+	   wave PNG need to reveal the page underneath, not more nav texture, or
+	   the wave shape disappears and all that's left is the header's own
+	   straight rectangular edge. Nested inside .nav, sharing its background,
+	   was exactly that bug. */
 	.nav-wave {
-		height: 64px;
-		background: url('/wave-band-down.png') repeat-x;
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 100%;
+		height: 90px;
+		background: url('/wave-band-down.png') repeat-x top;
 		background-size: auto 100%;
 		margin-top: -2px;
+		pointer-events: none;
 		transition: height 260ms ease, opacity 200ms ease;
 	}
 	/* rolled away once you start scrolling, so the sticky bar stays slim */
@@ -227,7 +239,8 @@
 			top: 100%;
 			left: 0;
 			right: 0;
-			background: var(--sea-band);
+			background: url('/wave-texture.jpg');
+			background-size: 340px auto;
 			flex-direction: column;
 			align-items: flex-start;
 			padding: 1.2rem var(--edge-pad);
