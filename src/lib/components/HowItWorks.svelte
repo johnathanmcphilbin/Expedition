@@ -33,8 +33,7 @@
 
 <style>
 	.how-it-works {
-		background: url('/wave-texture.jpg');
-		background-size: 340px auto;
+		background: var(--sea-band);
 	}
 
 	/* The wave crests overlap upward into whatever section comes before this

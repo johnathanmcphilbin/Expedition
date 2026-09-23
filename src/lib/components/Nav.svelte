@@ -101,8 +101,7 @@
 		position: sticky;
 		top: 0;
 		z-index: 500;
-		background: url('/wave-texture.jpg');
-		background-size: 340px auto;
+		background: var(--sea-band);
 	}
 	.nav-wave {
 		height: 64px;
@@ -228,8 +227,7 @@
 			top: 100%;
 			left: 0;
 			right: 0;
-			background: url('/wave-texture.jpg');
-			background-size: 340px auto;
+			background: var(--sea-band);
 			flex-direction: column;
 			align-items: flex-start;
 			padding: 1.2rem var(--edge-pad);
