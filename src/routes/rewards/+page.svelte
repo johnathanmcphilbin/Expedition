@@ -16,16 +16,9 @@
 </svelte:head>
 
 <main>
-	<section class="claim-cta">
-		<div class="wrap claim-cta-inner">
-			<p class="claim-cta-text">Already got hours banked?</p>
-			<a class="btn" href="/claim">Claim your hours →</a>
-		</div>
-	</section>
-
-	<!-- Everything below the button above is a preview: drag the slider to see
-	     how the trail looks at any hour count. It isn't your real balance, and
-	     "claiming" here hands off to the real page rather than doing anything. -->
+	<!-- This whole page is a preview: drag the slider to see how the trail
+	     looks at any hour count. There is no live way to redeem hours for gear
+	     yet, so nothing here is wired to a real account or a real checkout. -->
 	<RewardTrail bind:hoursBuilt bind:claimed />
 
 	<section class="section gearorgo">
@@ -51,22 +44,6 @@
 <Footer />
 
 <style>
-	.claim-cta {
-		border-bottom: 2px solid var(--rule);
-		background: var(--paper-soft);
-	}
-	.claim-cta-inner {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		flex-wrap: wrap;
-		gap: 1rem;
-		padding: 1.2rem 0;
-	}
-	.claim-cta-text {
-		font-weight: 700;
-		color: var(--slate);
-	}
 
 	.gearorgo {
 		background: var(--paper-soft);

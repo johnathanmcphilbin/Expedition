@@ -112,9 +112,21 @@
 						Every approved checkpoint adds to your ledger. Nothing is ever removed unless you
 						spend it.
 					</p>
-					<p class="head-actions" style="margin-top:1rem">
+					<p style="margin-top:1rem">
 						<a class="btn btn-outline" href="/your-hours">See the ledger</a>
-						<a class="btn btn-outline" href="/claim">Claim your hours</a>
+					</p>
+				</div>
+			</section>
+
+			<section>
+				<p class="section-label">Submit to Hack Club</p>
+				<div class="panel">
+					<p class="hint">
+						Separate from checkpoints — send a finished project to Hack Club's own review and
+						reward pipeline. Doesn't touch your Expedition hours.
+					</p>
+					<p style="margin-top:1rem">
+						<a class="btn btn-outline" href="/submit-to-hackclub">Submit a project</a>
 					</p>
 				</div>
 			</section>

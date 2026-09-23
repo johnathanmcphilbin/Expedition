@@ -20,6 +20,7 @@ Fill in six values. `.env` is gitignored; never commit real values.
 | `HCA_CLIENT_ID` / `HCA_CLIENT_SECRET` | OAuth client on `auth.hackclub.com` |
 | `HACKATIME_CLIENT_ID` / `HACKATIME_CLIENT_SECRET` | OAuth client on `hackatime.hackclub.com` |
 | `APP_ORIGIN` | Production only: `https://expedition.hackclub.com` |
+| `AIRTABLE_API_KEY` | Personal access token, `data.records:read` + `schema.bases:read` on the Unified YSWS base. Not currently read by the running app — see "Hack Club submission" below. |
 
 Redirect URIs to register. Both environments can be registered on the same
 OAuth client — Doorkeeper takes one URI per line:
@@ -125,6 +126,34 @@ positive, debits negative), so spending can be added without a migration.
 A participant runs as many projects as they like. Each may map to one Hackatime
 project, enforced by `projects_one_hackatime_per_user` — without it two projects
 could claim the same tracked time and count it twice.
+
+### Hack Club submission, separately from Expedition's hours
+
+`/submit-to-hackclub` embeds Hack Club's own **Unified YSWS** Airtable form
+(base `appGcYrt3CFYab05y`, table `YSWS Project Submission`) with a project's
+repo/demo URL and description prefilled via Airtable's
+[form-prefill query params](https://support.airtable.com/docs/prefilling-a-form).
+That's a public, unauthenticated embed — it needs no API key.
+
+This is Hack Club's own end-of-program review and reward pipeline, shared
+across every YSWS program, not something Expedition built or controls. It is
+deliberately **not** wired to Expedition's ledger:
+
+- The table has no field Expedition sets or can reliably match a synced row
+  against — `Automation - YSWS Record ID` is assigned by Hack Club's own
+  automation after the fact, not by us.
+- The closest thing to a status, `Automation - Status`, only reflects whether
+  the row was successfully handed off to Hack Club's backend
+  (`1–Pending Submission` / `1.5–Processing` / `2–Submitted` /
+  `0–Error`), not whether anyone has reviewed or approved it. Crediting hours
+  off that would mean crediting unverified self-reported work.
+
+`AIRTABLE_API_KEY` was used once, ad hoc, to inspect this schema — the app
+doesn't read it at runtime. To build a real status readback later (e.g. "not
+yet submitted" / "submitted" badges, still never touching the ledger), the
+Airtable table would need a hidden field Expedition can prefill with the
+project id, so a synced row can be matched exactly instead of guessed at by
+name or URL.
 
 Progress is **not** stored. Two views in migration 0003 derive it from the
 ledger:

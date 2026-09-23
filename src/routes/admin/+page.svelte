@@ -48,14 +48,18 @@
 			</div>
 		</div>
 
-		<!-- Claims come in through the Airtable form at /claim, not through this
-		     app — nothing here reads Airtable, so cross-check a submission there,
-		     then use the matching row below to deduct the hours. -->
+		<!-- "YSWS Project Submission" in this base is Hack Club's own Unified YSWS
+		     pipeline (/submit-to-hackclub) — a separate track from Expedition's
+		     hours, not a source of reward-claim requests. There is currently no
+		     self-service way for a builder to request gear for banked hours; the
+		     grant/deduct tool below is the only way to record one, by hand, once
+		     you've agreed to it some other way (Slack, email, in person). -->
 		<section class="claims-note panel" style="margin-bottom:2.5rem">
-			<p class="section-label">Claims</p>
+			<p class="section-label">Hack Club submissions</p>
 			<p class="hint">
-				Reward requests are collected in Airtable, not in this database. Check submissions
-				there, then deduct the hours below against the builder who claimed them.
+				Builders can send a finished project to Hack Club's own Unified YSWS review — separate
+				from Expedition's hours, and not something this app reads back. Check submissions there
+				if you need to.
 			</p>
 			<a
 				class="link-action"
@@ -118,7 +122,7 @@
 							<input type="hidden" name="user_id" value={u.id} />
 							<select name="type" required>
 								<option value="manual_adjustment">Correction (+/-)</option>
-								<option value="reward_claimed">Reward claimed (Airtable, deduct)</option>
+								<option value="reward_claimed">Reward given (deduct)</option>
 								<option value="travel_allocation">Travel support (deduct)</option>
 							</select>
 							<input

@@ -17,10 +17,7 @@
 
 <main class="app-page">
 	<div class="wrap">
-		<div class="app-head">
-			<h1 class="app-title">Your hours</h1>
-			<a class="btn" href="/claim">Claim your hours</a>
-		</div>
+		<div class="app-head"><h1 class="app-title">Your hours</h1></div>
 
 		<div class="stat-row">
 			<div class="stat-big green">

@@ -27,9 +27,9 @@
 
 	// ---- claim flow -------------------------------------------------------
 	// This trail is a preview (drag the slider below to see any hour count) —
-	// it was never wired to a real balance, so "claiming" here used to just
-	// flip local state and show a fake success banner. The confirm dialog now
-	// hands off to the real claim page instead of pretending anything happened.
+	// it was never wired to a real balance. There is no live way to redeem
+	// hours for gear yet, so the confirm dialog says exactly that rather than
+	// faking a success state.
 	let pending = $state<Drop | null>(null);
 	let dialog: HTMLDialogElement;
 
@@ -220,10 +220,12 @@
 	{#if pending}
 		<p class="c-title">Claim the {pending.hours}h drop?</p>
 		<p class="c-item">{pending.name}{pending.extra ? ` + ${pending.extra}` : ''}</p>
-		<p class="c-cost">This preview is just for browsing — claiming for real spends hours from your actual ledger, not this slider.</p>
+		<p class="c-cost">
+			This is a preview, not a real checkout — there's no live way to redeem hours for gear yet.
+			The numbers here are just for browsing.
+		</p>
 		<div class="c-actions">
-			<button class="keep" onclick={() => (pending = null)}>Keep browsing</button>
-			<a class="take" href="/claim">Claim for real →</a>
+			<button class="keep" onclick={() => (pending = null)}>Close</button>
 		</div>
 	{/if}
 </dialog>
@@ -565,8 +567,7 @@
 		margin-top: 1.6rem;
 		flex-wrap: wrap;
 	}
-	.keep,
-	.take {
+	.keep {
 		font-family: var(--font-sans);
 		font-weight: 800;
 		font-size: 0.95rem;
@@ -583,21 +584,6 @@
 		background: var(--navy);
 		color: var(--paper);
 	}
-	.take {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--green);
-		border: 0;
-		color: var(--white);
-		text-decoration: none;
-		box-shadow: 0 5px 0 var(--green-dark);
-	}
-	.take:active {
-		transform: translateY(4px);
-		box-shadow: 0 1px 0 var(--green-dark);
-	}
-
 	/* ---------- narrow: same winding route, tighter composition ---------- */
 	@media (max-width: 760px) {
 		.stop {
