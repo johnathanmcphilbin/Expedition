@@ -74,6 +74,23 @@ export function hours(value: FormDataEntryValue | null, field: string): number {
 	return Math.round(n * 4) / 4;
 }
 
+/**
+ * Signed hours, for admin ledger grants and deductions — unlike `hours()`,
+ * zero and negative values are allowed (a deduction for a fulfilled claim is
+ * a negative amount), but the database's own sign-matches-type constraint is
+ * still the real guard: this only rejects garbage before it gets there.
+ */
+export function signedHours(value: FormDataEntryValue | null, field: string): number {
+	if (typeof value !== 'string' || !value.trim()) {
+		throw new ValidationError(`${field} is required`, field);
+	}
+	const n = Number(value);
+	if (!Number.isFinite(n)) throw new ValidationError(`${field} must be a number`, field);
+	if (n === 0) throw new ValidationError(`${field} cannot be zero`, field);
+	if (Math.abs(n) > 200) throw new ValidationError(`${field} is implausibly large`, field);
+	return Math.round(n * 4) / 4;
+}
+
 export function uuid(value: string | undefined, field: string): string {
 	const re = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 	if (!value || !re.test(value)) throw new ValidationError(`Invalid ${field}`, field);

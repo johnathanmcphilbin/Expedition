@@ -9,7 +9,8 @@ import type {
 	HourBalanceRow,
 	ProjectHoursRow,
 	ExpeditionProgressRow,
-	UserRow
+	UserRow,
+	HourTransactionType
 } from './database.types';
 
 /**
@@ -271,6 +272,77 @@ export async function listReviews(submissionId: string): Promise<ReviewRow[]> {
 		.eq('submission_id', submissionId)
 		.order('created_at', { ascending: false });
 	return (data ?? []) as ReviewRow[];
+}
+
+// ----------------------------------------------------------------- admin ---
+
+export type AdminProject = ProjectRow & {
+	hours: ProjectHoursRow | null;
+	owner: Pick<UserRow, 'display_name' | 'email'> | null;
+};
+
+/** Every project across every user, for the admin roster. Not owner-scoped. */
+export async function listAllProjects(): Promise<AdminProject[]> {
+	const [{ data: projects, error: pe }, { data: hours }] = await Promise.all([
+		db()
+			.from('projects')
+			.select('*, users(display_name, email)')
+			.order('created_at', { ascending: false }),
+		db().from('project_hours').select('*')
+	]);
+	if (pe) throw new Error(pe.message);
+
+	const byProject = new Map<string, ProjectHoursRow>(
+		((hours ?? []) as ProjectHoursRow[]).map((h) => [h.project_id, h])
+	);
+
+	return ((projects ?? []) as unknown as (ProjectRow & {
+		users: Pick<UserRow, 'display_name' | 'email'> | null;
+	})[]).map((p) => ({ ...p, owner: p.users, hours: byProject.get(p.id) ?? null }));
+}
+
+export type AdminUser = UserRow & { balance: HourBalanceRow };
+
+/** Every user with their derived balance, for granting hours from the roster. */
+export async function listUsersWithBalances(): Promise<AdminUser[]> {
+	const [{ data: users, error: ue }, { data: balances }] = await Promise.all([
+		db().from('users').select('*').order('created_at', { ascending: false }),
+		db().from('user_hour_balances').select('*')
+	]);
+	if (ue) throw new Error(ue.message);
+
+	const byUser = new Map<string, HourBalanceRow>(
+		((balances ?? []) as HourBalanceRow[]).map((b) => [b.user_id, b])
+	);
+
+	return ((users ?? []) as UserRow[]).map((u) => ({
+		...u,
+		balance: byUser.get(u.id) ?? {
+			user_id: u.id,
+			hours_earned: 0,
+			hours_spent: 0,
+			hours_available: 0
+		}
+	}));
+}
+
+/**
+ * A free-standing ledger entry, outside the checkpoint-review flow —
+ * fulfilling an Airtable claim, a travel allocation, or a manual correction.
+ * `checkpoint_approved` is deliberately not grantable here: that type stays
+ * exclusively tied to a reviewed submission via `review_submission()`, so
+ * every hour credited that way has a submission behind it in the audit trail.
+ */
+export async function grantHours(
+	userId: string,
+	amount: number,
+	type: Exclude<HourTransactionType, 'checkpoint_approved'>,
+	note: string | null
+): Promise<void> {
+	const { error: e } = await db()
+		.from('hour_transactions')
+		.insert({ user_id: userId, amount, type, note });
+	if (e) throw new Error(e.message);
 }
 
 export async function countPendingReviews(): Promise<number> {

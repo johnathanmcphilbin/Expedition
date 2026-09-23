@@ -112,8 +112,9 @@
 						Every approved checkpoint adds to your ledger. Nothing is ever removed unless you
 						spend it.
 					</p>
-					<p style="margin-top:1rem">
+					<p class="head-actions" style="margin-top:1rem">
 						<a class="btn btn-outline" href="/your-hours">See the ledger</a>
+						<a class="btn btn-outline" href="/claim">Claim your hours</a>
 					</p>
 				</div>
 			</section>

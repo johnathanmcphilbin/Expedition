@@ -28,3 +28,21 @@ export function requireReviewer(locals: App.Locals): UserRow {
 export function isReviewer(user: UserRow | null): boolean {
 	return user?.role === 'reviewer' || user?.role === 'admin';
 }
+
+/**
+ * Admin only — deliberately stricter than requireReviewer. Reviewers judge
+ * checkpoints; only admin can grant hours outright or see every user's
+ * balance, and that role is granted by nobody but an operator running SQL.
+ */
+export function requireAdmin(locals: App.Locals): UserRow {
+	const user = requireUser(locals);
+	if (user.role !== 'admin') {
+		// 404 rather than 403: don't confirm the route exists to a reviewer
+		error(404, 'Not found');
+	}
+	return user;
+}
+
+export function isAdmin(user: UserRow | null): boolean {
+	return user?.role === 'admin';
+}
