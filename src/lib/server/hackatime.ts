@@ -113,6 +113,8 @@ export interface HackatimeProjectTime {
 	totalSeconds: number;
 	languages: string[];
 	archived: boolean;
+	/** ISO timestamp of the last heartbeat, or null if Hackatime never sent one. */
+	mostRecentHeartbeat: string | null;
 }
 
 /**
@@ -153,6 +155,7 @@ export async function fetchProjectTimes(userId: string): Promise<HackatimeProjec
 				total_seconds?: number;
 				languages?: string[];
 				archived?: boolean;
+				most_recent_heartbeat?: string | null;
 			}>;
 		};
 
@@ -162,7 +165,8 @@ export async function fetchProjectTimes(userId: string): Promise<HackatimeProjec
 				name: p.name as string,
 				totalSeconds: Number(p.total_seconds ?? 0),
 				languages: p.languages ?? [],
-				archived: !!p.archived
+				archived: !!p.archived,
+				mostRecentHeartbeat: p.most_recent_heartbeat ?? null
 			}))
 			.sort((a, b) => b.totalSeconds - a.totalSeconds);
 	} catch {

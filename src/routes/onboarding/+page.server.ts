@@ -26,6 +26,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		const taken = new Set(claimed);
 		projects = (times ?? [])
 			.filter((t) => !t.archived)
+			// most recently worked on first — what they're likely mid-flow on,
+			// not necessarily their all-time biggest project
+			.sort((a, b) => {
+				const at = a.mostRecentHeartbeat ? Date.parse(a.mostRecentHeartbeat) : 0;
+				const bt = b.mostRecentHeartbeat ? Date.parse(b.mostRecentHeartbeat) : 0;
+				return bt - at;
+			})
 			.map((t) => ({
 				name: t.name,
 				tracked: formatHours(t.totalSeconds),

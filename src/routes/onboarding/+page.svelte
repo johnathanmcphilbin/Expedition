@@ -11,6 +11,11 @@
 
 	const pickable = $derived(data.projects.filter((p) => !p.taken));
 	const alreadyLinked = $derived(data.projects.filter((p) => p.taken));
+
+	const VISIBLE = 5;
+	let showAll = $state(false);
+	const visiblePickable = $derived(showAll ? pickable : pickable.slice(0, VISIBLE));
+	const hiddenCount = $derived(Math.max(pickable.length - VISIBLE, 0));
 </script>
 
 <svelte:head><title>Welcome · Expedition</title></svelte:head>
@@ -66,7 +71,7 @@
 
 							{#if pickable.length}
 								<div class="project-rows">
-									{#each pickable as p (p.name)}
+									{#each visiblePickable as p (p.name)}
 										<form
 											method="POST"
 											action="?/connectExisting"
@@ -89,6 +94,11 @@
 										</form>
 									{/each}
 								</div>
+								{#if hiddenCount > 0}
+									<button type="button" class="link-action" onclick={() => (showAll = true)}>
+										Show {hiddenCount} more
+									</button>
+								{/if}
 							{:else if alreadyLinked.length}
 								<p class="hint">
 									Every tracked Hackatime project is already connected to one of your projects.
