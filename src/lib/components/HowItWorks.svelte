@@ -45,7 +45,7 @@
 		left: 0;
 		right: 0;
 		bottom: 100%;
-		height: 34px;
+		height: 90px;
 		background: url('/wave-band-up.png') repeat-x bottom;
 		background-size: auto 100%;
 		margin-bottom: -2px;
@@ -81,14 +81,14 @@
 		width: 2.2ch;
 	}
 
-	.step:nth-child(2) .num { color: var(--green); }
-	.step:nth-child(4) .num { color: var(--blue); }
-	.step:nth-child(6) .num { color: var(--orange); }
+	.body h3 {
+		font-size: clamp(1.5rem, 2.6vw, 1.9rem);
+	}
 
 	.desc {
-		margin-top: 0.4rem;
+		margin-top: 0.5rem;
 		color: var(--muted);
-		font-size: 1rem;
+		font-size: 1.15rem;
 		max-width: 52ch;
 	}
 

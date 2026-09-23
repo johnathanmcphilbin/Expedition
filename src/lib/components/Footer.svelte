@@ -5,7 +5,7 @@
 	<div class="wrap footer-inner">
 		<div class="col">
 			<span class="brand">
-				<img src="/logo.png" alt="" width="34" height="32" />
+				<img src="/logo.png" alt="" width="50" height="47" />
 				Expedition
 			</span>
 			<p class="tag">A Hack Club YSWS. Build something worth exploring.</p>
@@ -31,7 +31,7 @@
 
 <style>
 	.footer-wave {
-		height: 22px;
+		height: 64px;
 		background: url('/wave-band-up.png') repeat-x;
 		background-size: auto 100%;
 		margin-bottom: -2px;
@@ -58,7 +58,7 @@
 		color: var(--navy);
 	}
 	.brand img {
-		height: 32px;
+		height: 47px;
 		width: auto;
 	}
 

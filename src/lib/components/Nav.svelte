@@ -32,7 +32,7 @@
 				<img src="/hackclub-flag.svg" alt="" width="42" height="24" />
 			</a>
 			<a href="/" class="logo">
-				<img src="/logo.png" alt="" width="38" height="35" />
+				<img src="/logo.png" alt="" width="56" height="52" />
 				Expedition
 			</a>
 		</div>
@@ -96,7 +96,7 @@
 		background-size: 340px auto;
 	}
 	.nav-wave {
-		height: 22px;
+		height: 64px;
 		background: url('/wave-band-down.png') repeat-x;
 		background-size: auto 100%;
 		margin-top: -2px;
@@ -138,7 +138,7 @@
 		flex-shrink: 0;
 	}
 	.logo img {
-		height: 35px;
+		height: 52px;
 		width: auto;
 	}
 	.links {

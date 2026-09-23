@@ -11,15 +11,18 @@
 		const ctx = canvas.getContext('2d');
 		if (!ctx) return;
 
-		// The Expedition mark, drawn in place of the old vector boat. The
-		// artwork's own sail/hull split sits at ~58% down the image — that line
+		// The ship-only mark (not the full HACKCLUB lockup) drawn in place of
+		// the old vector boat. Deliberately the ship-only mark, not the full
+		// HACKCLUB lockup used for branding — a wordmark bobbing on the waves
+		// would look wrong. The artwork's own sail/hull split sits at ~58% down
+		// the image — that line
 		// is treated as the waterline so the mark rides the wave the same way
 		// the drawn boat did, instead of bobbing centred on empty sail.
 		const LOGO_WATERLINE = 0.58;
 		const logo = new Image();
 		let logoReady = false;
 		logo.onload = () => (logoReady = true);
-		logo.src = '/logo.png';
+		logo.src = '/ship-mark.png';
 
 		const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 

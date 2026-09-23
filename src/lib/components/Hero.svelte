@@ -13,10 +13,10 @@
 	<div class="wrap hero-inner">
 		<div class="panel">
 			<div class="mark" aria-hidden="true">
-				<img src="/logo.png" alt="" width="72" height="67" />
+				<img src="/logo.png" alt="" width="104" height="97" />
 			</div>
 			<div class="titles">
-				<h1><span class="light">a hack club ysws:</span> expedition</h1>
+				<h1>Expedition</h1>
 				<p class="sub">
 					Build whatever you want and track the time you spend making it. Every verified hour is worth
 					$5 of gear. Bank them, spend them, your call.
@@ -86,7 +86,7 @@
 
 	.mark {
 		flex-shrink: 0;
-		width: 132px;
+		width: 160px;
 		display: grid;
 		place-items: center;
 		border-right: 3px solid var(--navy);
@@ -94,7 +94,7 @@
 	}
 	.mark img {
 		width: 100%;
-		max-width: 76px;
+		max-width: 108px;
 		height: auto;
 	}
 
@@ -105,10 +105,6 @@
 	h1 {
 		font-size: clamp(1.7rem, 4.6vw, 3rem);
 		line-height: 1.02;
-	}
-	.light {
-		font-weight: 400;
-		color: var(--slate);
 	}
 
 	.sub {
