@@ -1,7 +1,7 @@
 /* ============================================================
    Shared styles for the logged-in app (dashboard, projects,
-   submissions, review queue). Uses the existing Expedition
-   tokens from global.css — no new visual language.
+	submissions, review queue). Uses the same sea-paper and printed-guide
+	language as the public home page.
    ============================================================ */
 
 .app-page {

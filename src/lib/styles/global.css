@@ -1,7 +1,7 @@
 /* ============================================================
    EXPEDITION / Hack Club YSWS
    Phantom Sans + the official Hack Club palette.
-   Light paper, navy ink, chunky pressable buttons.
+	Cool sea paper, navy ink, chunky pressable buttons.
    ============================================================ */
 
 @font-face {
@@ -41,7 +41,7 @@
 }
 
 :root {
-	/* Irish green leads; Hack Club red/orange/blue as secondary accents */
+	/* Sea blue leads; Irish green and Hack Club red/orange remain accents. */
 	--green: #2f9e57;
 	--green-dark: #1f6f3c;
 	--green-bright: #43c06d;
@@ -60,9 +60,9 @@
 	--slate: #3b4a5f;
 	--muted: #66748a;
 
-	/* soft sage paper, distinct from the cream used elsewhere in Hack Club land */
-	--paper: #eef2ea;
-	--paper-soft: #e3ebdf;
+	/* cool paper keeps the inner pages in the same water palette as the home page */
+	--paper: #e9f0f4;
+	--paper-soft: #dbe8f0;
 	--white: #ffffff;
 
 	/* open water — sampled from the wave texture so the hero, the nav and the
@@ -89,7 +89,9 @@
 }
 
 html {
-	background: var(--paper);
+	background-color: var(--paper);
+	background-image: url('/wave-texture.jpg');
+	background-size: 65px auto;
 	color-scheme: light;
 }
 
@@ -103,7 +105,9 @@ body {
 	line-height: 1.55;
 	-webkit-font-smoothing: antialiased;
 	overflow-x: hidden;
-	background: var(--paper);
+	background-color: var(--paper);
+	background-image: url('/wave-texture.jpg');
+	background-size: 65px auto;
 }
 
 h1, h2, h3, h4 {

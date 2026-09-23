@@ -31,15 +31,18 @@
 
 <style>
 	.footer-wave {
-		height: 64px;
+		position: relative;
+		z-index: 1;
+		height: 90px;
 		background: url('/wave-band-up.png') repeat-x;
 		background-size: auto 100%;
-		margin-bottom: -2px;
+		margin-top: -90px;
+		margin-bottom: 0;
 	}
 	.footer {
 		background: url('/wave-texture.jpg');
 		background-size: 65px auto;
-		padding: 3rem 0 3.5rem;
+		padding: calc(3rem + 90px) 0 3.5rem;
 	}
 
 	.footer-inner {
