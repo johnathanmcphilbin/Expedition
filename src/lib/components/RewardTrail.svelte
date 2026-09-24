@@ -150,7 +150,7 @@
 				{#each trailDrops as d, i (d.hours)}
 					<img
 						class="road-art road-art-{statusOf(d)}"
-						src={i % 2 === 0 ? '/rd1.png' : '/rd2.png'}
+						src={i % 2 === 0 ? '/rd2.png' : '/rd1.png'}
 						alt=""
 						style:left="{roadPts[i].x}px"
 						style:top="{roadPts[i].y}px"
@@ -373,7 +373,7 @@
 	.road-art {
 		position: absolute;
 		z-index: 1;
-		width: clamp(150px, 20vw, 230px);
+		width: clamp(170px, 22vw, 250px);
 		height: auto;
 		transform: translate(-50%, -50%);
 		opacity: 0.92;
@@ -414,19 +414,23 @@
 	/* pad so the illustration centres on the bend the marker sits at */
 	.stop-left {
 		justify-content: flex-start;
-		padding-left: 0;
 	}
 	/* row-reverse flips the main axis, so flex-start is what packs to the right */
 	.stop-right {
 		justify-content: flex-start;
 		flex-direction: row-reverse;
-		padding-right: 0;
 	}
 
 	.info {
-		max-width: 300px;
+		position: absolute;
+		max-width: 260px;
+	}
+	.stop-left .info {
+		right: calc(100% - var(--bx) + 24px);
+		text-align: right;
 	}
 	.stop-right .info {
+		left: calc(var(--bx) + 24px);
 		text-align: right;
 	}
 
@@ -590,12 +594,8 @@
 		.stop-right .info {
 			text-align: right;
 		}
-		.art {
-			width: 132px;
-			/* stacked layout: the downward nudge would collide with the number */
-			transform: none;
-		}
 		.info {
+			position: static;
 			max-width: 100%;
 		}
 		.hrs {
@@ -603,9 +603,4 @@
 		}
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.lane.done {
-			transition: none;
-		}
-	}
 </style>
