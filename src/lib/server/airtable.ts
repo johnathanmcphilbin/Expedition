@@ -37,14 +37,14 @@ interface SubmissionFields {
 	'Justification - Submitter Hackatime ID'?: string;
 	'Justification - Hackatime Project Name(s) + Date Range(s)'?: string;
 	'Automation - Status'?: string;
-	// Expedition's own review answer, filled in directly on this row
-	'Expedition Hackatime Project'?: string;
-	'Expedition Approved Hours'?: number;
-	'Expedition Review Status'?: string;
-	'Expedition Reviewer Notes'?: string;
-	'Expedition Feedback to Participant'?: string;
-	'Expedition Reviewer'?: string;
-	'Expedition Reviewed At'?: string;
+	// The only fields on this row meant for a reviewer's own answer — Hack
+	// Club's own automation reads these as a manual override of the hours it
+	// would otherwise compute. There is no separate status/reviewer/feedback
+	// field on this table; Expedition's own review record (submission_reviews)
+	// is the real source of truth for those — this is just what Hack Club
+	// itself looks at.
+	'Optional - Override Hours Spent'?: number;
+	'Optional - Override Hours Spent Justification'?: string;
 }
 
 /**
@@ -170,6 +170,16 @@ export async function writeReviewToAirtable(
 		rejected: 'Rejected'
 	};
 
+	const justification = [
+		`Expedition review: ${statusLabel[review.status]} — ${review.hackatime_project}`,
+		reviewer && `Reviewer: ${reviewer.display_name ?? reviewer.email ?? reviewer.hackclub_id}`,
+		review.reviewed_at && `Reviewed at: ${new Date(review.reviewed_at).toLocaleString()}`,
+		review.participant_feedback && `Feedback to participant: ${review.participant_feedback}`,
+		review.internal_notes && `Internal notes: ${review.internal_notes}`
+	]
+		.filter(Boolean)
+		.join('\n');
+
 	const res = await fetch(
 		`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${submission.airtable_record_id}`,
 		{
@@ -178,13 +188,8 @@ export async function writeReviewToAirtable(
 			signal: AbortSignal.timeout(15000),
 			body: JSON.stringify({
 				fields: {
-					'Expedition Hackatime Project': review.hackatime_project,
-					'Expedition Approved Hours': review.approved_hours ?? undefined,
-					'Expedition Review Status': statusLabel[review.status],
-					'Expedition Reviewer Notes': review.internal_notes ?? '',
-					'Expedition Feedback to Participant': review.participant_feedback ?? '',
-					'Expedition Reviewer': reviewer?.display_name ?? reviewer?.email ?? '',
-					'Expedition Reviewed At': review.reviewed_at ?? undefined
+					'Optional - Override Hours Spent': review.approved_hours ?? undefined,
+					'Optional - Override Hours Spent Justification': justification
 				}
 			})
 		}
