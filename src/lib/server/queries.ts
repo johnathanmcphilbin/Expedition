@@ -75,6 +75,47 @@ export async function getHackClubSubmission(
 	return data as HackClubSubmissionRow;
 }
 
+/**
+ * For an admin manually linking a submission Hack Club's Hackatime-ID match
+ * missed — e.g. the submitter never got that field filled in on Hack Club's
+ * form. Matches by name or email, newest accounts first.
+ */
+export async function searchUsers(
+	query: string
+): Promise<Pick<UserRow, 'id' | 'display_name' | 'email' | 'hackclub_id'>[]> {
+	// Admin-only and only ever matched against non-sensitive columns, but
+	// `.or()` parses this as a raw filter expression — strip characters that
+	// have meaning there (`,()%*`) so a stray one can't reshape the query.
+	const q = query.trim().replace(/[,()%*]/g, '');
+	if (!q) return [];
+	const { data, error: e } = await db()
+		.from('users')
+		.select('id, display_name, email, hackclub_id')
+		.or(`display_name.ilike.%${q}%,email.ilike.%${q}%,hackclub_id.ilike.%${q}%`)
+		.order('created_at', { ascending: false })
+		.limit(8);
+	if (e) throw new Error(e.message);
+	return data ?? [];
+}
+
+/** Manually attach a submission to an Expedition account — see `searchUsers`. */
+export async function linkSubmissionToUser(airtableRecordId: string, userId: string): Promise<void> {
+	const { data: connection } = await db()
+		.from('hackatime_connections')
+		.select('hackatime_user_id')
+		.eq('user_id', userId)
+		.maybeSingle();
+
+	const { error: e } = await db()
+		.from('hackclub_submissions')
+		.update({
+			user_id: userId,
+			hackatime_user_id: (connection as { hackatime_user_id: string | null } | null)?.hackatime_user_id ?? null
+		})
+		.eq('airtable_record_id', airtableRecordId);
+	if (e) throw new Error(e.message);
+}
+
 // ------------------------------------------------------------- reviews -----
 
 /** This user's review status across their submissions, for their dashboard. */

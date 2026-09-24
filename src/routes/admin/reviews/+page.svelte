@@ -150,7 +150,35 @@
 				{#if data.detail}
 					{@const s = data.detail.submission}
 					{#if !s.user_id}
-						<p class="hint">Can't review this — no matching Expedition account.</p>
+						<p class="hint">
+							No account matched automatically. Search for the participant and link them by hand.
+						</p>
+						<form method="GET" class="search-form" style="margin-top:0.75rem">
+							<input type="hidden" name="status" value={data.filter} />
+							{#if data.search}<input type="hidden" name="q" value={data.search} />{/if}
+							<input type="hidden" name="submission" value={s.airtable_record_id} />
+							<input
+								type="search"
+								name="link_q"
+								placeholder="Name, email, or Hack Club ID"
+								value={data.linkQuery} />
+							<button class="btn btn-outline" type="submit">Find</button>
+						</form>
+
+						{#if data.detail.linkCandidates.length}
+							<ul class="link-candidates">
+								{#each data.detail.linkCandidates as c (c.id)}
+									<li>
+										<form method="POST" action="?/link" use:enhance>
+											<input type="hidden" name="airtable_record_id" value={s.airtable_record_id} />
+											<input type="hidden" name="user_id" value={c.id} />
+											<span>{c.display_name ?? c.hackclub_id}{c.email ? ` — ${c.email}` : ''}</span>
+											<button class="btn btn-outline" type="submit">Link</button>
+										</form>
+									</li>
+								{/each}
+							</ul>
+						{/if}
 					{:else if !data.detail.hackatimeProjects.length}
 						<p class="empty error">
 							Couldn't reach Hackatime for this participant. Nothing to review against — try
@@ -266,6 +294,27 @@
 	}
 	.search-form input[type='search'] {
 		min-width: 16rem;
+	}
+
+	.link-candidates {
+		list-style: none;
+		margin: 0.75rem 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.link-candidates li form {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding: 0.5rem 0.7rem;
+		border: 1.5px solid var(--rule);
+		border-radius: 8px;
+	}
+	.link-candidates span {
+		font-size: 0.9rem;
 	}
 
 	.filters {

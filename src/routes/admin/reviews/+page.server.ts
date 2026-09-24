@@ -6,7 +6,9 @@ import {
 	listAllReviewsWithSubmissions,
 	getOrCreateReview,
 	getHackClubSubmission,
-	getBalance
+	getBalance,
+	searchUsers,
+	linkSubmissionToUser
 } from '$lib/server/queries';
 import { syncHackClubSubmissions, writeReviewToAirtable } from '$lib/server/airtable';
 import { fetchProjectTimes, formatHours } from '$lib/server/hackatime';
@@ -101,6 +103,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		hackatimeProjects: { name: string; tracked: string }[];
 		suggestedProject: string | null;
 		balance: Awaited<ReturnType<typeof getBalance>> | null;
+		linkCandidates: Awaited<ReturnType<typeof searchUsers>>;
 	} | null = null;
 
 	if (selectedRow) {
@@ -126,12 +129,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			hackatimeProjects.find((p) => raw.includes(p.name.toLowerCase()))?.name ??
 			null;
 
+		const linkQuery = url.searchParams.get('link_q') ?? '';
+		const linkCandidates = !selectedRow.submission.user_id && linkQuery ? await searchUsers(linkQuery) : [];
+
 		detail = {
 			submission: selectedRow.submission,
 			review: selectedRow.review,
 			hackatimeProjects,
 			suggestedProject,
-			balance
+			balance,
+			linkCandidates
 		};
 	}
 
@@ -149,12 +156,41 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		})),
 		filter: validFilter,
 		search: q,
+		linkQuery: url.searchParams.get('link_q') ?? '',
 		detail,
 		syncError
 	};
 };
 
 export const actions: Actions = {
+	/**
+	 * Manually attach a submission to an Expedition account when Hack Club's
+	 * form never captured (or never matched) the submitter's Hackatime ID.
+	 * Stays attached across future resyncs — see `syncHackClubSubmissions`.
+	 */
+	link: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const form = await request.formData();
+		try {
+			const airtableRecordId = text(form.get('airtable_record_id'), 'Submission', {
+				max: 200,
+				required: true
+			})!;
+			const userId = uuid(form.get('user_id')?.toString(), 'account');
+			await linkSubmissionToUser(airtableRecordId, userId);
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { message: e.message, field: e.field });
+			throw e;
+		}
+
+		const url = new URL(request.url);
+		const qs = new URLSearchParams();
+		if (url.searchParams.get('status')) qs.set('status', url.searchParams.get('status')!);
+		if (url.searchParams.get('q')) qs.set('q', url.searchParams.get('q')!);
+		qs.set('submission', form.get('airtable_record_id')!.toString());
+		redirect(303, `/admin/reviews?${qs}`);
+	},
+
 	/**
 	 * One action for every button (Save Review / Approve / Needs Changes /
 	 * Reject) — they differ only in which `status` they submit. On a final
