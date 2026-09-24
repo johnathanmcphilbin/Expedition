@@ -298,7 +298,7 @@
 
 <section class="ocean">
 	<div class="wrap ocean-inner" bind:this={host}>
-		<span class="shore left">USA</span>
+		<span class="shore left">YOU</span>
 		<span class="shore right">Ireland</span>
 		<canvas bind:this={canvas} aria-label="The Atlantic, with a boat you can push around"></canvas>
 		<span class="hint">{hint}</span>
@@ -307,7 +307,8 @@
 
 <style>
 	.ocean {
-		background: var(--navy);
+		background: url('/wave%20texture.png');
+		background-size: 65px auto;
 		padding: clamp(2rem, 5vw, 3.5rem) 0;
 		overflow: hidden;
 	}

@@ -44,7 +44,42 @@
 
 <style>
 	.dublin-section {
-		background: var(--paper-soft);
+		background: url('/unnamed.png');
+		background-size: 68px auto;
+		color: var(--cream);
+	}
+
+	.dublin-section h2 {
+		color: var(--cream);
+	}
+
+	.dublin-section .lede,
+	.dublin-section .travel-copy {
+		color: rgba(248, 243, 231, 0.78);
+	}
+
+	.dublin-section .facts {
+		border-color: rgba(248, 243, 231, 0.28);
+	}
+
+	.dublin-section .fact-key {
+		color: rgba(248, 243, 231, 0.68);
+	}
+
+	.dublin-section .fact-val,
+	.dublin-section h3 {
+		color: var(--cream);
+	}
+
+	.dublin-section .clarify {
+		border-color: rgba(248, 243, 231, 0.28);
+		color: rgba(248, 243, 231, 0.82);
+	}
+
+	.dublin-section .btn {
+		background: var(--green);
+		border-color: var(--green);
+		color: var(--white);
 	}
 
 	h2 {

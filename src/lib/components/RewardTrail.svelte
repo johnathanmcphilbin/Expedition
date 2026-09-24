@@ -2,7 +2,6 @@
 	import { onMount } from 'svelte';
 	import { drops } from '$lib/data';
 	import type { Drop } from '$lib/types';
-	import DropArt from './DropArt.svelte';
 
 	let {
 		/** verified hours built. Wire to real data when it exists. */
@@ -57,8 +56,13 @@
 		}))
 	);
 	let totalH = $derived(TOP + (trailDrops.length - 1) * seg + TAIL);
+	let roadPts = $derived(
+		trailDrops.map((_, i) => ({
+			x: W / 2,
+			y: i === 0 ? TOP / 2 : TOP + (i - 0.5) * seg
+		}))
+	);
 
-	/** one continuous smooth line: each leg is a cubic with vertical tangents */
 	let routeD = $derived(
 		(() => {
 			if (!pts.length) return '';
@@ -75,38 +79,13 @@
 		})()
 	);
 
-	// how far down the route they've travelled
-	let progress = $derived(Math.max(0, Math.min(1, hoursBuilt / 40)));
-
-	let donePath = $state<SVGPathElement | null>(null);
-	let pathLen = $state(0);
-	let drawn = $state(false);
-
-	$effect(() => {
-		// recompute whenever the curve changes
-		routeD;
-		if (donePath) pathLen = donePath.getTotalLength();
-	});
-
 	onMount(() => {
 		const ro = new ResizeObserver(() => (W = routeEl.clientWidth));
 		ro.observe(routeEl);
 		W = routeEl.clientWidth;
 
-		const io = new IntersectionObserver(
-			([e]) => {
-				if (e.isIntersecting) {
-					drawn = true;
-					io.disconnect();
-				}
-			},
-			{ threshold: 0.05 }
-		);
-		io.observe(routeEl);
-
 		return () => {
 			ro.disconnect();
-			io.disconnect();
 		};
 	});
 </script>
@@ -162,17 +141,22 @@
 
 	<!-- ---------- the route down the page ---------- -->
 	<div class="route-wrap">
-		<div class="route" bind:this={routeEl} style:height="{totalH}px" class:drawn>
+		<div class="route" bind:this={routeEl} style:height="{totalH}px">
 			<svg class="curve" width={W} height={totalH} viewBox="0 0 {W} {totalH}" aria-hidden="true">
 				<path class="lane" d={routeD} />
-				<path
-					class="lane done"
-					bind:this={donePath}
-					d={routeD}
-					style:stroke-dasharray={pathLen || 1}
-					style:stroke-dashoffset={pathLen ? pathLen * (1 - (drawn ? progress : 0)) : 1}
-				/>
 			</svg>
+
+			<div class="roadmap" aria-hidden="true">
+				{#each trailDrops as d, i (d.hours)}
+					<img
+						class="road-art road-art-{statusOf(d)}"
+						src={i % 2 === 0 ? '/rd1.png' : '/rd2.png'}
+						alt=""
+						style:left="{roadPts[i].x}px"
+						style:top="{roadPts[i].y}px"
+					/>
+				{/each}
+			</div>
 
 			{#each trailDrops as d, i (d.hours)}
 				{@const status = statusOf(d)}
@@ -186,8 +170,6 @@
 				></span>
 
 				<div class="stop stop-{side} stop-{status}" style:top="{p.y}px" style:--bx="{p.x}px">
-					<div class="art"><DropArt kind={d.art} /></div>
-
 					<div class="info">
 						<p class="hrs">{d.hours}h</p>
 						<p class="name">{d.name}</p>
@@ -375,17 +357,29 @@
 		top: 0;
 		left: 0;
 		pointer-events: none;
+		z-index: 0;
 	}
-
 	.lane {
 		fill: none;
 		stroke: var(--rule-strong);
 		stroke-width: 5;
-		stroke-linecap: round;
+		stroke-linecap: butt;
 	}
-	.lane.done {
-		stroke: var(--green);
-		transition: stroke-dashoffset 2.4s ease;
+	.roadmap {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+	}
+	.road-art {
+		position: absolute;
+		z-index: 1;
+		width: clamp(150px, 20vw, 230px);
+		height: auto;
+		transform: translate(-50%, -50%);
+		opacity: 0.92;
+	}
+	.road-art-short {
+		opacity: 0.42;
 	}
 
 	.marker {
@@ -420,24 +414,13 @@
 	/* pad so the illustration centres on the bend the marker sits at */
 	.stop-left {
 		justify-content: flex-start;
-		padding-left: calc(var(--bx) - 115px);
+		padding-left: 0;
 	}
 	/* row-reverse flips the main axis, so flex-start is what packs to the right */
 	.stop-right {
 		justify-content: flex-start;
 		flex-direction: row-reverse;
-		padding-right: calc(100% - var(--bx) - 115px);
-	}
-
-	.art {
-		width: 230px;
-		flex-shrink: 0;
-		/* drop the object below the bend so the route passes above it,
-		   rather than the marker landing in the middle of the product */
-		transform: translateY(34px);
-	}
-	.stop-short .art {
-		opacity: 0.45;
+		padding-right: 0;
 	}
 
 	.info {

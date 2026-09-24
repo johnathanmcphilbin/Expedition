@@ -51,7 +51,7 @@
 				</label>
 
 				<button class="btn" type="submit" disabled={!fileName || !workedOn.trim()}>
-					Post to the library <span aria-hidden="true">→</span>
+					Post checkpoint <span aria-hidden="true">→</span>
 				</button>
 
 				{#if posted}

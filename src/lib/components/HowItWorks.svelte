@@ -2,7 +2,7 @@
 	const steps = [
 		{ t: 'Build things.', d: 'Any project you actually care about. Software, hardware, games, weird internet stuff.' },
 		{ t: 'Every 5 hours, show what happened.', d: 'A screenshot or a video, and a sentence about what you worked on. That’s a checkpoint.' },
-		{ t: 'Your checkpoint joins the library.', d: 'Everything gets posted publicly, so you can see what everyone else is finding along the way.' },
+		{ t: 'Your checkpoint becomes part of the expedition.', d: 'Your progress stays tied to something real: the work you are building and sharing along the way.' },
 		{ t: 'Start as many projects as you want.', d: 'Your hours carry across everything you build. Starting something new never resets you.' },
 		{ t: 'Every hour you build is worth $5.', d: 'Hours bank up as you go. There are no points or coins — the hours themselves are what you spend.' },
 		{ t: 'Take a drop, or keep going.', d: 'Claim gear at any point on the trail and it spends those hours. Bank them instead and they can count toward getting to Dublin.' }

@@ -19,10 +19,6 @@
 		<div class="wrap">
 			<h2>Where to next.</h2>
 			<div class="links">
-				<a class="onward-link" href="/library">
-					<span class="onward-title">The library</span>
-					<span class="onward-desc">Every checkpoint people have posted so far.</span>
-				</a>
 				<a class="onward-link" href="/rewards">
 					<span class="onward-title">Your hours</span>
 					<span class="onward-desc">Eight supply drops. Spend your hours or bank them.</span>

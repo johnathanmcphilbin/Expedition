@@ -13,7 +13,6 @@
 
 		<div class="col links-col">
 			<a href="/#how-it-works">How it works</a>
-			<a href="/library">Library</a>
 			<a href="/rewards">Your hours</a>
 			<a href="/ireland">Dublin</a>
 		</div>
