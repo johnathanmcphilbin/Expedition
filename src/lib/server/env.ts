@@ -78,7 +78,23 @@ export const config = {
 		// separate table — that's where this org already looks.
 		submissionTableId: 'tblfwLewpflB3hH1Y',
 		get apiKey() {
-			return required('AIRTABLE_API_KEY');
+			const key = required('AIRTABLE_API_KEY').trim();
+			// HTTP headers must be Latin-1; a non-ASCII character here (almost
+			// always U+2022 "•") means a masked/obscured display value was
+			// pasted in — e.g. copied from a password manager's hidden-field
+			// view — rather than the real token. Fails here with a clear
+			// reason instead of a cryptic ByteString error from fetch().
+			for (let i = 0; i < key.length; i++) {
+				if (key.charCodeAt(i) > 255) {
+					throw new Error(
+						`AIRTABLE_API_KEY contains a non-ASCII character at position ${i} ` +
+							`(U+${key.charCodeAt(i).toString(16).toUpperCase()}). This usually means a ` +
+							`masked value (e.g. "pat••••1234") was pasted instead of the real token — ` +
+							`copy it again from https://airtable.com/create/tokens.`
+					);
+				}
+			}
+			return key;
 		}
 	}
 };

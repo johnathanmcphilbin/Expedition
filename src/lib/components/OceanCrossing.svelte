@@ -307,7 +307,7 @@
 
 <style>
 	.ocean {
-		background: url('/wave%20texture.png');
+		background: url('/wave-texture.jpg');
 		background-size: 65px auto;
 		padding: clamp(2rem, 5vw, 3.5rem) 0;
 		overflow: hidden;

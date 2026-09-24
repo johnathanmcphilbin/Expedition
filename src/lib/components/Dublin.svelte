@@ -44,7 +44,7 @@
 
 <style>
 	.dublin-section {
-		background: url('/unnamed.png');
+		background: url('/wave-texture-dark.jpg');
 		background-size: 68px auto;
 		color: var(--cream);
 	}
