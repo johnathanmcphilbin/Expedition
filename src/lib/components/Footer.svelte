@@ -45,7 +45,7 @@
 	.footer {
 		background: url('/wave-texture-dark.jpg');
 		background-size: 68px auto;
-		padding: calc(3rem + 90px) 0 3.5rem;
+		padding: calc(2.5rem + 90px) 0 2.75rem;
 		/* navy text measures 1.95:1 on this texture — everything below is
 		   light-on-dark, with a soft shadow to hold it off the busy dashes */
 		color: var(--cream);

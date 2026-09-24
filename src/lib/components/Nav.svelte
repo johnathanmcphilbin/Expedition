@@ -28,18 +28,17 @@
 <svelte:window onscroll={onScroll} />
 
 <header class="nav">
+	<a
+		class="hc-mark"
+		href="https://hackclub.com"
+		target="_blank"
+		rel="noopener noreferrer"
+		aria-label="Hack Club">
+		<img src="/hackclub-flag.svg" alt="" width="42" height="24" />
+	</a>
+
 	<div class="wrap nav-inner">
 		<div class="brand-group">
-			<!-- Credits the program, not part of Expedition's own nav — goes to
-			     hackclub.com rather than anywhere in this app. -->
-			<a
-				class="hc-mark"
-				href="https://hackclub.com"
-				target="_blank"
-				rel="noopener noreferrer"
-				aria-label="Hack Club">
-				<img src="/hackclub-flag.svg" alt="" width="42" height="24" />
-			</a>
 			<a href="/" class="logo">
 				<img src="/logo.png" alt="" width="56" height="52" />
 				<img class="wordmark" src="/title-expedition-v2.png" alt="Expedition" width="243" height="30" />
@@ -103,6 +102,24 @@
 		background: url('/wave-texture.jpg');
 		background-size: 65px auto;
 	}
+	.hc-mark {
+		position: absolute;
+		left: 0;
+		top: 50%;
+		z-index: 1;
+		display: inline-flex;
+		align-items: center;
+		transform: translateY(-50%);
+		opacity: 0.9;
+		transition: opacity 120ms ease;
+	}
+	.hc-mark img {
+		width: 88px;
+		height: auto;
+	}
+	.hc-mark:hover {
+		opacity: 1;
+	}
 	/* Overlapping past the nav's own bottom edge, the same way How It Works'
 	   bottom wave overlaps past ITS bottom edge — the transparent gaps in the
 	   wave PNG need to reveal the page underneath, not more nav texture, or
@@ -145,17 +162,6 @@
 		gap: 0.7rem;
 		flex-shrink: 0;
 	}
-	.hc-mark {
-		display: inline-flex;
-		align-items: center;
-		padding-right: 0.7rem;
-		border-right: 1.5px solid var(--rule-strong);
-		opacity: 0.85;
-		transition: opacity 120ms ease;
-	}
-	.hc-mark:hover {
-		opacity: 1;
-	}
 	.logo {
 		display: inline-flex;
 		align-items: center;
@@ -168,11 +174,11 @@
 		flex-shrink: 0;
 	}
 	.logo img {
-		height: 52px;
+		height: 64px;
 		width: auto;
 	}
 	.logo .wordmark {
-		height: 30px;
+		height: 38px;
 	}
 	.links {
 		display: flex;
@@ -274,10 +280,13 @@
 			display: none;
 		}
 		.logo img {
-			height: 40px;
+			height: 48px;
 		}
 		.logo .wordmark {
-			height: 22px;
+			height: 28px;
+		}
+		.hc-mark img {
+			width: 68px;
 		}
 		/* Two text actions crowd the collapsed bar; the dashboard still offers it. */
 		.nav-btn-hackatime {
