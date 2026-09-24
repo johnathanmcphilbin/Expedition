@@ -100,12 +100,26 @@ export async function syncHackClubSubmissions(
 			.map((c) => [c.hackatime_user_id as string, c.user_id])
 	);
 
+	// A submission that was already matched to an account (whether by a
+	// previous sync, or by hand) stays matched even if this pass can't derive
+	// a match itself — e.g. Hack Club's form never captured a Hackatime ID
+	// for it. Re-syncing must never regress an existing match back to null.
+	const { data: existing } = await db()
+		.from('hackclub_submissions')
+		.select('airtable_record_id, user_id, hackatime_user_id');
+	const existingById = new Map<string, { user_id: string | null; hackatime_user_id: string | null }>(
+		((existing ?? []) as { airtable_record_id: string; user_id: string | null; hackatime_user_id: string | null }[])
+			.map((e) => [e.airtable_record_id, { user_id: e.user_id, hackatime_user_id: e.hackatime_user_id }])
+	);
+
 	const rows: Omit<HackClubSubmissionRow, 'synced_at'>[] = records.map((r) => {
 		const hackatimeUserId = r.fields['Justification - Submitter Hackatime ID']?.trim() || null;
+		const matchedUserId = hackatimeUserId ? (byHackatimeId.get(hackatimeUserId) ?? null) : null;
+		const prior = existingById.get(r.id);
 		return {
 			airtable_record_id: r.id,
-			user_id: hackatimeUserId ? (byHackatimeId.get(hackatimeUserId) ?? null) : null,
-			hackatime_user_id: hackatimeUserId,
+			user_id: matchedUserId ?? prior?.user_id ?? null,
+			hackatime_user_id: hackatimeUserId ?? prior?.hackatime_user_id ?? null,
 			first_name: r.fields['First Name'] ?? null,
 			last_name: r.fields['Last Name'] ?? null,
 			email: r.fields['Email'] ?? null,
