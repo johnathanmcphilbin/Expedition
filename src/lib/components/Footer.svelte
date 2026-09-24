@@ -34,15 +34,23 @@
 		position: relative;
 		z-index: 1;
 		height: 90px;
-		background: url('/wave-band-up.png') repeat-x;
+		background: url('/wave-band-dark.png') repeat-x;
 		background-size: auto 100%;
 		margin-top: -90px;
 		margin-bottom: 0;
 	}
+	/* Dark water — the texture tile is sized so its grain matches the grain
+	   baked into wave-band-dark.png at the wave's 90px height (checked side
+	   by side), otherwise the footer reads as a different material from the
+	   waves cresting into it. */
 	.footer {
-		background: url('/wave-texture.jpg');
-		background-size: 65px auto;
+		background: url('/wave-texture-dark.jpg');
+		background-size: 68px auto;
 		padding: calc(3rem + 90px) 0 3.5rem;
+		/* navy text measures 1.95:1 on this texture — everything below is
+		   light-on-dark, with a soft shadow to hold it off the busy dashes */
+		color: var(--cream);
+		text-shadow: 0 1px 2px rgba(10, 25, 45, 0.45);
 	}
 
 	.footer-inner {
@@ -58,7 +66,7 @@
 		font-size: 1.4rem;
 		font-weight: 800;
 		letter-spacing: -0.02em;
-		color: var(--navy);
+		color: var(--cream);
 	}
 	.brand img {
 		height: 47px;
@@ -67,7 +75,7 @@
 
 	.tag {
 		margin-top: 0.6rem;
-		color: var(--muted);
+		color: var(--sea);
 		font-size: 0.95rem;
 		max-width: 32ch;
 	}
@@ -82,15 +90,16 @@
 
 	.links-col a {
 		text-decoration: none;
-		color: var(--slate);
+		color: var(--cream);
 		font-weight: 700;
 	}
 	.links-col a:hover {
-		color: var(--green);
+		color: var(--white);
+		text-decoration: underline;
 	}
 
 	.meta-col {
-		color: var(--muted);
+		color: var(--sea);
 		font-weight: 500;
 	}
 	.hc-credit {
@@ -103,7 +112,7 @@
 	}
 
 	.signoff {
-		color: var(--rule-strong);
+		color: var(--sea-deep);
 		font-size: 0.85rem;
 	}
 

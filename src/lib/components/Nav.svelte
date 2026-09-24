@@ -42,7 +42,7 @@
 			</a>
 			<a href="/" class="logo">
 				<img src="/logo.png" alt="" width="56" height="52" />
-				Expedition
+				<img class="wordmark" src="/title-expedition-v2.png" alt="Expedition" width="243" height="30" />
 			</a>
 		</div>
 
@@ -172,6 +172,9 @@
 		height: 52px;
 		width: auto;
 	}
+	.logo .wordmark {
+		height: 30px;
+	}
 	.links {
 		display: flex;
 		align-items: center;
@@ -270,6 +273,12 @@
 		}
 		.ages {
 			display: none;
+		}
+		.logo img {
+			height: 40px;
+		}
+		.logo .wordmark {
+			height: 22px;
 		}
 		/* Two text actions crowd the collapsed bar; the dashboard still offers it. */
 		.nav-btn-hackatime {

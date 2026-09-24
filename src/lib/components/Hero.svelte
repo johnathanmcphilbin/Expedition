@@ -16,7 +16,7 @@
 				<img src="/logo.png" alt="" width="104" height="97" />
 			</div>
 			<div class="titles">
-				<h1><img src="/title-expedition.png" alt="Expedition" width="350" height="101" /></h1>
+				<h1><img src="/title-expedition-v2.png" alt="Expedition" width="520" height="64" /></h1>
 				<p class="sub">
 					Build whatever you want and track the time you spend making it. Every verified hour is worth
 					$5 of gear. Bank them, spend them, your call.
@@ -108,7 +108,8 @@
 	}
 	h1 img {
 		display: block;
-		width: clamp(220px, 32vw, 350px);
+		width: clamp(260px, 42vw, 520px);
+		max-width: 100%;
 		height: auto;
 	}
 
