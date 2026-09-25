@@ -12,6 +12,8 @@ export interface Drop {
 	art: 'cap' | 'mouse' | 'charger' | 'earbuds' | 'mic' | 'speaker' | 'camera' | 'keyboard';
 	/** the 40 hour drop, which ends the trail */
 	finisher?: boolean;
+	/** product photo on a transparent background, under /static */
+	image?: string;
 }
 
 export interface Project {

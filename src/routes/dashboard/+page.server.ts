@@ -99,6 +99,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		name: d.name,
 		extra: d.extra ?? null,
 		value: d.value,
+		image: d.image ?? null,
 		state: claimed.has(String(d.hours))
 			? ('claimed' as const)
 			: available >= d.hours

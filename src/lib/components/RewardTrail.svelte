@@ -171,6 +171,7 @@
 
 				<div class="stop stop-{side} stop-{status}" style:top="{p.y}px" style:--bx="{p.x}px">
 					<div class="info">
+						{#if d.image}<img class="drop-img" src={d.image} alt={d.name} loading="lazy" />{/if}
 						<p class="hrs">{d.hours}h</p>
 						<p class="name">{d.name}</p>
 						{#if d.extra}<p class="extra">+ {d.extra}</p>{/if}
@@ -434,6 +435,18 @@
 		text-align: right;
 	}
 
+	.drop-img {
+		display: block;
+		height: clamp(80px, 11vw, 120px);
+		width: auto;
+		max-width: 100%;
+		object-fit: contain;
+		margin: 0 0 0.6rem auto;
+		filter: drop-shadow(0 6px 10px rgba(23, 37, 63, 0.18));
+	}
+	.stop-short .drop-img {
+		opacity: 0.55;
+	}
 	.hrs {
 		font-size: clamp(3rem, 6vw, 4.6rem);
 		font-weight: 800;

@@ -116,6 +116,7 @@
 			<ol class="unlocks">
 				{#each data.unlocks as u (u.hours)}
 					<li class="unlock unlock-{u.state}">
+						{#if u.image}<img class="u-img" src={u.image} alt="" loading="lazy" />{/if}
 						<span class="u-tier">{u.hours}h</span>
 						<span class="u-name">{u.name}</span>
 						<span class="u-state">
@@ -382,6 +383,15 @@
 		background: var(--white);
 		border: 2px solid var(--rule);
 		min-height: 128px;
+	}
+	.u-img {
+		height: 56px;
+		width: 100%;
+		object-fit: contain;
+		margin-bottom: 0.2rem;
+	}
+	.unlock-locked .u-img {
+		opacity: 0.6;
 	}
 	.u-tier {
 		font-family: var(--font-mono);

@@ -229,13 +229,13 @@ export const checkpoints: Checkpoint[] = [
 
 /** 1 verified hour = $5. Values include shipping. Models may vary by country. */
 export const drops: Drop[] = [
-	{ hours: 5, value: 25, name: 'Custom Expedition cap', extra: 'Jukebox Expedition stickers', art: 'cap' },
-	{ hours: 10, value: 50, name: 'Nice wireless mouse', art: 'mouse' },
-	{ hours: 15, value: 75, name: '65W GaN charger', extra: 'USB-C cable', art: 'charger' },
-	{ hours: 20, value: 100, name: 'Wireless earbuds', art: 'earbuds' },
-	{ hours: 25, value: 125, name: 'Really nice microphone', art: 'mic' },
-	{ hours: 30, value: 150, name: 'Portable Bluetooth speaker', art: 'speaker' },
-	{ hours: 35, value: 175, name: 'Polaroid-style instant camera', art: 'camera' },
+	{ hours: 5, value: 25, name: 'Custom Expedition cap', extra: 'Jukebox Expedition stickers', art: 'cap', image: '/drop-cap.webp' },
+	{ hours: 10, value: 50, name: 'Nice wireless mouse', art: 'mouse', image: '/drop-mouse.webp' },
+	{ hours: 15, value: 75, name: '65W GaN charger', extra: 'USB-C cable', art: 'charger', image: '/drop-charger.webp' },
+	{ hours: 20, value: 100, name: 'Wireless earbuds', art: 'earbuds', image: '/drop-earbuds.webp' },
+	{ hours: 25, value: 125, name: 'Really nice microphone', art: 'mic', image: '/drop-mic.webp' },
+	{ hours: 30, value: 150, name: 'Portable Bluetooth speaker', art: 'speaker', image: '/drop-speaker.webp' },
+	{ hours: 35, value: 175, name: 'Polaroid-style instant camera', art: 'camera', image: '/drop-camera.webp' },
 	{
 		hours: 40,
 		value: 200,

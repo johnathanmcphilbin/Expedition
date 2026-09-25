@@ -53,6 +53,7 @@
 		<div class="drops">
 			{#each data.catalogue as d (d.key)}
 				<div class="drop" class:locked={!d.affordable && !d.claimed} class:done={d.claimed}>
+					{#if d.image}<img class="drop-img" src={d.image} alt={d.name} loading="lazy" />{/if}
 					<div class="drop-head">
 						<span class="drop-hours">{d.hours}h</span>
 						<span class="drop-value">${d.value}</span>
@@ -128,6 +129,12 @@
 	}
 	.drop.locked {
 		opacity: 0.55;
+	}
+	.drop-img {
+		height: 110px;
+		width: 100%;
+		object-fit: contain;
+		margin-bottom: 0.4rem;
 	}
 	.drop.done {
 		background: var(--paper-soft);

@@ -28,6 +28,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			key: String(d.hours),
 			name: d.name,
 			extra: d.extra ?? null,
+			image: d.image ?? null,
 			hours: d.hours,
 			value: d.value,
 			affordable: Number(balance.hours_available) >= d.hours,
