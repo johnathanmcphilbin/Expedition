@@ -5,7 +5,7 @@
 		{ t: 'Your checkpoint becomes part of the expedition.', d: 'Your progress stays tied to something real: the work you are building and sharing along the way.' },
 		{ t: 'Start as many projects as you want.', d: 'Your hours carry across everything you build. Starting something new never resets you.' },
 		{ t: 'Your hours unlock grants.', d: 'Hours bank up as you go. There are no points or coins. Reach a drop on the trail and you can take a grant for it.' },
-		{ t: 'Take a drop, or bank for Dublin.', d: 'Claim gear at any point on the trail and it spends those hours. Or bank them in your travel fund, where every hour adds $8.50 to a travel grant for getting to Dublin.' }
+		{ t: 'Take a drop, or bank for Dublin.', d: 'Claim gear at any point on the trail and it spends those hours. Or bank them in your travel fund, where every hour adds $8 to a travel grant for getting to Dublin.' }
 	];
 
 	// Snapshots pinned in the empty space either side of the steps.

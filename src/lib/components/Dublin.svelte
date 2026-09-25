@@ -45,6 +45,14 @@
 			</ol>
 			<a class="btn" href="/dashboard#travel">Bank hours for Dublin</a>
 		</div>
+
+		<div class="past-events">
+			<p class="past-k">From past Hack Club hackathons</p>
+			<div class="past-photos">
+				<img src="/event-1.webp" alt="Builders at a past Hack Club hackathon" loading="lazy" />
+				<img src="/event-2.webp" alt="A group of builders at a past Hack Club hackathon" loading="lazy" />
+			</div>
+		</div>
 	</div>
 </section>
 
@@ -235,12 +243,44 @@
 		}
 	}
 
+	/* ---- from past hackathons: real evidence, shown at every width ---- */
+	.past-events {
+		margin-top: 3rem;
+		padding-top: 2rem;
+		border-top: 2px solid rgba(23, 37, 63, 0.15);
+		max-width: 900px;
+	}
+	.past-k {
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--slate);
+		margin-bottom: 0.9rem;
+	}
+	.past-photos {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1rem;
+	}
+	.past-photos img {
+		display: block;
+		width: 100%;
+		aspect-ratio: 3 / 2;
+		object-fit: cover;
+		border: 3px solid var(--navy);
+	}
+
 	@media (max-width: 700px) {
 		.facts {
 			grid-template-columns: 1fr;
 		}
 		.steps {
 			flex-direction: column;
+		}
+		.past-photos {
+			grid-template-columns: 1fr;
 		}
 	}
 </style>

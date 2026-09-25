@@ -241,7 +241,7 @@ export const drops: Drop[] = [
 ];
 
 /** Travel grant per approved hour banked toward Dublin. Only ever shown on request. */
-export const TRAVEL_RATE = 8.5;
+export const TRAVEL_RATE = 8;
 
 /** "$50 grant", or "$12.75" style for travel amounts */
 export const money = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
