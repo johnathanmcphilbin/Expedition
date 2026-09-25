@@ -88,7 +88,7 @@
 	}
 	.tease-k {
 		font-family: var(--font-mono);
-		font-size: 0.85rem;
+		font-size: 1rem;
 		font-weight: 600;
 		letter-spacing: 0.04em;
 		color: var(--sea);
@@ -96,25 +96,27 @@
 	}
 	.tease-head {
 		margin-top: 0.6rem;
-		font-size: clamp(2rem, 5vw, 3.2rem);
+		font-size: clamp(2.6rem, 6.5vw, 4.2rem);
 		color: var(--cream);
 		line-height: 1.05;
 		text-wrap: balance;
 	}
 	.tease-copy {
 		margin-top: 1rem;
-		max-width: 46ch;
+		max-width: 40ch;
 		color: rgba(248, 243, 231, 0.78);
+		font-size: 1.3rem;
+		line-height: 1.45;
 	}
 	.tp-big {
-		font-size: clamp(2.2rem, 6vw, 3.2rem);
+		font-size: clamp(2.8rem, 7vw, 4rem);
 		font-weight: 800;
 		letter-spacing: -0.04em;
 		line-height: 1;
 		color: var(--cream);
 	}
 	.tp-big span {
-		font-size: 1rem;
+		font-size: 1.2rem;
 		font-weight: 700;
 		letter-spacing: 0;
 		color: var(--sea-deep);
@@ -132,6 +134,7 @@
 	.tp-sub {
 		font-weight: 600;
 		color: rgba(248, 243, 231, 0.82);
+		font-size: 1.3rem;
 	}
 	.tp-sub a {
 		color: var(--cream);
