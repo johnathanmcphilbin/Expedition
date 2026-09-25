@@ -16,6 +16,19 @@
 		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 		<meta property="og:image" content="/logo.png" />
 		<meta name="twitter:image" content="/logo.png" />
+		<!-- Privacy-friendly analytics by Plausible -->
+		<script async src="https://plausible.io/js/pa-ct-9mbUJuPXSUho2z3n00.js"></script>
+		<script>
+			window.plausible =
+				window.plausible ||
+				function () {
+					(plausible.q = plausible.q || []).push(arguments);
+				};
+			plausible.init = plausible.init || function (i) {
+				plausible.o = i || {};
+			};
+			plausible.init();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
