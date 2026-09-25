@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireUser } from '$lib/server/guards';
-import { connectionStatus, fetchProjectTimes, formatHours } from '$lib/server/hackatime';
+import { connectionStatus, fetchProjectTimes, formatHours, fetchHackatimeProfile } from '$lib/server/hackatime';
 import { createSubmission } from '$lib/server/airtable';
 import {
 	listHackClubSubmissions,
@@ -27,11 +27,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		redirect(303, '/auth/hackatime?next=/submit-to-hackclub');
 	}
 
-	const [times, submissions, reviews, connected] = await Promise.all([
+	const [times, submissions, reviews, connected, profile] = await Promise.all([
 		fetchProjectTimes(user.id),
 		listHackClubSubmissions(user.id),
 		listOwnReviews(user.id),
-		listConnectedProjects(user.id)
+		listConnectedProjects(user.id),
+		fetchHackatimeProfile(user.id)
 	]);
 
 	const submittedNames = submissions.map((s) => (s.project_names_raw ?? '').toLowerCase());
@@ -54,8 +55,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// the ones they said they're working on come first
 		.sort((a, b) => Number(b.connected) - Number(a.connected));
 
-	// Anything they've told Hack Club before, so a second project isn't a
-	// second round of typing the same name and email.
+	// Prefilled so nobody retypes who they are: what they told Hack Club last
+	// time first, then their Hack Club account, then what Hackatime knows.
 	const last = submissions[0];
 	const [first, ...rest] = (user.display_name ?? '').split(' ');
 
@@ -66,8 +67,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		defaults: {
 			firstName: last?.first_name ?? first ?? '',
 			lastName: last?.last_name ?? rest.join(' '),
-			email: last?.email ?? user.email ?? '',
-			githubUsername: last?.github_username ?? ''
+			email: last?.email ?? user.email ?? profile?.email ?? '',
+			githubUsername: last?.github_username ?? profile?.githubUsername ?? ''
 		}
 	};
 };

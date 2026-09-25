@@ -1,7 +1,7 @@
 <!-- Waves crest up out of the page into the footer, then the footer itself
      is the same water the page has been sailing on the whole way down. -->
 <div class="footer-wave" aria-hidden="true"></div>
-<footer class="footer">
+<footer class="footer" id="footer">
 	<div class="wrap footer-inner">
 		<div class="col">
 			<span class="brand">
@@ -23,6 +23,7 @@
 				Hack Club · YSWS program
 			</span>
 			<span>For teens aged 13&ndash;18</span>
+			<span>Questions? <a href="mailto:johnny@hackclub.com">johnny@hackclub.com</a></span>
 			<a href="https://hackclub.com/privacy-and-terms" target="_blank" rel="noopener noreferrer">Privacy &amp; terms</a>
 			<span class="signoff">johnny was here</span>
 		</div>

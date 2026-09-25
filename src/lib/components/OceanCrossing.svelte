@@ -310,6 +310,8 @@
 		background: url('/wave-texture.jpg');
 		background-size: 65px auto;
 		padding: clamp(2rem, 5vw, 3.5rem) 0;
+		/* last before the footer, whose waves rise 90px into this section */
+		padding-bottom: calc(90px + clamp(1.5rem, 4vw, 2.5rem));
 		overflow: hidden;
 	}
 

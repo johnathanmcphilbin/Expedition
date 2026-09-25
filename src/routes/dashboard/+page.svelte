@@ -14,14 +14,6 @@
 		failed: 'Hackatime connection failed. Try again.'
 	};
 
-	const statusLabel: Record<string, string> = {
-		pending: 'Submitted, awaiting review',
-		in_review: 'In review',
-		approved: 'Approved',
-		changes_requested: 'Needs changes',
-		rejected: 'Not approved'
-	};
-
 	const firstName = $derived((data.user.display_name ?? '').split(' ')[0]);
 	const available = $derived(Number(data.balance.hours_available));
 	const nextDrop = $derived(data.unlocks.find((u) => u.state === 'locked') ?? null);
@@ -41,6 +33,23 @@
 	const travelHours = $derived(Number(data.balance.hours_travel));
 	const travelLocked = $derived(!!data.balance.travel_locked_at);
 	let moveHours = $state<number | null>(null);
+
+	type Stage = 'building' | 'submitted' | 'approved' | 'changes' | 'rejected';
+	function stageOf(p: (typeof data.projects)[number]): Stage {
+		const st = p.review?.status;
+		if (st === 'approved') return 'approved';
+		if (st === 'changes_requested') return 'changes';
+		if (st === 'rejected') return 'rejected';
+		if (st || p.submitted) return 'submitted';
+		return 'building';
+	}
+	const finalLabel: Record<Stage, string> = {
+		building: 'Approved',
+		submitted: 'Approved',
+		approved: 'Approved',
+		changes: 'Needs changes',
+		rejected: 'Not approved'
+	};
 
 	function hoursToGo(h: number) {
 		const n = Math.max(0, h - available);
@@ -254,28 +263,36 @@
 				{#if data.projects.length}
 					<ul class="projects">
 						{#each data.projects as p (p.name)}
+							{@const stage = stageOf(p)}
 							<li class="project">
 								<div class="p-info">
 									<span class="p-name">{p.name}</span>
-									<span class="p-meta">
-										{p.tracked} tracked{#if p.languages.length}&nbsp;· {p.languages.join(', ')}{/if}
-									</span>
+									{#if p.languages.length}<span class="p-meta">{p.languages.join(', ')}</span>{/if}
+									<ol class="stages" aria-label="Where this project is at">
+										<li class="st done">Building</li>
+										<li class="st" class:done={stage !== 'building'} class:now={stage === 'submitted'}>
+											{stage === 'submitted' ? 'Submitted, in review' : 'Submitted'}
+										</li>
+										<li
+											class="st st-final"
+											class:done={stage === 'approved'}
+											class:warn={stage === 'changes'}
+											class:bad={stage === 'rejected'}>
+											{finalLabel[stage]}{#if stage === 'approved' && p.review?.approved_hours} · {p.review.approved_hours}h{/if}
+										</li>
+									</ol>
 								</div>
-								<div class="p-status">
-									{#if p.review}
-										<span class="status status-{p.review.status}">{statusLabel[p.review.status]}</span>
-										{#if p.review.approved_hours}<span class="p-hours">{p.review.approved_hours}h approved</span>{/if}
-									{:else if p.submitted}
-										<span class="status status-pending">Submitted</span>
-									{/if}
+								<div class="p-total">
+									<span class="p-total-n">{p.tracked}</span>
+									<span class="p-total-k">tracked</span>
 								</div>
 								<div class="p-actions">
-									{#if !p.submitted && !p.review}
+									{#if stage === 'building'}
 										<a class="btn" href="/submit-to-hackclub?project={encodeURIComponent(p.name)}">Submit</a>
-									{:else if p.review?.status === 'changes_requested'}
+									{:else if stage === 'changes'}
 										<a class="btn" href="/submit-to-hackclub?project={encodeURIComponent(p.name)}">Resubmit</a>
 									{/if}
-									{#if p.connected && !p.submitted && !p.review}
+									{#if p.connected && stage === 'building'}
 										<form method="POST" action="?/disconnect" use:enhance>
 											<input type="hidden" name="project" value={p.name} />
 											<button class="remove" type="submit" aria-label="Remove {p.name}" title="Remove">×</button>
@@ -679,17 +696,82 @@
 		font-weight: 600;
 		color: var(--muted);
 	}
-	.p-status {
+	.stages {
+		list-style: none;
+		margin: 0.55rem 0 0;
+		padding: 0;
 		display: flex;
-		align-items: center;
-		gap: 0.6rem;
 		flex-wrap: wrap;
-		justify-content: flex-end;
+		gap: 0.3rem;
 	}
-	.p-hours {
+	.st {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.15em 0.55em;
+		font-size: 0.72rem;
 		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		border: 1.5px solid var(--rule);
+		color: var(--muted);
+		background: var(--white);
+	}
+	.st::before {
+		content: '';
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--rule-strong);
+	}
+	.st.done {
+		border-color: var(--green);
 		color: var(--green-dark);
-		font-size: 0.9rem;
+	}
+	.st.done::before {
+		background: var(--green);
+	}
+	.st.now {
+		border-color: var(--navy);
+		color: var(--navy);
+	}
+	.st.now::before {
+		background: var(--navy);
+	}
+	.st.warn {
+		border-color: var(--orange);
+		color: var(--orange-dark);
+	}
+	.st.warn::before {
+		background: var(--orange);
+	}
+	.st.bad {
+		border-color: var(--red);
+		color: var(--red-dark);
+	}
+	.st.bad::before {
+		background: var(--red);
+	}
+	.p-total {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		line-height: 1;
+	}
+	.p-total-n {
+		font-size: 1.6rem;
+		font-weight: 800;
+		letter-spacing: -0.03em;
+		color: var(--navy);
+		white-space: nowrap;
+	}
+	.p-total-k {
+		margin-top: 0.25rem;
+		font-size: 0.72rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--muted);
 	}
 	.p-actions {
 		display: flex;
@@ -722,10 +804,9 @@
 		.project {
 			grid-template-columns: minmax(0, 1fr) auto;
 		}
-		.p-status {
-			grid-column: 1 / -1;
-			grid-row: 2;
-			justify-content: flex-start;
+		.p-total {
+			align-items: flex-start;
+			grid-column: 1;
 		}
 	}
 

@@ -11,6 +11,7 @@
 	<ShipRoutes />
 
 	<div class="wrap hero-inner">
+		<p class="byline">Made by <a href="#footer">Johnny</a></p>
 		<div class="panel">
 			<div class="mark" aria-hidden="true">
 				<img src="/logo.png" alt="" width="104" height="97" />
@@ -88,6 +89,27 @@
 	.slack a {
 		color: var(--navy);
 		font-weight: 800;
+	}
+	.byline {
+		margin-bottom: 0.7rem;
+		font-family: var(--font-mono);
+		font-size: 0.85rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		color: var(--navy);
+	}
+	.byline a {
+		color: var(--navy);
+		font-weight: 700;
+		text-underline-offset: 3px;
+	}
+	/* on phones the content is taller than the screen, so it starts right
+	   under the nav, where the nav's 90px wave band hangs over it */
+	@media (max-width: 700px) {
+		.hero {
+			padding-top: calc(90px + 0.5rem);
+			align-items: flex-start;
+		}
 	}
 	.hero-inner {
 		position: relative;

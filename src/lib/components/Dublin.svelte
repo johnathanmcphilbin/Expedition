@@ -4,41 +4,33 @@
 
 <section class="section dublin-section" id="dublin">
 	<div class="wrap">
-		<h2>There's also a hackathon in Dublin.</h2>
-		<p class="lede">
-			On December 5 a few hundred people are getting together in Dublin to build for a day. It's
-			free, it's optional, and it has nothing to do with your checkpoints.
-		</p>
+		<h2 class="headline">Dublin, December 5.</h2>
+		<p class="lede">One day of building with a hundred other people.</p>
 
-		<div class="facts">
-			<div class="fact">
-				<span class="fact-key">When</span>
-				<span class="fact-val">December 5</span>
-			</div>
-			<div class="fact">
-				<span class="fact-key">Cost</span>
-				<span class="fact-val">Free to attend</span>
-			</div>
-			<div class="fact">
-				<span class="fact-key">Required?</span>
-				<span class="fact-val">No. Completely optional</span>
-			</div>
-		</div>
+		<ul class="facts">
+			<li class="fact">
+				<span class="fact-big">Free</span>
+				<span class="fact-small">to attend</span>
+			</li>
+			<li class="fact">
+				<span class="fact-big">Optional</span>
+				<span class="fact-small">your hours count either way</span>
+			</li>
+			<li class="fact fact-grant">
+				<span class="fact-big">{money(TRAVEL_RATE)}</span>
+				<span class="fact-small">travel grant for every hour you bank</span>
+			</li>
+		</ul>
 
 		<div class="travel">
-			<h3>If you'd need help getting there</h3>
-			<p class="travel-copy">
-				Bank approved hours in your travel fund instead of spending them on gear. Every hour you bank
-				adds {money(TRAVEL_RATE)} to a travel grant for getting you here, and you can move them back
-				until your trip is booked.
-			</p>
+			<h3>Getting there</h3>
+			<ol class="steps">
+				<li><span class="step-n">1</span>Get hours approved</li>
+				<li><span class="step-n">2</span>Bank them for Dublin</li>
+				<li><span class="step-n">3</span>Your grant goes toward the trip</li>
+			</ol>
 			<a class="btn" href="/dashboard#travel">Bank hours for Dublin</a>
 		</div>
-
-		<p class="clarify">
-			Claim every drop and never come to Dublin, or bank the lot and come. Both are the whole
-			Expedition.
-		</p>
 	</div>
 </section>
 
@@ -47,87 +39,105 @@
 		background: url('/wave-texture-dark.jpg');
 		background-size: 68px auto;
 		color: var(--cream);
+		/* first on the page: the nav's 90px wave band hangs over the top */
+		padding-top: calc(90px + clamp(1.5rem, 4vw, 3rem));
 	}
 
-	.dublin-section h2 {
+	.headline {
+		font-size: clamp(2.6rem, 8vw, 5rem);
+		line-height: 0.98;
+		letter-spacing: -0.04em;
 		color: var(--cream);
 	}
-
-	.dublin-section .lede,
-	.dublin-section .travel-copy {
-		color: rgba(248, 243, 231, 0.78);
-	}
-
-	.dublin-section .facts {
-		border-color: rgba(248, 243, 231, 0.28);
-	}
-
-	.dublin-section .fact-key {
-		color: rgba(248, 243, 231, 0.68);
-	}
-
-	.dublin-section .fact-val,
-	.dublin-section h3 {
-		color: var(--cream);
-	}
-
-	.dublin-section .clarify {
-		border-color: rgba(248, 243, 231, 0.28);
+	.lede {
+		margin-top: 1rem;
+		font-size: 1.15rem;
 		color: rgba(248, 243, 231, 0.82);
 	}
 
+	/* ---- the three things that matter ---- */
+	.facts {
+		list-style: none;
+		margin: 2.4rem 0 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 1rem;
+		max-width: 900px;
+	}
+	.fact {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		padding: 1.2rem 1.3rem;
+		background: rgba(248, 243, 231, 0.07);
+		border: 2px solid rgba(248, 243, 231, 0.3);
+	}
+	.fact-big {
+		font-size: clamp(1.8rem, 4vw, 2.4rem);
+		font-weight: 800;
+		letter-spacing: -0.03em;
+		line-height: 1;
+		color: var(--cream);
+	}
+	.fact-small {
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: rgba(248, 243, 231, 0.75);
+	}
+	.fact-grant {
+		border-color: var(--green-bright);
+	}
+	.fact-grant .fact-big {
+		color: var(--green-bright);
+	}
+
+	/* ---- getting there ---- */
+	.travel {
+		margin-top: 2.6rem;
+	}
+	.travel h3 {
+		font-size: 1.3rem;
+		color: var(--cream);
+	}
+	.steps {
+		list-style: none;
+		margin: 1rem 0 1.6rem;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.6rem 1.8rem;
+	}
+	.steps li {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		font-weight: 700;
+		color: var(--cream);
+	}
+	.step-n {
+		display: inline-grid;
+		place-items: center;
+		width: 1.7rem;
+		height: 1.7rem;
+		flex-shrink: 0;
+		background: var(--cream);
+		color: var(--navy);
+		font-size: 0.85rem;
+		font-weight: 800;
+	}
 	.dublin-section .btn {
 		background: var(--green);
 		border-color: var(--green);
 		color: var(--white);
 	}
 
-	h2 {
-		max-width: 18ch;
-		margin-bottom: 1rem;
-	}
-
-	.facts {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-		gap: 1.5rem;
-		margin: 2.5rem 0;
-		border-top: 2px solid var(--rule);
-		border-bottom: 2px solid var(--rule);
-		padding: 1.6rem 0;
-	}
-
-	.fact {
-		display: flex;
-		flex-direction: column;
-		gap: 0.2rem;
-	}
-	.fact-key {
-		font-size: 0.85rem;
-		font-weight: 700;
-		color: var(--muted);
-	}
-	.fact-val {
-		font-size: 1.15rem;
-		font-weight: 800;
-		letter-spacing: -0.02em;
-		color: var(--navy);
-	}
-
-	.travel {
-		max-width: 56ch;
-	}
-	.travel-copy {
-		margin: 0.8rem 0 1.6rem;
-		color: var(--muted);
-	}
-
-	.clarify {
-		margin-top: 2.5rem;
-		padding-top: 1.2rem;
-		border-top: 2px solid var(--rule);
-		font-weight: 700;
-		color: var(--slate);
-		max-width: 56ch;
+	@media (max-width: 700px) {
+		.facts {
+			grid-template-columns: 1fr;
+		}
+		.steps {
+			flex-direction: column;
+		}
 	}
 </style>

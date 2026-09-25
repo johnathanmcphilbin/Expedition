@@ -41,6 +41,14 @@
 		query = '';
 	}
 
+	// Who's submitting: prefilled, so it's a glance and a click unless
+	// something's missing — then the fields open straight away.
+	let editingIdentity = $state(false);
+	$effect(() => {
+		const d = data.defaults;
+		editingIdentity = !(d.firstName && d.lastName && d.email && d.githubUsername);
+	});
+
 	let preview = $state<string | null>(null);
 	let dragging = $state(false);
 	let fileInput = $state<HTMLInputElement | null>(null);
@@ -142,6 +150,48 @@
 							}
 						};
 					}}>
+					<!-- who -->
+					<section class="identity" class:editing={editingIdentity}>
+						<div class="id-head">
+							<div>
+								<p class="id-k">Submitting as</p>
+								<p class="id-name">{data.defaults.firstName} {data.defaults.lastName}</p>
+								{#if !editingIdentity}
+									<p class="id-meta">
+										{data.defaults.email} &middot; GitHub <strong>{data.defaults.githubUsername}</strong>
+									</p>
+								{/if}
+							</div>
+							{#if !editingIdentity}
+								<button type="button" class="id-edit" onclick={() => (editingIdentity = true)}>Edit</button>
+							{/if}
+						</div>
+						<p class="hint id-source">
+							{editingIdentity
+								? "We filled in what we could from your Hack Club and Hackatime accounts. Check it's right."
+								: 'From your Hack Club and Hackatime accounts.'}
+						</p>
+						<div class="grid-2 tight id-fields" hidden={!editingIdentity}>
+							<div class="field">
+								<label for="first_name">First name</label>
+								<input oninvalid={() => (editingIdentity = true)} id="first_name" name="first_name" type="text" required autocomplete="given-name" value={data.defaults.firstName} />
+							</div>
+							<div class="field">
+								<label for="last_name">Last name</label>
+								<input oninvalid={() => (editingIdentity = true)} id="last_name" name="last_name" type="text" required autocomplete="family-name" value={data.defaults.lastName} />
+							</div>
+							<div class="field">
+								<label for="email">Email</label>
+								<input oninvalid={() => (editingIdentity = true)} id="email" name="email" type="email" required autocomplete="email" value={data.defaults.email} />
+							</div>
+							<div class="field">
+								<label for="github_username">GitHub username</label>
+								<input oninvalid={() => (editingIdentity = true)} id="github_username" name="github_username" type="text" required autocomplete="username"
+									placeholder="octocat" value={data.defaults.githubUsername} onblur={fixGithub} />
+							</div>
+						</div>
+					</section>
+
 					<!-- 1 -->
 					<section class="step">
 						<h2 class="step-title"><span class="step-n">1</span> Which project?</h2>
@@ -251,30 +301,11 @@
 
 					<!-- 3 -->
 					<section class="step">
-						<h2 class="step-title"><span class="step-n">3</span> About you</h2>
-						<p class="hint step-hint">Hack Club uses this to confirm you're eligible and to get in touch.</p>
-						<div class="grid-2 tight">
-							<div class="field">
-								<label for="first_name">First name</label>
-								<input id="first_name" name="first_name" type="text" required autocomplete="given-name" value={data.defaults.firstName} />
-							</div>
-							<div class="field">
-								<label for="last_name">Last name</label>
-								<input id="last_name" name="last_name" type="text" required autocomplete="family-name" value={data.defaults.lastName} />
-							</div>
-							<div class="field">
-								<label for="email">Email</label>
-								<input id="email" name="email" type="email" required autocomplete="email" value={data.defaults.email} />
-							</div>
-							<div class="field">
-								<label for="github_username">GitHub username</label>
-								<input id="github_username" name="github_username" type="text" required autocomplete="username"
-									placeholder="octocat" value={data.defaults.githubUsername} onblur={fixGithub} />
-							</div>
-							<div class="field">
-								<label for="birthday">Birthday</label>
-								<input id="birthday" name="birthday" type="date" required autocomplete="bday" />
-							</div>
+						<h2 class="step-title"><span class="step-n">3</span> Your birthday</h2>
+						<p class="hint step-hint">Hack Club checks you're 13 to 18. It isn't shown to anyone else.</p>
+						<div class="field birthday">
+							<label class="sr-only" for="birthday">Birthday</label>
+							<input id="birthday" name="birthday" type="date" required autocomplete="bday" />
 						</div>
 					</section>
 
@@ -359,6 +390,67 @@
 		font-size: 1rem;
 	}
 
+	/* ---- who's submitting ---- */
+	.identity {
+		max-width: 760px;
+		margin-bottom: 2.4rem;
+		padding: 1.1rem 1.3rem;
+		background: var(--white);
+		border: 3px solid var(--navy);
+	}
+	.id-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 1rem;
+	}
+	.id-k {
+		font-size: 0.75rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.07em;
+		color: var(--muted);
+	}
+	.id-name {
+		margin-top: 0.15rem;
+		font-size: 1.35rem;
+		font-weight: 800;
+		letter-spacing: -0.02em;
+		color: var(--navy);
+	}
+	.id-meta {
+		margin-top: 0.2rem;
+		font-size: 0.92rem;
+		color: var(--slate);
+		word-break: break-word;
+	}
+	.id-edit {
+		background: none;
+		border: 2px solid var(--navy);
+		padding: 0.35rem 0.8rem;
+		font: inherit;
+		font-weight: 700;
+		font-size: 0.88rem;
+		color: var(--navy);
+		cursor: pointer;
+	}
+	.id-edit:hover {
+		background: var(--navy);
+		color: var(--white);
+	}
+	.id-source {
+		margin-top: 0.5rem;
+		font-size: 0.8rem;
+	}
+	.id-fields {
+		margin-top: 1rem;
+	}
+	.id-fields[hidden] {
+		display: none;
+	}
+	.birthday {
+		max-width: 16rem;
+	}
 	.step {
 		margin-bottom: 2.8rem;
 		max-width: 760px;

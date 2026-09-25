@@ -67,6 +67,35 @@ export async function fetchHackatimeUserId(accessToken: string): Promise<string 
 	}
 }
 
+/**
+ * The contact details Hackatime already holds for this person — used to
+ * prefill Hack Club's submission form so nobody retypes their own email or
+ * GitHub username. Null when not connected or Hackatime is unreachable.
+ */
+export async function fetchHackatimeProfile(
+	userId: string
+): Promise<{ email: string | null; githubUsername: string | null } | null> {
+	const { data: conn } = await db()
+		.from('hackatime_connections')
+		.select('access_token')
+		.eq('user_id', userId)
+		.maybeSingle();
+	const token = (conn as { access_token: string } | null)?.access_token;
+	if (!token) return null;
+
+	try {
+		const res = await fetch(`${config.hackatime.apiUrl}/authenticated/me`, {
+			headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+			signal: AbortSignal.timeout(5000)
+		});
+		if (!res.ok) return null;
+		const me = (await res.json()) as { emails?: string[]; github_username?: string | null };
+		return { email: me.emails?.[0] ?? null, githubUsername: me.github_username || null };
+	} catch {
+		return null;
+	}
+}
+
 export async function saveConnection(
 	userId: string,
 	tokens: TokenResponse,

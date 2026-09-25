@@ -9,7 +9,7 @@
 </svelte:head>
 
 <main>
-	<OceanCrossing />
 	<Dublin />
+	<OceanCrossing />
 </main>
 <Footer />
