@@ -127,6 +127,13 @@ export type MailingSignupRow = {
 	created_at: string;
 }
 
+/** A Hackatime project the participant picked as one they're working on. */
+export type ExpeditionProjectRow = {
+	user_id: string;
+	hackatime_project: string;
+	created_at: string;
+}
+
 export type HourBalanceRow = {
 	user_id: string;
 	hours_earned: number;
@@ -164,6 +171,7 @@ export interface Database {
 			reward_claims: Table<RewardClaimRow>;
 			hour_transactions: Table<HourTransactionRow>;
 			hackatime_connections: Table<HackatimeConnectionRow>;
+			expedition_projects: Table<ExpeditionProjectRow>;
 		};
 		Views: {
 			user_hour_balances: { Row: HourBalanceRow; Relationships: [] };

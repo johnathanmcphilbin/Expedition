@@ -3,7 +3,12 @@ import type { Actions, PageServerLoad } from './$types';
 import { requireUser } from '$lib/server/guards';
 import { connectionStatus, fetchProjectTimes, formatHours } from '$lib/server/hackatime';
 import { createSubmission } from '$lib/server/airtable';
-import { listHackClubSubmissions, listOwnReviews } from '$lib/server/queries';
+import {
+	listHackClubSubmissions,
+	listOwnReviews,
+	listConnectedProjects,
+	connectProject
+} from '$lib/server/queries';
 import { db } from '$lib/server/supabase';
 import { text, url, email, ValidationError } from '$lib/server/validate';
 
@@ -21,10 +26,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		redirect(303, '/auth/hackatime?next=/submit-to-hackclub');
 	}
 
-	const [times, submissions, reviews] = await Promise.all([
+	const [times, submissions, reviews, connected] = await Promise.all([
 		fetchProjectTimes(user.id),
 		listHackClubSubmissions(user.id),
-		listOwnReviews(user.id)
+		listOwnReviews(user.id),
+		listConnectedProjects(user.id)
 	]);
 
 	const submittedNames = submissions.map((s) => (s.project_names_raw ?? '').toLowerCase());
@@ -40,9 +46,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				seconds: t.totalSeconds,
 				tracked: formatHours(t.totalSeconds),
 				languages: t.languages.slice(0, 3),
-				status: review?.status ?? (submittedNames.some((n) => n.includes(key)) ? 'pending' : null)
+				status: review?.status ?? (submittedNames.some((n) => n.includes(key)) ? 'pending' : null),
+				connected: connected.includes(t.name)
 			};
-		});
+		})
+		// the ones they said they're working on come first
+		.sort((a, b) => Number(b.connected) - Number(a.connected));
 
 	// Anything they've told Hack Club before, so a second project isn't a
 	// second round of typing the same name and email.
@@ -133,6 +142,8 @@ export const actions: Actions = {
 				contentType: file.type,
 				filename: file.name || 'screenshot.png'
 			});
+
+			await connectProject(user.id, projectName).catch(() => {});
 
 			// Cache it straight away, already linked to this account, so it
 			// shows up on their dashboard and in the review queue immediately.

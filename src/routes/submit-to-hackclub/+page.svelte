@@ -32,7 +32,7 @@
 	const matches = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		if (q) return data.projects.filter((p) => p.name.toLowerCase().includes(q));
-		return showAll ? data.projects : data.projects.filter((p) => p.seconds >= 60).slice(0, TOP);
+		return showAll ? data.projects : data.projects.filter((p) => p.connected || p.seconds >= 60).slice(0, TOP);
 	});
 
 	function pick(name: string) {

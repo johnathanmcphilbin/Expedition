@@ -116,6 +116,42 @@ export async function linkSubmissionToUser(airtableRecordId: string, userId: str
 	if (e) throw new Error(e.message);
 }
 
+// ------------------------------------------------- connected projects ------
+
+/**
+ * The Hackatime projects this participant picked as the ones they're working
+ * on. Returns [] if the table isn't there yet, so a deploy that lands before
+ * its migration shows an empty list instead of a broken dashboard.
+ */
+export async function listConnectedProjects(userId: string): Promise<string[]> {
+	const { data, error: e } = await db()
+		.from('expedition_projects')
+		.select('hackatime_project')
+		.eq('user_id', userId)
+		.order('created_at', { ascending: true });
+	if (e) {
+		console.error('listConnectedProjects', e.message);
+		return [];
+	}
+	return (data ?? []).map((r) => r.hackatime_project as string);
+}
+
+export async function connectProject(userId: string, name: string): Promise<void> {
+	const { error: e } = await db()
+		.from('expedition_projects')
+		.upsert({ user_id: userId, hackatime_project: name }, { onConflict: 'user_id,hackatime_project' });
+	if (e) throw new Error(e.message);
+}
+
+export async function disconnectProject(userId: string, name: string): Promise<void> {
+	const { error: e } = await db()
+		.from('expedition_projects')
+		.delete()
+		.eq('user_id', userId)
+		.eq('hackatime_project', name);
+	if (e) throw new Error(e.message);
+}
+
 // ------------------------------------------------------------- reviews -----
 
 /** This user's review status across their submissions, for their dashboard. */
