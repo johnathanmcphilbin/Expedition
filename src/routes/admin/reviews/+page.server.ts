@@ -64,6 +64,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		return { submission: s, review: active, status: active?.status ?? 'pending' };
 	});
 
+	const counts = {
+		pending: rows.filter((r) => r.status === 'pending' || r.status === 'in_review').length,
+		changes_requested: rows.filter((r) => r.status === 'changes_requested').length,
+		approved: rows.filter((r) => r.status === 'approved').length,
+		rejected: rows.filter((r) => r.status === 'rejected').length,
+		all: rows.length
+	};
+
 	const filter = (url.searchParams.get('status') as Filter | null) ?? 'pending';
 	const validFilter = FILTERS.includes(filter) ? filter : 'pending';
 	const filtered =
@@ -152,9 +160,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				'Unknown',
 			owner: r.submission.owner ?? null,
 			status: r.status,
-			project: r.review?.hackatime_project ?? r.submission.project_names_raw
+			project: r.review?.hackatime_project ?? r.submission.project_names_raw,
+			submittedAt: r.submission.airtable_created_at,
+			matched: !!r.submission.user_id
 		})),
 		filter: validFilter,
+		counts,
 		search: q,
 		linkQuery: url.searchParams.get('link_q') ?? '',
 		detail,

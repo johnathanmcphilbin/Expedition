@@ -55,6 +55,10 @@
 				Club.
 			</p>
 		{/if}
+		<p class="slack">
+			New to Hack Club? <a href="https://hackclub.com/slack" target="_blank" rel="noopener noreferrer">Join the Slack</a>
+			first. It's where everyone hangs out, shares what they're building and gets help.
+		</p>
 	</div>
 </section>
 
@@ -71,6 +75,20 @@
 		background: linear-gradient(180deg, var(--sea) 0%, var(--sea-deep) 100%);
 	}
 
+	/* same card language as the panel above: solid white, 3px navy border */
+	.slack {
+		margin-top: 1.2rem;
+		padding: 1rem 1.5rem;
+		background: var(--white);
+		border: 3px solid var(--navy);
+		font-size: 0.95rem;
+		font-weight: 600;
+		color: var(--muted);
+	}
+	.slack a {
+		color: var(--navy);
+		font-weight: 800;
+	}
 	.hero-inner {
 		position: relative;
 		z-index: 1;

@@ -23,6 +23,7 @@
 				Hack Club · YSWS program
 			</span>
 			<span>For teens aged 13&ndash;18</span>
+			<a href="https://hackclub.com/privacy-and-terms" target="_blank" rel="noopener noreferrer">Privacy &amp; terms</a>
 			<span class="signoff">johnny was here</span>
 		</div>
 	</div>
@@ -104,6 +105,13 @@
 	.meta-col {
 		color: var(--sea);
 		font-weight: 500;
+	}
+	.meta-col a {
+		color: var(--sea);
+		text-underline-offset: 2px;
+	}
+	.meta-col a:hover {
+		color: var(--white);
 	}
 	.hc-credit {
 		display: inline-flex;

@@ -1,16 +1,38 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import { page } from '$app/state';
 
 	let {
-		currentUser = null
+		currentUser = null,
+		builders: initialBuilders = null
 	}: {
 		currentUser?: {
 			displayName: string | null;
 			isAdmin: boolean;
 			hackatimeConnected: boolean;
 		} | null;
+		builders?: number | null;
 	} = $props();
+
+	// Live builder count: starts from the server-rendered number, then polls
+	// while the tab is visible. A failed poll just keeps the last number.
+	let builders = $state<number | null>(null);
+	$effect(() => {
+		builders = initialBuilders;
+	});
+	onMount(() => {
+		const id = setInterval(async () => {
+			if (document.hidden) return;
+			try {
+				const res = await fetch('/api/stats');
+				if (res.ok) builders = (await res.json()).builders;
+			} catch {
+				/* keep the last number */
+			}
+		}, 30_000);
+		return () => clearInterval(id);
+	});
 
 	let open = $state(false);
 
@@ -56,14 +78,33 @@
 				{/if}
 				<a href="/dashboard">Dashboard</a>
 			{/if}
+			<!-- phones: the account action lives in the menu, the bar has no room -->
+			<div class="menu-account">
+				{#if currentUser}
+					<form method="POST" action="/auth/logout">
+						<button class="link-action" type="submit">Sign out</button>
+					</form>
+				{:else}
+					<a class="link-action" href={signInHref}>Connect Hack Club</a>
+				{/if}
+			</div>
 		</nav>
 
-		<div class="right">
+		<div class="right" class:signed-in={!!currentUser}>
 			<!-- Metadata printed in the corner of a map, not a control. -->
-			<span class="ages" aria-label="Ages 13 to 18">
-				<span class="ages-num">13&ndash;18</span>
-				<span class="ages-unit">yrs</span>
-			</span>
+			{#if builders}
+				<span class="ages count" aria-live="polite" aria-label="{builders} builders on board">
+					<span class="ages-num"><span class="live-dot" aria-hidden="true"></span>{builders.toLocaleString()}</span>
+					<span class="ages-unit">{builders === 1 ? 'builder' : 'builders'}</span>
+				</span>
+			{/if}
+			<!-- who it's for: only useful before you've joined -->
+			{#if !currentUser}
+				<span class="ages" aria-label="Ages 13 to 18">
+					<span class="ages-num">13&ndash;18</span>
+					<span class="ages-unit">yrs</span>
+				</span>
+			{/if}
 
 			{#if currentUser}
 				{#if !currentUser.hackatimeConnected}
@@ -91,7 +132,7 @@
 
 	<!-- The nav's own edge, not a border — waves hang down out of the water
 	     the nav bar represents into the page below. -->
-	<div class="nav-wave" class:rolled={scrolled} aria-hidden="true"></div>
+	<div class="nav-wave" class:rolled={scrolled || open} aria-hidden="true"></div>
 </header>
 
 <style>
@@ -190,6 +231,7 @@
 	.links a {
 		text-decoration: none;
 		color: var(--slate);
+		white-space: nowrap;
 	}
 	.links a:hover {
 		color: var(--green);
@@ -222,6 +264,49 @@
 		letter-spacing: 0.22em;
 		text-transform: uppercase;
 	}
+	.count .ages-num {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		color: var(--navy);
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+	.live-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: var(--green);
+		box-shadow: 0 0 0 0 rgba(47, 158, 87, 0.6);
+		animation: pulse 2s ease-out infinite;
+	}
+	@keyframes pulse {
+		to {
+			box-shadow: 0 0 0 6px rgba(47, 158, 87, 0);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.live-dot {
+			animation: none;
+		}
+	}
+	/* between phone and full desktop there isn't room for both corner tags */
+	@media (max-width: 1180px) {
+		.count {
+			display: none;
+		}
+	}
+	/* signed-in nav carries more links (Reviews, Admin, Dashboard) */
+	@media (max-width: 1360px) {
+		.right.signed-in .count {
+			display: none;
+		}
+	}
+	@media (max-width: 1200px) {
+		.links {
+			gap: 1.1rem;
+		}
+	}
 
 	.burger {
 		display: none;
@@ -239,7 +324,7 @@
 		border-radius: 0;
 	}
 
-	@media (max-width: 900px) {
+	@media (max-width: 1180px) {
 		/* Hangs off the bottom of the bar itself rather than a hard-coded
 		   offset, so it stays put as the nav's own height changes. */
 		.links {
@@ -291,6 +376,21 @@
 		/* Two text actions crowd the collapsed bar; the dashboard still offers it. */
 		.nav-btn-hackatime {
 			display: none;
+		}
+	}
+	.menu-account {
+		display: none;
+	}
+	@media (max-width: 640px) {
+		.right > .link-action,
+		.right > form {
+			display: none;
+		}
+		.menu-account {
+			display: block;
+			padding-top: 0.6rem;
+			border-top: 1.5px solid var(--rule-strong);
+			width: 100%;
 		}
 	}
 </style>

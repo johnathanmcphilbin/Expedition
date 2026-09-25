@@ -116,6 +116,21 @@ export async function linkSubmissionToUser(airtableRecordId: string, userId: str
 	if (e) throw new Error(e.message);
 }
 
+// ------------------------------------------------------------- stats ------
+
+/**
+ * People who've actually signed in with Hack Club Auth. Every real HCA id
+ * starts with `ident!`; anything else (stress-test accounts) is left out.
+ */
+export async function countBuilders(): Promise<number> {
+	const { count, error: e } = await db()
+		.from('users')
+		.select('id', { count: 'exact', head: true })
+		.like('hackclub_id', 'ident!%');
+	if (e) throw new Error(e.message);
+	return count ?? 0;
+}
+
 // ------------------------------------------------- connected projects ------
 
 /**

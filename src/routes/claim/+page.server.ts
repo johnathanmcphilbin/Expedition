@@ -4,6 +4,7 @@ import { requireUser } from '$lib/server/guards';
 import { getBalance, claimReward, listOwnClaims } from '$lib/server/queries';
 import { drops } from '$lib/data';
 import { text, ValidationError } from '$lib/server/validate';
+import { notifyClaim } from '$lib/server/notify';
 
 /**
  * Spending approved hours. The catalogue is `drops` from src/lib/data.ts —
@@ -66,6 +67,12 @@ export const actions: Actions = {
 			});
 
 			if (!result.ok) return fail(409, { message: result.message });
+			await notifyClaim({
+				name: user.display_name,
+				reward: drop.extra ? `${drop.name} + ${drop.extra}` : drop.name,
+				hours: drop.hours,
+				note
+			});
 			return { success: true, claimed: drop.name };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { message: e.message, field: e.field });

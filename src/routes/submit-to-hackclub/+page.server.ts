@@ -11,6 +11,7 @@ import {
 } from '$lib/server/queries';
 import { db } from '$lib/server/supabase';
 import { text, url, email, ValidationError } from '$lib/server/validate';
+import { notifySubmission } from '$lib/server/notify';
 
 /**
  * The one place a participant submits a project. Expedition builds the row
@@ -168,6 +169,15 @@ export const actions: Actions = {
 					},
 					{ onConflict: 'airtable_record_id' }
 				);
+
+			await notifySubmission({
+				name: `${submission.firstName} ${submission.lastName}`,
+				email: submission.email,
+				project: projectName,
+				codeUrl: submission.codeUrl,
+				playableUrl: submission.playableUrl,
+				description: submission.description
+			});
 
 			return { submitted: projectName };
 		} catch (e) {

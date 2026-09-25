@@ -4,5 +4,5 @@
 	let { children, data } = $props();
 </script>
 
-<Nav currentUser={data.currentUser} />
+<Nav currentUser={data.currentUser} builders={data.builders} />
 {@render children()}
