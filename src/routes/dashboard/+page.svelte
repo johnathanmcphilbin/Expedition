@@ -158,7 +158,7 @@
 			</div>
 			<p class="hint block-hint">
 				Bank approved hours here instead of spending them on gear. Every hour you bank adds
-				<strong>{money(TRAVEL_RATE)}</strong> to a travel grant for getting you to Dublin on December 5.
+				<strong>{money(TRAVEL_RATE)}</strong> to a travel grant for getting you to Dublin on December 5th.
 			</p>
 			<div class="panel travel">
 				<div class="travel-total">

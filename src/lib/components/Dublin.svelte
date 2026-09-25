@@ -4,7 +4,7 @@
 
 <section class="section dublin-section" id="dublin">
 	<div class="wrap">
-		<h2 class="headline">Dublin, December 5.</h2>
+		<h2 class="headline">Dublin, December 5th</h2>
 		<p class="lede">One day of building with a hundred other people.</p>
 
 		<ul class="facts">

@@ -250,10 +250,15 @@
 		font-family: var(--font-mono);
 		font-size: 0.95rem;
 		font-weight: 600;
-		color: var(--orange);
+		color: var(--green-dark);
 		margin-top: 0.7rem;
 		transform: rotate(-1.2deg);
 		transform-origin: left;
+	}
+	.scrawl a {
+		color: inherit;
+		font-weight: 700;
+		text-underline-offset: 3px;
 	}
 
 	/* ---------- banked readout ---------- */

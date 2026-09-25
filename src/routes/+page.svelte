@@ -25,7 +25,7 @@
 				</a>
 				<a class="onward-link" href="/ireland">
 					<span class="onward-title">Dublin</span>
-					<span class="onward-desc">A free, optional hackathon on December 5.</span>
+					<span class="onward-desc">A free, optional hackathon on December 5th.</span>
 				</a>
 			</div>
 		</div>
