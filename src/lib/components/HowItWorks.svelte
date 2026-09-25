@@ -7,10 +7,24 @@
 		{ t: 'Your hours unlock grants.', d: 'Hours bank up as you go. There are no points or coins. Reach a drop on the trail and you can take a grant for it.' },
 		{ t: 'Take a drop, or bank for Dublin.', d: 'Claim gear at any point on the trail and it spends those hours. Or bank them in your travel fund, where every hour adds $8.50 to a travel grant for getting to Dublin.' }
 	];
+
+	// Snapshots pinned in the empty space either side of the steps.
+	const polaroids = [
+		{ src: '/polaroids/sheep-sunset.webp', side: 'left', top: '24%', tilt: -5 },
+		{ src: '/polaroids/colourful-street.webp', side: 'right', top: '36%', tilt: 4 },
+		{ src: '/polaroids/harbour-reflection.webp', side: 'left', top: '64%', tilt: 3 },
+		{ src: '/polaroids/mountain-lake.webp', side: 'right', top: '76%', tilt: -4 }
+	];
 </script>
 
 <section class="section how-it-works" id="how-it-works">
-	<div class="wrap">
+	{#each polaroids as p (p.src)}
+		<figure class="polaroid polaroid-{p.side}" style:top={p.top} style:--tilt="{p.tilt}deg" aria-hidden="true">
+			<img src={p.src} alt="" loading="lazy" />
+			<figcaption>Ireland</figcaption>
+		</figure>
+	{/each}
+	<div class="wrap column">
 		<h2 class="heading">From an idea to something real.</h2>
 		<p class="lede">
 			No applications, no gatekeeping. Pick something ambitious, log genuine time, and show your
@@ -73,8 +87,52 @@
 		pointer-events: none;
 	}
 
+	/* one centred column, so the space either side is even */
+	.column {
+		max-width: calc(760px + 2 * var(--edge-pad));
+	}
 	.heading {
 		margin-bottom: 1rem;
+	}
+
+	.polaroid {
+		position: absolute;
+		z-index: 0;
+		margin: 0;
+		width: clamp(150px, 13vw, 210px);
+		padding: 10px 10px 0;
+		background: #fdfcf8;
+		box-shadow:
+			0 1px 2px rgba(23, 37, 63, 0.18),
+			0 10px 24px rgba(23, 37, 63, 0.22);
+		transform: translate(-50%, -50%) rotate(var(--tilt));
+		pointer-events: none;
+	}
+	/* centred in the gutter either side of the 760px column */
+	.polaroid-left {
+		left: calc((100% - 760px) / 4);
+	}
+	.polaroid-right {
+		left: calc(100% - (100% - 760px) / 4);
+	}
+	.polaroid img {
+		display: block;
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: cover;
+	}
+	.polaroid figcaption {
+		padding: 0.55rem 0 0.75rem;
+		text-align: center;
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: var(--slate);
+	}
+	@media (max-width: 1180px) {
+		.polaroid {
+			display: none;
+		}
 	}
 
 	.steps {

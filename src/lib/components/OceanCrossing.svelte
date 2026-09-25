@@ -307,8 +307,8 @@
 
 <style>
 	.ocean {
-		background: url('/wave-texture.jpg');
-		background-size: 65px auto;
+		background: url('/wave-texture-dark.jpg');
+		background-size: 68px auto;
 		padding: clamp(2rem, 5vw, 3.5rem) 0;
 		/* last before the footer, whose waves rise 90px into this section */
 		padding-bottom: calc(90px + clamp(1.5rem, 4vw, 2.5rem));
@@ -347,7 +347,7 @@
 	}
 	.shore.right {
 		right: var(--edge-pad);
-		color: var(--green);
+		color: var(--green-bright);
 	}
 
 	.hint {

@@ -61,7 +61,6 @@
 <style>
 	/* ---- 40h teaser: dark sea, its waves rising into the trail above ---- */
 	.tease {
-		margin-top: 90px;
 		/* the footer's waves rise 90px into this section */
 		padding-bottom: calc(90px + clamp(3rem, 6vw, 5rem));
 		background: url('/wave-texture-dark.jpg');

@@ -27,6 +27,14 @@
 	const trailDrops = drops.filter((d) => !d.finisher);
 	let claimable = $derived(trailDrops.filter((d) => !claimed.has(d.hours) && available >= d.hours));
 	let nextUp = $derived(trailDrops.find((d) => !claimed.has(d.hours) && available < d.hours) ?? null);
+	// Snapshots of where the trail ends up, pinned in the empty half beside a stop.
+	const polaroids: Record<number, { src: string; caption: string }> = {
+		0: { src: '/polaroids/hapenny-bridge.webp', caption: 'Ireland' },
+		1: { src: '/polaroids/cobh.webp', caption: 'Ireland' },
+		3: { src: '/polaroids/canal-sunset.webp', caption: 'Ireland' },
+		4: { src: '/polaroids/convention-centre.webp', caption: 'Ireland' },
+		6: { src: '/polaroids/dublin-above.webp', caption: 'Ireland' }
+	};
 	const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, ''));
 
 	function statusOf(d: Drop) {
@@ -177,6 +185,21 @@
 				{/each}
 			</div>
 
+			{#if !narrow}
+				{#each trailDrops as _, i (i)}
+					{#if polaroids[i]}
+						<figure
+							class="polaroid"
+							style:left="{i % 2 === 0 ? W * 0.72 : W * 0.28}px"
+							style:top="{pts[i].y}px"
+							style:--tilt="{i % 2 === 0 ? 3 : -4}deg">
+							<img src={polaroids[i].src} alt={polaroids[i].caption} loading="lazy" />
+							<figcaption>{polaroids[i].caption}</figcaption>
+						</figure>
+					{/if}
+				{/each}
+			{/if}
+
 			{#each trailDrops as d, i (d.hours)}
 				{@const status = statusOf(d)}
 				{@const p = pts[i]}
@@ -235,8 +258,12 @@
 </dialog>
 
 <style>
+	/* same open water as the Dublin section: plain, so the nav's textured
+	   waves read against it */
 	.trail-section {
-		padding-bottom: 2rem;
+		/* the 40-hour section's dark waves rise 90px up into this one */
+		padding-bottom: calc(90px + 2rem);
+		background: linear-gradient(180deg, var(--sea) 0%, var(--sea-deep) 100%);
 	}
 
 	.big {
@@ -378,6 +405,33 @@
 	.route {
 		position: relative;
 		width: 100%;
+	}
+	.polaroid {
+		position: absolute;
+		z-index: 1;
+		margin: 0;
+		width: clamp(160px, 17vw, 220px);
+		padding: 10px 10px 0;
+		background: #fdfcf8;
+		box-shadow:
+			0 1px 2px rgba(23, 37, 63, 0.18),
+			0 10px 24px rgba(23, 37, 63, 0.22);
+		transform: translate(-50%, -50%) rotate(var(--tilt));
+		pointer-events: none;
+	}
+	.polaroid img {
+		display: block;
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: cover;
+	}
+	.polaroid figcaption {
+		padding: 0.55rem 0 0.75rem;
+		text-align: center;
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: var(--slate);
 	}
 	.curve {
 		position: absolute;
