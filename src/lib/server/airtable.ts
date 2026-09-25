@@ -151,6 +151,103 @@ export async function syncHackClubSubmissions(
 	return (data ?? []) as HackClubSubmissionRow[];
 }
 
+export interface NewSubmission {
+	hackatimeUserId: string;
+	projectName: string;
+	codeUrl: string;
+	playableUrl: string;
+	description: string;
+	firstName: string;
+	lastName: string;
+	email: string;
+	githubUsername: string;
+	birthday: string;
+	addressLine1: string;
+	addressLine2: string | null;
+	city: string;
+	state: string;
+	country: string;
+	zip: string;
+	heardAbout: string | null;
+	doingWell: string | null;
+	improve: string | null;
+}
+
+/**
+ * Create a row in Hack Club's own submission table, the same row their
+ * Airtable form would have created — but with the Hackatime ID set here on
+ * the server, so it can't go missing the way the embedded form's prefill
+ * did. The screenshot is uploaded straight onto the new row afterwards; if
+ * that fails the row is removed again, so a retry never leaves a duplicate.
+ */
+export async function createSubmission(
+	s: NewSubmission,
+	screenshot: { bytes: ArrayBuffer; contentType: string; filename: string }
+): Promise<{ id: string; createdTime: string }> {
+	const table = `${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}`;
+
+	const res = await fetch(table, {
+		method: 'POST',
+		headers: headers(),
+		signal: AbortSignal.timeout(15000),
+		body: JSON.stringify({
+			// lets Airtable coerce plain strings into its own date/select types
+			typecast: true,
+			records: [
+				{
+					fields: {
+						'Code URL': s.codeUrl,
+						'Playable URL': s.playableUrl,
+						Description: s.description,
+						'First Name': s.firstName,
+						'Last Name': s.lastName,
+						Email: s.email,
+						'GitHub Username': s.githubUsername,
+						Birthday: s.birthday,
+						'Address (Line 1)': s.addressLine1,
+						'Address (Line 2)': s.addressLine2 ?? undefined,
+						City: s.city,
+						'State / Province': s.state,
+						Country: s.country,
+						'ZIP / Postal Code': s.zip,
+						'How did you hear about this?': s.heardAbout ?? undefined,
+						'What are we doing well?': s.doingWell ?? undefined,
+						'How can we improve?': s.improve ?? undefined,
+						'Justification - Submitter Hackatime ID': s.hackatimeUserId,
+						'Justification - Hackatime Project Name(s) + Date Range(s)': s.projectName
+					}
+				}
+			]
+		})
+	});
+	if (!res.ok) {
+		const body = await res.text();
+		throw new Error(`Airtable rejected the submission (${res.status}): ${body.slice(0, 300)}`);
+	}
+	const record = ((await res.json()) as { records: AirtableRecord<SubmissionFields>[] }).records[0];
+
+	const upload = await fetch(
+		`https://content.airtable.com/v0/${config.airtable.baseId}/${record.id}/${encodeURIComponent('Screenshot')}/uploadAttachment`,
+		{
+			method: 'POST',
+			headers: headers(),
+			signal: AbortSignal.timeout(30000),
+			body: JSON.stringify({
+				contentType: screenshot.contentType,
+				filename: screenshot.filename,
+				file: Buffer.from(screenshot.bytes).toString('base64')
+			})
+		}
+	);
+	if (!upload.ok) {
+		const body = await upload.text();
+		await fetch(`${table}/${record.id}`, { method: 'DELETE', headers: headers() }).catch(() => {});
+		throw new Error(`Couldn't upload the screenshot (${upload.status}): ${body.slice(0, 300)}`);
+	}
+
+	return { id: record.id, createdTime: record.createdTime };
+}
+
 /**
  * Write one review decision directly onto Hack Club's own submission row —
  * an ordinary update by record id, not an upsert into a table of

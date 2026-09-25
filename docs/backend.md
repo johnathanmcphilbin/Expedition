@@ -106,9 +106,11 @@ functions and form actions.
 Hack Club's own **Unified YSWS** Airtable base (`appGcYrt3CFYab05y`, table
 `YSWS Project Submission`) is the canonical record of what a participant
 submitted. Expedition does not have — and must not grow — a second,
-Expedition-specific submission form. `/submit-to-hackclub` embeds that real
-Hack Club form, prefilled with the participant's Hackatime ID and chosen
-project so the resulting row can be matched back automatically.
+Expedition-specific submission record. `/submit-to-hackclub` is Expedition's
+own form, but it writes that one real row straight into Hack Club's table
+(`createSubmission`), with the Hackatime ID and project set on the server.
+It replaced an embedded Airtable form whose Hackatime-ID prefill silently
+failed, leaving submissions that couldn't be matched to an account.
 
 Expedition's own tables only **cache** and **review** that submission:
 
