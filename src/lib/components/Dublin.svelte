@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { TRAVEL_RATE, money } from '$lib/data';
 </script>
 
 <section class="section dublin-section" id="dublin">
@@ -27,12 +28,11 @@
 		<div class="travel">
 			<h3>If you'd need help getting there</h3>
 			<p class="travel-copy">
-				Don't spend your hours on gear and that value can count toward getting you here. It's
-				decided case by case, based on your verified building hours, what the travel actually
-				costs, the budget available and approval. Banked hours don't guarantee a flight or a set
-				amount.
+				Bank approved hours in your travel fund instead of spending them on gear. Every hour you bank
+				adds {money(TRAVEL_RATE)} to a travel grant for getting you here, and you can move them back
+				until your trip is booked.
 			</p>
-			<a class="btn" href="/#how-it-works">Start logging hours</a>
+			<a class="btn" href="/dashboard#travel">Bank hours for Dublin</a>
 		</div>
 
 		<p class="clarify">

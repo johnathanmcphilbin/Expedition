@@ -255,7 +255,9 @@ export async function getBalance(userId: string): Promise<HourBalanceRow> {
 			user_id: userId,
 			hours_earned: 0,
 			hours_spent: 0,
-			hours_available: 0
+			hours_available: 0,
+			hours_travel: 0,
+			travel_locked_at: null
 		}
 	);
 }
@@ -323,6 +325,42 @@ export async function claimReward(params: {
 		return { ok: false, message: 'Could not record that claim. Try again.' };
 	}
 	return { ok: true, claimId: data as unknown as string };
+}
+
+// ---------------------------------------------------------- travel fund ----
+
+/**
+ * Positive `hours` banks them toward Dublin travel; negative moves them back
+ * to the gear balance. Affordability and the organiser lock are enforced
+ * inside move_travel_hours(), under a row lock, not here.
+ */
+export async function moveTravelHours(
+	userId: string,
+	hours: number
+): Promise<{ ok: true } | { ok: false; message: string }> {
+	const { error: e } = await db().rpc('move_travel_hours', { p_user_id: userId, p_hours: hours });
+	if (e) {
+		if (/locked/i.test(e.message)) {
+			return { ok: false, message: 'Your travel fund is locked while your trip is being arranged.' };
+		}
+		if (/not enough hours/i.test(e.message)) {
+			return { ok: false, message: "You don't have that many hours available to bank." };
+		}
+		if (/not enough banked/i.test(e.message)) {
+			return { ok: false, message: "You don't have that many hours in your travel fund." };
+		}
+		console.error('move_travel_hours', e.message);
+		return { ok: false, message: "Couldn't move those hours just now. Try again." };
+	}
+	return { ok: true };
+}
+
+export async function setTravelLock(userId: string, locked: boolean): Promise<void> {
+	const { error: e } = await db()
+		.from('users')
+		.update({ travel_locked_at: locked ? new Date().toISOString() : null })
+		.eq('id', userId);
+	if (e) throw new Error(e.message);
 }
 
 export async function listOwnClaims(userId: string): Promise<RewardClaimRow[]> {
@@ -406,7 +444,9 @@ export async function listUsersWithBalances(): Promise<AdminUser[]> {
 			user_id: u.id,
 			hours_earned: 0,
 			hours_spent: 0,
-			hours_available: 0
+			hours_available: 0,
+			hours_travel: 0,
+			travel_locked_at: null
 		}
 	}));
 }

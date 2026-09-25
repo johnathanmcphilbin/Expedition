@@ -28,6 +28,8 @@ export type UserRow = {
 	display_name: string | null;
 	avatar_url: string | null;
 	role: UserRole;
+	/** set once an organiser starts arranging this person's travel — freezes their fund */
+	travel_locked_at: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -138,7 +140,11 @@ export type HourBalanceRow = {
 	user_id: string;
 	hours_earned: number;
 	hours_spent: number;
+	/** for gear — already excludes hours banked for travel */
 	hours_available: number;
+	/** banked toward Dublin travel */
+	hours_travel: number;
+	travel_locked_at: string | null;
 }
 
 type Table<Row> = {
@@ -178,6 +184,10 @@ export interface Database {
 			user_expedition_progress: { Row: ExpeditionProgressRow; Relationships: [] };
 		};
 		Functions: {
+			move_travel_hours: {
+				Args: { p_user_id: string; p_hours: number };
+				Returns: void;
+			};
 			claim_reward: {
 				Args: {
 					p_user_id: string;

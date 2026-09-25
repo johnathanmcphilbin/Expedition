@@ -99,7 +99,7 @@
 				<h1 class="app-title">{form.submitted} is in.</h1>
 				<ol class="next">
 					<li>An Expedition reviewer looks at it against your Hackatime time.</li>
-					<li>Approved hours land in your balance — spend them on drops or bank them for Dublin.</li>
+					<li>Approved hours land in your balance. Spend them on drops or bank them for Dublin.</li>
 					<li>If something needs fixing, you'll see a note on your dashboard.</li>
 				</ol>
 				<div class="done-actions">
@@ -113,7 +113,7 @@
 					<h1 class="app-title">Submit a project</h1>
 					<p class="hint lead">
 						One form, about five minutes. It goes straight to Hack Club and into the Expedition
-						review queue — your Hackatime is linked automatically.
+						review queue, with your Hackatime linked automatically.
 					</p>
 				</div>
 			</div>
@@ -124,7 +124,7 @@
 				</p>
 			{:else if !data.projects.length}
 				<p class="empty">
-					Nothing tracked in Hackatime yet — start coding with it running, then come back.
+					Nothing tracked in Hackatime yet. Start coding with it running, then come back.
 				</p>
 			{:else}
 				<form

@@ -10,10 +10,12 @@ export interface Drop {
 	/** second item in the drop, if there is one */
 	extra?: string;
 	art: 'cap' | 'mouse' | 'charger' | 'earbuds' | 'mic' | 'speaker' | 'camera' | 'keyboard';
-	/** the 40 hour drop, which ends the trail */
+	/** the 40 hour drop, which ends the trail. Not revealed or claimable yet. */
 	finisher?: boolean;
 	/** product photo on a transparent background, under /static */
 	image?: string;
+	/** Expedition merch we ship — every other drop is a grant for the item */
+	merch?: boolean;
 }
 
 export interface Project {

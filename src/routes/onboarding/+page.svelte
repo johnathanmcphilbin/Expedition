@@ -36,7 +36,7 @@
 					<p class="step-title">Connect Hackatime</p>
 					<p class="step-hint">
 						Hackatime tracks how long you spend building. Expedition reads your projects and
-						hours from it directly — nothing to set up on your end beyond this.
+						hours from it directly, so there's nothing else to set up.
 					</p>
 					<a class="btn" href="/auth/hackatime?next=/onboarding">Connect Hackatime</a>
 				</div>
@@ -44,8 +44,8 @@
 		</ol>
 
 		<p class="hint" style="margin-top:2rem">
-			Once you're connected, your Hackatime projects show up on your dashboard automatically —
-			no separate project to create here.
+			Once you're connected, your Hackatime projects show up on your dashboard automatically.
+			There's no separate project to create here.
 		</p>
 	</div>
 </main>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GrantAmount from '$lib/components/GrantAmount.svelte';
+	import { money } from '$lib/data';
 	import '$lib/styles/app.css';
 	import { enhance } from '$app/forms';
 	import Footer from '$lib/components/Footer.svelte';
@@ -22,7 +24,7 @@
 		<div class="app-head">
 			<div>
 				<h1 class="app-title">Spend your hours</h1>
-				<p class="hint">Approved hours only — tracked time doesn't count until it's reviewed.</p>
+				<p class="hint">Approved hours only. Tracked time doesn't count until it's reviewed.</p>
 			</div>
 		</div>
 
@@ -39,7 +41,18 @@
 				<span class="n">{data.balance.hours_spent}h</span>
 				<span class="k">already spent</span>
 			</div>
+			{#if Number(data.balance.hours_travel) > 0}
+				<div class="stat-big">
+					<span class="n">{data.balance.hours_travel}h</span>
+					<span class="k">banked for Dublin</span>
+				</div>
+			{/if}
 		</div>
+		{#if Number(data.balance.hours_travel) > 0}
+			<p class="hint" style="margin-bottom:1.5rem">
+				Hours banked for Dublin can't be spent on gear. <a href="/dashboard#travel">Move them back</a> from your dashboard if you change your mind.
+			</p>
+		{/if}
 
 		{#if form?.success}
 			<p class="notice">
@@ -56,10 +69,11 @@
 					{#if d.image}<img class="drop-img" src={d.image} alt={d.name} loading="lazy" />{/if}
 					<div class="drop-head">
 						<span class="drop-hours">{d.hours}h</span>
-						<span class="drop-value">${d.value}</span>
+						<span class="drop-value">{d.merch ? 'Shipped to you' : 'Grant'}</span>
 					</div>
 					<p class="drop-name">{d.name}</p>
 					{#if d.extra}<p class="drop-extra">+ {d.extra}</p>{/if}
+					{#if !d.merch}<GrantAmount reveal="{money(d.value)} grant" />{/if}
 
 					{#if d.claimed}
 						<p class="drop-state">Claimed</p>

@@ -6,7 +6,7 @@
 		<div class="col">
 			<span class="brand">
 				<img src="/logo.png" alt="" width="50" height="47" />
-				Expedition
+				<img class="wordmark" src="/title-expedition-light.png" alt="Expedition" width="243" height="30" />
 			</span>
 			<p class="tag">A Hack Club YSWS. Build something worth exploring.</p>
 		</div>
@@ -70,6 +70,10 @@
 	.brand img {
 		height: 47px;
 		width: auto;
+	}
+	.brand .wordmark {
+		height: 30px;
+		max-width: 100%;
 	}
 
 	.tag {

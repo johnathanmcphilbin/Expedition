@@ -10,12 +10,13 @@ import {
 	listOwnClaims,
 	listConnectedProjects,
 	connectProject,
-	disconnectProject
+	disconnectProject,
+	moveTravelHours
 } from '$lib/server/queries';
 import { connectionStatus, fetchProjectTimes, formatHours } from '$lib/server/hackatime';
 import { syncHackClubSubmissions } from '$lib/server/airtable';
 import { drops } from '$lib/data';
-import { text, ValidationError } from '$lib/server/validate';
+import { text, hours, ValidationError } from '$lib/server/validate';
 import type { SubmissionReviewRow } from '$lib/server/database.types';
 
 export type DashboardProject = {
@@ -94,7 +95,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	const claimed = new Set(claims.filter((c) => c.status !== 'cancelled').map((c) => c.reward_key));
 	const available = Number(balance.hours_available);
-	const unlocks = drops.map((d) => ({
+	const unlocks = drops.filter((d) => !d.finisher).map((d) => ({
 		hours: d.hours,
 		name: d.name,
 		extra: d.extra ?? null,
@@ -138,6 +139,22 @@ export const actions: Actions = {
 			if (e instanceof ValidationError) return fail(400, { message: e.message });
 			console.error('connect project', e);
 			return fail(500, { message: "Couldn't add that project just now. Try again in a moment." });
+		}
+	},
+
+	/** One action for both directions — `direction` says which. */
+	travel: async ({ request, locals }) => {
+		const user = requireUser(locals, '/dashboard');
+		const form = await request.formData();
+		try {
+			const amount = hours(form.get('hours'), 'Hours');
+			const direction = form.get('direction') === 'back' ? -1 : 1;
+			const result = await moveTravelHours(user.id, direction * amount);
+			if (!result.ok) return fail(409, { travelMessage: result.message });
+			return { travelMoved: direction * amount };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { travelMessage: e.message });
+			throw e;
 		}
 	},
 

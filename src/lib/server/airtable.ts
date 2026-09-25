@@ -268,7 +268,7 @@ export async function writeReviewToAirtable(
 	};
 
 	const justification = [
-		`Expedition review: ${statusLabel[review.status]} — ${review.hackatime_project}`,
+		`Expedition review: ${statusLabel[review.status]} (${review.hackatime_project})`,
 		reviewer && `Reviewer: ${reviewer.display_name ?? reviewer.email ?? reviewer.hackclub_id}`,
 		review.reviewed_at && `Reviewed at: ${new Date(review.reviewed_at).toLocaleString()}`,
 		review.participant_feedback && `Feedback to participant: ${review.participant_feedback}`,

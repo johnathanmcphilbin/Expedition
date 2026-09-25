@@ -21,7 +21,7 @@
 			<div class="links">
 				<a class="onward-link" href="/rewards">
 					<span class="onward-title">Your hours</span>
-					<span class="onward-desc">Eight supply drops. Spend your hours or bank them.</span>
+					<span class="onward-desc">Supply drops along the trail. Spend your hours or bank them.</span>
 				</a>
 				<a class="onward-link" href="/ireland">
 					<span class="onward-title">Dublin</span>
@@ -42,7 +42,8 @@
 	.onward {
 		background: var(--sea-mid);
 		padding-top: calc(90px + clamp(2.5rem, 5vw, 4rem));
-		padding-bottom: clamp(3rem, 6vw, 5rem);
+		/* the footer's waves rise 90px up into this section */
+		padding-bottom: calc(90px + clamp(2rem, 4vw, 3rem));
 	}
 	.onward h2 {
 		color: var(--navy);

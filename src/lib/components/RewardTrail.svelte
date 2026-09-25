@@ -1,23 +1,33 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { drops } from '$lib/data';
+	import { drops, money } from '$lib/data';
+	import GrantAmount from './GrantAmount.svelte';
 	import type { Drop } from '$lib/types';
 
 	let {
-		/** verified hours built. Wire to real data when it exists. */
+		/** preview-only: drives the trail when nobody's signed in */
 		hoursBuilt = $bindable(17),
-		/** hours already spent on claimed drops */
+		/** drop tiers already claimed */
 		claimed = $bindable(new Set<number>()),
-		name = ''
-	}: { hoursBuilt?: number; claimed?: Set<number>; name?: string } = $props();
+		name = '',
+		/** a signed-in participant's real ledger figures; replaces the preview */
+		live = null
+	}: {
+		hoursBuilt?: number;
+		claimed?: Set<number>;
+		name?: string;
+		live?: { built: number; spent: number; available: number; travel: number } | null;
+	} = $props();
 
-	let spent = $derived([...claimed].reduce((a, b) => a + b, 0));
-	let available = $derived(hoursBuilt - spent);
+	let built = $derived(live ? live.built : hoursBuilt);
+	let spent = $derived(live ? live.spent : [...claimed].reduce((a, b) => a + b, 0));
+	let available = $derived(live ? live.available : hoursBuilt - spent);
 
-	// the 40h drop is its own destination section, not a bend on the route
+	// the 40h finisher prize isn't revealed yet — it's a teaser elsewhere, never a stop
 	const trailDrops = drops.filter((d) => !d.finisher);
-	let claimable = $derived(drops.filter((d) => !claimed.has(d.hours) && available >= d.hours));
-	let nextUp = $derived(drops.find((d) => !claimed.has(d.hours) && available < d.hours) ?? null);
+	let claimable = $derived(trailDrops.filter((d) => !claimed.has(d.hours) && available >= d.hours));
+	let nextUp = $derived(trailDrops.find((d) => !claimed.has(d.hours) && available < d.hours) ?? null);
+	const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, ''));
 
 	function statusOf(d: Drop) {
 		if (claimed.has(d.hours)) return 'claimed';
@@ -94,23 +104,30 @@
 	<div class="wrap">
 		<h2 class="big">Your hours.<br />Your call.</h2>
 		<p class="lede">
-			Every hour you build is worth $5 in rewards. Spend your hours on gear now, or keep banking
-			them for something bigger.
+			Every drop is a grant for the thing it names. The cap and stickers we just ship to you. Or
+			keep your hours and bank them toward a travel grant to Dublin.
 		</p>
-		<p class="scrawl">or keep them for Dublin <span aria-hidden="true">→</span></p>
+		<p class="scrawl">
+			<a href={live ? '/dashboard#travel' : '/ireland'}>bank them for Dublin</a> <span aria-hidden="true">→</span>
+		</p>
 
 		<!-- ---------- banked readout ---------- -->
 		<div class="bank">
 			{#if name}<p class="whose">{name}'s expedition</p>{/if}
 			<div class="tallies">
 				<div class="tally">
-					<span class="tally-n">{hoursBuilt}h</span><span class="tally-k">built</span>
+					<span class="tally-n">{fmt(built)}h</span><span class="tally-k">built</span>
 				</div>
 				<div class="tally">
-					<span class="tally-n">{spent}h</span><span class="tally-k">spent</span>
+					<span class="tally-n">{fmt(spent)}h</span><span class="tally-k">spent</span>
 				</div>
+				{#if live && live.travel > 0}
+					<div class="tally">
+						<span class="tally-n">{fmt(live.travel)}h</span><span class="tally-k">for Dublin</span>
+					</div>
+				{/if}
 				<div class="tally hero">
-					<span class="tally-n">{available}h</span><span class="tally-k">banked</span>
+					<span class="tally-n">{fmt(available)}h</span><span class="tally-k">to spend</span>
 				</div>
 			</div>
 
@@ -126,17 +143,19 @@
 					<div class="opt">
 						<span class="opt-k">Or keep going</span>
 						<span class="opt-v">
-							{nextUp.hours - available}h to {nextUp.name.toLowerCase()}
+							{fmt(nextUp.hours - available)}h to {nextUp.name.toLowerCase()}
 						</span>
 					</div>
 				{/if}
 			</div>
 		</div>
 
-		<label class="scrub">
-			<span class="scrub-k">Drag to preview hours built</span>
-			<input type="range" min="0" max="180" step="1" bind:value={hoursBuilt} />
-		</label>
+		{#if !live}
+			<label class="scrub">
+				<span class="scrub-k">Drag to preview hours built</span>
+				<input type="range" min="0" max="180" step="1" bind:value={hoursBuilt} />
+			</label>
+		{/if}
 	</div>
 
 	<!-- ---------- the route down the page ---------- -->
@@ -173,18 +192,23 @@
 					<div class="info">
 						{#if d.image}<img class="drop-img" src={d.image} alt={d.name} loading="lazy" />{/if}
 						<p class="hrs">{d.hours}h</p>
+						<p class="kind">{d.merch ? 'Shipped to you' : 'A grant for'}</p>
 						<p class="name">{d.name}</p>
 						{#if d.extra}<p class="extra">+ {d.extra}</p>{/if}
-						<p class="value">${d.value} value</p>
+						{#if !d.merch}<p class="value"><GrantAmount reveal="{money(d.value)} grant" /></p>{/if}
 
 						{#if status === 'claimed'}
 							<p class="tag claimed">Claimed</p>
 						{:else if status === 'available'}
-							<button class="claim" onclick={() => (pending = d)}>
-								Claim for {d.hours} hours
-							</button>
+							{#if live}
+								<a class="claim" href="/claim">Claim for {d.hours} hours</a>
+							{:else}
+								<button class="claim" onclick={() => (pending = d)}>
+									Claim for {d.hours} hours
+								</button>
+							{/if}
 						{:else}
-							<p class="tag short">{d.hours - available} more hours</p>
+							<p class="tag short">{fmt(d.hours - available)} more hours</p>
 						{/if}
 					</div>
 				</div>
@@ -192,10 +216,7 @@
 		</div>
 	</div>
 
-	<p class="fineprint wrap">
-		Exact models may change depending on country, availability and shipping. Values include
-		shipping.
-	</p>
+	<p class="fineprint wrap">Exact models may vary by country and availability.</p>
 </section>
 
 <!-- ---------- claim confirmation ---------- -->
@@ -204,7 +225,7 @@
 		<p class="c-title">Claim the {pending.hours}h drop?</p>
 		<p class="c-item">{pending.name}{pending.extra ? ` + ${pending.extra}` : ''}</p>
 		<p class="c-cost">
-			This is a preview, not a real checkout — there's no live way to redeem hours for gear yet.
+			This is a preview, not a real checkout. There's no live way to redeem hours for gear yet.
 			The numbers here are just for browsing.
 		</p>
 		<div class="c-actions">
@@ -475,12 +496,19 @@
 		color: var(--muted);
 		font-size: 0.95rem;
 	}
+	.kind {
+		margin-top: 0.6rem;
+		font-size: 0.72rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.07em;
+		color: var(--muted);
+	}
+	.kind + .name {
+		margin-top: 0.15rem;
+	}
 	.value {
 		margin-top: 0.3rem;
-		font-family: var(--font-mono);
-		font-size: 0.88rem;
-		font-weight: 600;
-		color: var(--muted);
 	}
 
 	.tag {

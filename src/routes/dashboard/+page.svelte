@@ -2,6 +2,8 @@
 	import '$lib/styles/app.css';
 	import Footer from '$lib/components/Footer.svelte';
 	import { enhance } from '$app/forms';
+	import { TRAVEL_RATE, money } from '$lib/data';
+	import GrantAmount from '$lib/components/GrantAmount.svelte';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -36,6 +38,10 @@
 	});
 	const pickerOpen = $derived(adding || data.projects.length === 0);
 
+	const travelHours = $derived(Number(data.balance.hours_travel));
+	const travelLocked = $derived(!!data.balance.travel_locked_at);
+	let moveHours = $state<number | null>(null);
+
 	function hoursToGo(h: number) {
 		const n = Math.max(0, h - available);
 		return `${Number.isInteger(n) ? n : n.toFixed(2).replace(/0$/, '')}h to go`;
@@ -69,28 +75,36 @@
 		<section class="panel progress">
 			<div class="progress-main">
 				<p class="section-label">Approved hours</p>
-				<p class="big">
-					<strong>{data.progress.hours_earned}</strong><span>/ {data.progress.hours_target}h</span>
-				</p>
-				<div
-					class="meter"
-					role="progressbar"
-					aria-valuenow={data.progress.percent_complete}
-					aria-valuemin="0"
-					aria-valuemax="100"
-					aria-label="Approved hours toward 40">
-					<span class="meter-fill" style="width:{data.progress.percent_complete}%"></span>
+				<p class="big"><strong>{data.progress.hours_earned}</strong><span>h</span></p>
+				<p class="hint">Build as much as you like. There's no cap.</p>
+				<div class="milestone">
+					<div class="milestone-head">
+						<span class="milestone-k">{data.progress.hours_target}-hour prize</span>
+						<span class="milestone-v">
+							{#if data.progress.finished}Unlocked{:else}at {data.progress.hours_target}h{/if}
+						</span>
+					</div>
+					<div
+						class="meter"
+						role="progressbar"
+						aria-valuenow={data.progress.percent_complete}
+						aria-valuemin="0"
+						aria-valuemax="100"
+						aria-label="Approved hours toward the 40-hour prize">
+						<span class="meter-fill" style="width:{data.progress.percent_complete}%"></span>
+					</div>
+					<p class="hint">
+						{#if data.progress.finished}
+							You've unlocked the 40-hour prize. We'll be in touch about it.
+						{:else}
+							Something extra at {data.progress.hours_target} approved hours. We're keeping it quiet for now.
+						{/if}
+					</p>
 				</div>
-				<p class="hint">
-					{#if data.progress.finished}
-						All {data.progress.hours_target} hours approved. You finished the Expedition.
-					{:else}
-						{data.progress.hours_remaining}h more to finish the Expedition.
-					{/if}
-				</p>
 			</div>
 			<dl class="mini-stats">
-				<div><dt>Banked</dt><dd class="green">{data.balance.hours_available}h</dd></div>
+				<div><dt>To spend</dt><dd class="green">{data.balance.hours_available}h</dd></div>
+				<div><dt>For Dublin</dt><dd>{travelHours}h</dd></div>
 				<div><dt>Spent</dt><dd>{data.balance.hours_spent}h</dd></div>
 				<a class="ledger-link" href="/your-hours">See every hour →</a>
 			</dl>
@@ -108,7 +122,7 @@
 			</div>
 			<p class="hint block-hint">
 				{#if nextDrop}
-					Next up: <strong>{nextDrop.name}</strong> — {hoursToGo(nextDrop.hours)} of banked hours.
+					Next up: <strong>{nextDrop.name}</strong>, {hoursToGo(nextDrop.hours)}.
 				{:else}
 					Every drop is within reach.
 				{/if}
@@ -125,6 +139,83 @@
 					</li>
 				{/each}
 			</ol>
+		</section>
+
+		<!-- ---------------- travel fund ---------------- -->
+		<section class="block" id="travel">
+			<div class="block-head">
+				<h2>Dublin travel fund</h2>
+				<a class="text-link" href="/ireland">About Dublin →</a>
+			</div>
+			<p class="hint block-hint">
+				Bank approved hours here instead of spending them on gear. Every hour you bank adds
+				<strong>{money(TRAVEL_RATE)}</strong> to a travel grant for getting you to Dublin on December 5.
+			</p>
+			<div class="panel travel">
+				<div class="travel-total">
+					<span class="t-dollars">{travelHours}h</span>
+					<span class="t-hours">banked for Dublin</span>
+					{#if travelHours > 0}
+						<span class="t-grant">
+							<GrantAmount reveal="{money(travelHours * TRAVEL_RATE)} travel grant so far" />
+						</span>
+					{/if}
+				</div>
+
+				{#if travelLocked}
+					<p class="travel-note">
+						Your fund is locked while your trip is being arranged. Talk to an organiser if something's changed.
+					</p>
+				{:else}
+					<form
+						class="travel-form"
+						method="POST"
+						action="?/travel"
+						use:enhance={() =>
+							async ({ update, result }) => {
+								await update({ reset: false });
+								if (result.type === 'success') moveHours = null;
+							}}>
+						<label class="sr-only" for="move-hours">Hours</label>
+						<div class="travel-input">
+							<input
+								id="move-hours"
+								name="hours"
+								type="number"
+								min="0.25"
+								step="0.25"
+								max={Math.max(available, travelHours)}
+								placeholder="Hours"
+								bind:value={moveHours}
+								required />
+						</div>
+						<div class="travel-actions">
+							<button class="btn" type="submit" name="direction" value="bank" disabled={available <= 0}>
+								Bank for Dublin
+							</button>
+							{#if travelHours > 0}
+								<button class="btn btn-outline" type="submit" name="direction" value="back">
+									Move back to gear
+								</button>
+							{/if}
+						</div>
+						<p class="hint travel-avail">
+							{available}h available to bank{#if available > 0}
+								· <button type="button" class="text-link inline" onclick={() => (moveHours = available)}>use all</button>{/if}
+						</p>
+					</form>
+				{/if}
+
+				{#if form && 'travelMessage' in form && form.travelMessage}
+					<p class="error-box travel-msg">{form.travelMessage}</p>
+				{:else if form && 'travelMoved' in form && form.travelMoved}
+					<p class="notice travel-msg">
+						{form.travelMoved > 0
+							? `Banked ${form.travelMoved}h for Dublin.`
+							: `Moved ${-form.travelMoved}h back to your gear balance.`}
+					</p>
+				{/if}
+			</div>
 		</section>
 
 		<!-- ---------------- projects ---------------- -->
@@ -152,7 +243,7 @@
 			{:else}
 				{#if data.syncError}
 					<p class="hint error">
-						Couldn't refresh submission status from Hack Club just now — statuses may be a little out of date.
+						Couldn't refresh submission status from Hack Club just now, so statuses may be a little out of date.
 					</p>
 				{/if}
 
@@ -235,7 +326,7 @@
 							</div>
 						{:else}
 							<p class="empty">
-								Nothing tracked in Hackatime yet — start coding with it running and your projects will show up here.
+								Nothing tracked in Hackatime yet. Start coding with it running and your projects will show up here.
 							</p>
 						{/if}
 						{#if data.projects.length}
@@ -300,10 +391,31 @@
 		font-weight: 700;
 		color: var(--muted);
 	}
+	.milestone {
+		margin-top: 1.2rem;
+		padding-top: 1rem;
+		border-top: 2px solid var(--rule);
+		max-width: 520px;
+	}
+	.milestone-head {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+		font-size: 0.8rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+	}
+	.milestone-k {
+		color: var(--navy);
+	}
+	.milestone-v {
+		color: var(--muted);
+	}
 	.meter {
-		height: 12px;
+		height: 8px;
 		border: 1.5px solid var(--navy);
-		margin: 0.9rem 0 0.6rem;
+		margin: 0.5rem 0 0.5rem;
 	}
 	.meter-fill {
 		display: block;
@@ -372,7 +484,7 @@
 		margin: 0;
 		padding: 0;
 		display: grid;
-		grid-template-columns: repeat(8, minmax(0, 1fr));
+		grid-template-columns: repeat(7, minmax(0, 1fr));
 		gap: 0.6rem;
 	}
 	.unlock {
@@ -448,6 +560,77 @@
 		}
 		.unlock {
 			min-height: 0;
+		}
+	}
+
+	/* ---- travel fund ---- */
+	.travel {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: center;
+		gap: 1.2rem 2.5rem;
+	}
+	.travel-total {
+		display: flex;
+		flex-direction: column;
+	}
+	.t-dollars {
+		font-size: clamp(2.2rem, 6vw, 3rem);
+		font-weight: 800;
+		letter-spacing: -0.04em;
+		line-height: 1;
+		color: var(--navy);
+	}
+	.t-hours {
+		margin-top: 0.3rem;
+		font-size: 0.85rem;
+		font-weight: 700;
+		color: var(--muted);
+	}
+	.travel-form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.7rem;
+	}
+	.travel-input {
+		display: flex;
+		align-items: center;
+		gap: 0.8rem;
+	}
+	.travel-input input {
+		max-width: 9rem;
+	}
+	.t-grant {
+		margin-top: 0.35rem;
+	}
+	.travel-actions {
+		display: flex;
+		gap: 0.6rem;
+		flex-wrap: wrap;
+	}
+	.travel-avail {
+		margin: 0;
+	}
+	.inline {
+		background: none;
+		border: 0;
+		padding: 0;
+		cursor: pointer;
+		text-decoration: underline;
+		font-size: inherit;
+	}
+	.travel-note {
+		margin: 0;
+		font-weight: 600;
+		color: var(--slate);
+	}
+	.travel-msg {
+		grid-column: 1 / -1;
+		margin: 0;
+	}
+	@media (max-width: 600px) {
+		.travel {
+			grid-template-columns: 1fr;
 		}
 	}
 

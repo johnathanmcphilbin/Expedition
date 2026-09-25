@@ -112,7 +112,7 @@ export const actions: Actions = {
 				throw new ValidationError('The screenshot needs to be an image', 'screenshot');
 			}
 			if (file.size > MAX_SCREENSHOT) {
-				throw new ValidationError('That screenshot is over 4 MB — try a smaller one', 'screenshot');
+				throw new ValidationError('That screenshot is over 4 MB. Try a smaller one', 'screenshot');
 			}
 
 			const submission = {

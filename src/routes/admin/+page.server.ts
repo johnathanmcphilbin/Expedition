@@ -7,7 +7,8 @@ import {
 	countPendingReviews,
 	listAllClaims,
 	fulfilClaim,
-	cancelClaim
+	cancelClaim,
+	setTravelLock
 } from '$lib/server/queries';
 import { signedHours, text, oneOf, uuid, ValidationError } from '$lib/server/validate';
 
@@ -26,6 +27,23 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
+	/**
+	 * Freeze a participant's travel fund once their trip is being arranged —
+	 * after that they can't move hours in or out of it themselves.
+	 */
+	travelLock: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const form = await request.formData();
+		try {
+			const userId = uuid(form.get('user_id')?.toString(), 'user');
+			await setTravelLock(userId, form.get('locked') === 'yes');
+			return { success: true };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { message: e.message });
+			throw e;
+		}
+	},
+
 	/** Mark a claim as sent. No ledger effect — the debit happened at claim time. */
 	fulfil: async ({ request, locals }) => {
 		requireAdmin(locals);
@@ -89,7 +107,7 @@ export const actions: Actions = {
 				return fail(400, { message: e.message, field: e.field });
 			}
 			if (e instanceof Error && e.message.includes('hour_transactions_sign_matches_type')) {
-				return fail(400, { message: 'That amount and type don’t match — check the sign.' });
+				return fail(400, { message: 'That amount and type don’t match. Check the sign.' });
 			}
 			throw e;
 		}

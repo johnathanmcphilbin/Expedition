@@ -89,7 +89,7 @@ export const config = {
 					throw new Error(
 						`AIRTABLE_API_KEY contains a non-ASCII character at position ${i} ` +
 							`(U+${key.charCodeAt(i).toString(16).toUpperCase()}). This usually means a ` +
-							`masked value (e.g. "pat••••1234") was pasted instead of the real token — ` +
+							`masked value (e.g. "pat••••1234") was pasted instead of the real token. ` +
 							`copy it again from https://airtable.com/create/tokens.`
 					);
 				}

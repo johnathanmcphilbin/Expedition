@@ -24,11 +24,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	return {
 		balance,
 		claims,
-		catalogue: drops.map((d) => ({
+		catalogue: drops.filter((d) => !d.finisher).map((d) => ({
 			key: String(d.hours),
 			name: d.name,
 			extra: d.extra ?? null,
 			image: d.image ?? null,
+			merch: !!d.merch,
 			hours: d.hours,
 			value: d.value,
 			affordable: Number(balance.hours_available) >= d.hours,
@@ -48,7 +49,7 @@ export const actions: Actions = {
 			const note = text(form.get('note'), 'Note', { max: 500 });
 
 			// price and name come from the catalogue, never the form
-			const drop = drops.find((d) => String(d.hours) === key);
+			const drop = drops.find((d) => String(d.hours) === key && !d.finisher);
 			if (!drop) return fail(400, { message: 'That reward does not exist.' });
 
 			const existing = await listOwnClaims(user.id);

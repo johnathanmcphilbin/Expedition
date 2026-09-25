@@ -93,7 +93,7 @@
 						</h2>
 						{#if !s.user_id}
 							<p class="hint error">
-								No matching Expedition account — their Hackatime ID ({s.hackatime_user_id ??
+								No matching Expedition account. Their Hackatime ID ({s.hackatime_user_id ??
 									'none given'}) didn't match a connected account.
 							</p>
 						{/if}
@@ -172,7 +172,7 @@
 										<form method="POST" action="?/link" use:enhance>
 											<input type="hidden" name="airtable_record_id" value={s.airtable_record_id} />
 											<input type="hidden" name="user_id" value={c.id} />
-											<span>{c.display_name ?? c.hackclub_id}{c.email ? ` — ${c.email}` : ''}</span>
+											<span>{c.display_name ?? c.hackclub_id}{c.email ? ` · ${c.email}` : ''}</span>
 											<button class="btn btn-outline" type="submit">Link</button>
 										</form>
 									</li>
@@ -181,7 +181,7 @@
 						{/if}
 					{:else if !data.detail.hackatimeProjects.length}
 						<p class="empty error">
-							Couldn't reach Hackatime for this participant. Nothing to review against — try
+							Couldn't reach Hackatime for this participant. Nothing to review against, so try
 							again shortly.
 						</p>
 					{:else}
@@ -203,7 +203,7 @@
 								<select id="hackatime_project" name="hackatime_project" bind:value={selectedProject}>
 									<option value="">Choose&hellip;</option>
 									{#each data.detail.hackatimeProjects as p (p.name)}
-										<option value={p.name}>{p.name} — {p.tracked} tracked</option>
+										<option value={p.name}>{p.name} · {p.tracked} tracked</option>
 									{/each}
 								</select>
 							</div>

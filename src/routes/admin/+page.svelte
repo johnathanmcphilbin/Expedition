@@ -2,6 +2,7 @@
 	import '$lib/styles/app.css';
 	import { enhance } from '$app/forms';
 	import Footer from '$lib/components/Footer.svelte';
+	import { TRAVEL_RATE } from '$lib/data';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -10,6 +11,9 @@
 
 	const totalBanked = $derived(
 		data.users.reduce((sum, u) => sum + Number(u.balance.hours_available), 0)
+	);
+	const totalTravel = $derived(
+		data.users.reduce((sum, u) => sum + Number(u.balance.hours_travel), 0)
 	);
 	const totalEarned = $derived(
 		data.users.reduce((sum, u) => sum + Number(u.balance.hours_earned), 0)
@@ -36,7 +40,11 @@
 			</div>
 			<div class="stat-big green">
 				<span class="n">{totalBanked}h</span>
-				<span class="k">banked, all accounts</span>
+				<span class="k">available for gear</span>
+			</div>
+			<div class="stat-big">
+				<span class="n">${(totalTravel * TRAVEL_RATE).toFixed(0)}</span>
+				<span class="k">travel funds ({totalTravel}h)</span>
 			</div>
 			<div class="stat-big">
 				<span class="n">{totalEarned}h</span>
@@ -110,6 +118,19 @@
 						<span class="row-meta">
 							{u.balance.hours_earned}h earned &middot; {u.balance.hours_spent}h spent
 						</span>
+						{#if Number(u.balance.hours_travel) > 0 || u.travel_locked_at}
+							<span class="row-meta">
+								{u.balance.hours_travel}h for Dublin (${(Number(u.balance.hours_travel) * TRAVEL_RATE).toFixed(2)})
+								{#if u.travel_locked_at}&middot; <strong>locked</strong>{/if}
+							</span>
+							<form method="POST" action="?/travelLock" use:enhance>
+								<input type="hidden" name="user_id" value={u.id} />
+								<input type="hidden" name="locked" value={u.travel_locked_at ? 'no' : 'yes'} />
+								<button class="text-btn" type="submit">
+									{u.travel_locked_at ? 'Unlock travel fund' : 'Lock travel fund'}
+								</button>
+							</form>
+						{/if}
 					</div>
 
 					{#if grantingFor === u.id}
@@ -127,7 +148,7 @@
 							<select name="type" required>
 								<option value="manual_adjustment">Correction (+/-)</option>
 								<option value="reward_claimed">Reward given (deduct)</option>
-								<option value="travel_allocation">Travel support (deduct)</option>
+								<option value="travel_allocation">Move into travel fund (deduct)</option>
 							</select>
 							<input
 								name="amount"
@@ -188,6 +209,17 @@
 		flex-direction: column;
 		min-width: 14rem;
 		flex: 1;
+	}
+	.text-btn {
+		background: none;
+		border: 0;
+		padding: 0;
+		font: inherit;
+		font-size: 0.85rem;
+		font-weight: 700;
+		color: var(--blue-dark);
+		text-decoration: underline;
+		cursor: pointer;
 	}
 	.roster-balance {
 		display: flex;

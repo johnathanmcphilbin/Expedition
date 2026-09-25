@@ -61,7 +61,7 @@
 		<div class="right">
 			<!-- Metadata printed in the corner of a map, not a control. -->
 			<span class="ages" aria-label="Ages 13 to 18">
-				<span class="ages-num">13&mdash;18</span>
+				<span class="ages-num">13&ndash;18</span>
 				<span class="ages-unit">yrs</span>
 			</span>
 
