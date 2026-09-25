@@ -2,9 +2,11 @@
 	import { TRAVEL_RATE, money } from '$lib/data';
 
 	const polaroids = [
-		{ src: '/polaroids/hapenny-bridge.webp', cls: 'p1', tilt: 4 },
-		{ src: '/polaroids/dublin-above.webp', cls: 'p2', tilt: -3 },
-		{ src: '/polaroids/convention-centre.webp', cls: 'p3', tilt: -5 }
+		{ src: '/polaroids/hapenny-bridge.webp', cls: 'p1', tilt: 4, caption: 'Ireland' },
+		{ src: '/polaroids/dublin-above.webp', cls: 'p2', tilt: -3, caption: 'Ireland' },
+		{ src: '/polaroids/convention-centre.webp', cls: 'p3', tilt: -5, caption: 'Ireland' },
+		{ src: '/polaroids/galway-market-1.webp', cls: 'p4', tilt: -4, caption: 'Galway Christmas Market' },
+		{ src: '/polaroids/galway-market-2.webp', cls: 'p5', tilt: 5, caption: 'Galway Christmas Market' }
 	];
 </script>
 
@@ -13,7 +15,7 @@
 		{#each polaroids as p (p.src)}
 			<figure class="polaroid {p.cls}" style:--tilt="{p.tilt}deg" aria-hidden="true">
 				<img src={p.src} alt="" loading="lazy" />
-				<figcaption>Ireland</figcaption>
+				<figcaption>{p.caption}</figcaption>
 			</figure>
 		{/each}
 		<h2 class="headline">Dublin, December 5th</h2>
@@ -197,12 +199,33 @@
 	}
 	/* the left margin only opens up on wide screens */
 	.p3 {
+		width: 180px;
 		right: calc(100% + 3rem);
 		top: 6rem;
 		display: none;
 	}
-	@media (min-width: 1600px) {
+	@media (min-width: 1700px) {
 		.p3 {
+			display: block;
+		}
+	}
+	/* further right again, out in the page margin, which is only wide enough
+	   on big screens */
+	.p4,
+	.p5 {
+		width: 170px;
+		left: calc(100% - var(--edge-pad) + 1.5rem);
+		display: none;
+	}
+	.p4 {
+		top: 4rem;
+	}
+	.p5 {
+		top: 19rem;
+	}
+	@media (min-width: 1440px) {
+		.p4,
+		.p5 {
 			display: block;
 		}
 	}
