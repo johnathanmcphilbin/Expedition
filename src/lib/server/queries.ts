@@ -9,7 +9,9 @@ import type {
 	HourBalanceRow,
 	ExpeditionProgressRow,
 	UserRow,
-	HourTransactionType
+	HourTransactionType,
+	TravelBucket,
+	TravelBucketsRow
 } from './database.types';
 
 /**
@@ -351,9 +353,14 @@ export async function claimReward(params: {
  */
 export async function moveTravelHours(
 	userId: string,
-	hours: number
+	hours: number,
+	bucket: TravelBucket
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-	const { error: e } = await db().rpc('move_travel_hours', { p_user_id: userId, p_hours: hours });
+	const { error: e } = await db().rpc('move_travel_hours', {
+		p_user_id: userId,
+		p_hours: hours,
+		p_bucket: bucket
+	});
 	if (e) {
 		if (/locked/i.test(e.message)) {
 			return { ok: false, message: 'Your travel fund is locked while your trip is being arranged.' };
@@ -362,12 +369,36 @@ export async function moveTravelHours(
 			return { ok: false, message: "You don't have that many hours available to bank." };
 		}
 		if (/not enough banked/i.test(e.message)) {
-			return { ok: false, message: "You don't have that many hours in your travel fund." };
+			return { ok: false, message: "You don't have that many hours in that part of your travel fund." };
 		}
 		console.error('move_travel_hours', e.message);
 		return { ok: false, message: "Couldn't move those hours just now. Try again." };
 	}
 	return { ok: true };
+}
+
+/** Hours banked in each travel bucket. Zeros if the view isn't there yet. */
+export async function getTravelBuckets(userId: string): Promise<TravelBucketsRow> {
+	const empty = { user_id: userId, visa: 0, accommodation: 0, flights: 0 };
+	const { data, error: e } = await db()
+		.from('user_travel_buckets')
+		.select('*')
+		.eq('user_id', userId)
+		.maybeSingle();
+	if (e) {
+		console.error('getTravelBuckets', e.message);
+		return empty;
+	}
+	return (data as TravelBucketsRow | null) ?? empty;
+}
+
+export async function listAllTravelBuckets(): Promise<TravelBucketsRow[]> {
+	const { data, error: e } = await db().from('user_travel_buckets').select('*');
+	if (e) {
+		console.error('listAllTravelBuckets', e.message);
+		return [];
+	}
+	return (data ?? []) as TravelBucketsRow[];
 }
 
 export async function setTravelLock(userId: string, locked: boolean): Promise<void> {

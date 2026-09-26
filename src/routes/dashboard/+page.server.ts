@@ -11,12 +11,16 @@ import {
 	listConnectedProjects,
 	connectProject,
 	disconnectProject,
-	moveTravelHours
+	moveTravelHours,
+	getTravelBuckets
 } from '$lib/server/queries';
 import { connectionStatus, fetchProjectTimes, formatHours } from '$lib/server/hackatime';
 import { syncHackClubSubmissions } from '$lib/server/airtable';
 import { drops } from '$lib/data';
-import { text, hours, ValidationError } from '$lib/server/validate';
+import { text, hours, oneOf, ValidationError } from '$lib/server/validate';
+import type { TravelBucket } from '$lib/server/database.types';
+
+const BUCKETS = ['visa', 'accommodation', 'flights'] as const satisfies readonly TravelBucket[];
 import type { SubmissionReviewRow } from '$lib/server/database.types';
 
 export type DashboardProject = {
@@ -36,13 +40,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	const hackatime = await connectionStatus(user.id);
 
-	const [balance, progress, ownReviews, pendingReviews, claims, connected] = await Promise.all([
+	const [balance, progress, ownReviews, pendingReviews, claims, connected, travelBuckets] = await Promise.all([
 		getBalance(user.id),
 		getProgress(user.id),
 		listOwnReviews(user.id),
 		isAdmin(user) ? countPendingReviews() : Promise.resolve(null),
 		listOwnClaims(user.id),
-		listConnectedProjects(user.id)
+		listConnectedProjects(user.id),
+		getTravelBuckets(user.id)
 	]);
 
 	let projects: DashboardProject[] = [];
@@ -118,6 +123,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		projects,
 		others,
 		unlocks,
+		travelBuckets,
 		pendingReviews,
 		flash: url.searchParams.get('hackatime')
 	};
@@ -148,10 +154,11 @@ export const actions: Actions = {
 		const form = await request.formData();
 		try {
 			const amount = hours(form.get('hours'), 'Hours');
+			const bucket = oneOf(form.get('bucket'), BUCKETS, 'What it goes toward');
 			const direction = form.get('direction') === 'back' ? -1 : 1;
-			const result = await moveTravelHours(user.id, direction * amount);
+			const result = await moveTravelHours(user.id, direction * amount, bucket);
 			if (!result.ok) return fail(409, { travelMessage: result.message });
-			return { travelMoved: direction * amount };
+			return { travelMoved: direction * amount, travelBucket: bucket };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { travelMessage: e.message });
 			throw e;

@@ -14,6 +14,15 @@ export type SubmissionStatus =
 
 export type ReviewDecision = 'approved' | 'changes_requested' | 'rejected';
 
+export type TravelBucket = 'visa' | 'accommodation' | 'flights';
+
+export type TravelBucketsRow = {
+	user_id: string;
+	visa: number;
+	accommodation: number;
+	flights: number;
+}
+
 export type HourTransactionType =
 	| 'checkpoint_approved'
 	| 'reward_claimed'
@@ -83,6 +92,7 @@ export type HourTransactionRow = {
 	user_id: string;
 	amount: number;
 	type: HourTransactionType;
+	travel_bucket: TravelBucket | null;
 	reference_id: string | null;
 	note: string | null;
 	created_at: string;
@@ -182,10 +192,11 @@ export interface Database {
 		Views: {
 			user_hour_balances: { Row: HourBalanceRow; Relationships: [] };
 			user_expedition_progress: { Row: ExpeditionProgressRow; Relationships: [] };
+			user_travel_buckets: { Row: TravelBucketsRow; Relationships: [] };
 		};
 		Functions: {
 			move_travel_hours: {
-				Args: { p_user_id: string; p_hours: number };
+				Args: { p_user_id: string; p_hours: number; p_bucket: TravelBucket };
 				Returns: void;
 			};
 			claim_reward: {
@@ -225,6 +236,7 @@ export interface Database {
 			review_decision: ReviewDecision;
 			hour_transaction_type: HourTransactionType;
 			claim_status: ClaimStatus;
+			travel_bucket: TravelBucket;
 		};
 	};
 }

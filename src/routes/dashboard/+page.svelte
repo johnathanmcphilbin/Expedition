@@ -34,6 +34,16 @@
 	const travelLocked = $derived(!!data.balance.travel_locked_at);
 	let moveHours = $state<number | null>(null);
 
+	const BUCKETS = [
+		{ key: 'visa', label: 'Visa' },
+		{ key: 'accommodation', label: 'Accommodation' },
+		{ key: 'flights', label: 'Flights' }
+	] as const;
+	type BucketKey = (typeof BUCKETS)[number]['key'];
+	let bucket = $state<BucketKey>('flights');
+	const inBucket = $derived(Number(data.travelBuckets[bucket]));
+	const bucketLabel = (k: string) => BUCKETS.find((b) => b.key === k)?.label ?? k;
+
 	type Stage = 'building' | 'submitted' | 'approved' | 'changes' | 'rejected';
 	function stageOf(p: (typeof data.projects)[number]): Stage {
 		const st = p.review?.status;
@@ -171,6 +181,16 @@
 					{/if}
 				</div>
 
+				<div class="buckets" role="radiogroup" aria-label="What it goes toward">
+					{#each BUCKETS as b (b.key)}
+						<label class="bucket" class:selected={bucket === b.key} class:locked={travelLocked}>
+							<input class="sr-only" type="radio" name="bucket-pick" value={b.key} bind:group={bucket} disabled={travelLocked} />
+							<span class="b-label">{b.label}</span>
+							<span class="b-hours">{Number(data.travelBuckets[b.key])}h</span>
+						</label>
+					{/each}
+				</div>
+
 				{#if travelLocked}
 					<p class="travel-note">
 						Your fund is locked while your trip is being arranged. Talk to an organiser if something's changed.
@@ -180,11 +200,14 @@
 						class="travel-form"
 						method="POST"
 						action="?/travel"
-						use:enhance={() =>
-							async ({ update, result }) => {
+						use:enhance={({ formData }) => {
+							formData.set('bucket', bucket);
+							return async ({ update, result }) => {
 								await update({ reset: false });
 								if (result.type === 'success') moveHours = null;
-							}}>
+							};
+						}}>
+						<input type="hidden" name="bucket" value={bucket} />
 						<label class="sr-only" for="move-hours">Hours</label>
 						<div class="travel-input">
 							<input
@@ -193,16 +216,16 @@
 								type="number"
 								min="0.25"
 								step="0.25"
-								max={Math.max(available, travelHours)}
+								max={Math.max(available, inBucket)}
 								placeholder="Hours"
 								bind:value={moveHours}
 								required />
 						</div>
 						<div class="travel-actions">
 							<button class="btn" type="submit" name="direction" value="bank" disabled={available <= 0}>
-								Bank for Dublin
+								Bank for {bucketLabel(bucket).toLowerCase()}
 							</button>
-							{#if travelHours > 0}
+							{#if inBucket > 0}
 								<button class="btn btn-outline" type="submit" name="direction" value="back">
 									Move back to gear
 								</button>
@@ -220,8 +243,8 @@
 				{:else if form && 'travelMoved' in form && form.travelMoved}
 					<p class="notice travel-msg">
 						{form.travelMoved > 0
-							? `Banked ${form.travelMoved}h for Dublin.`
-							: `Moved ${-form.travelMoved}h back to your gear balance.`}
+							? `Banked ${form.travelMoved}h toward ${bucketLabel(form.travelBucket).toLowerCase()}.`
+							: `Moved ${-form.travelMoved}h out of ${bucketLabel(form.travelBucket).toLowerCase()}, back to your gear balance.`}
 					</p>
 				{/if}
 			</div>
@@ -582,10 +605,9 @@
 
 	/* ---- travel fund ---- */
 	.travel {
-		display: grid;
-		grid-template-columns: auto minmax(0, 1fr);
-		align-items: center;
-		gap: 1.2rem 2.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1.2rem;
 	}
 	.travel-total {
 		display: flex;
@@ -603,6 +625,48 @@
 		font-size: 0.85rem;
 		font-weight: 700;
 		color: var(--muted);
+	}
+	.buckets {
+		grid-column: 1 / -1;
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.6rem;
+	}
+	.bucket {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		padding: 0.8rem 1rem;
+		background: var(--white);
+		border: 2px solid var(--rule-strong);
+		cursor: pointer;
+	}
+	.bucket:hover {
+		border-color: var(--navy-soft);
+	}
+	.bucket.selected {
+		border-color: var(--green);
+		box-shadow: inset 0 0 0 1px var(--green);
+	}
+	.bucket.locked {
+		cursor: default;
+	}
+	.bucket:has(input:focus-visible) {
+		outline: 3px solid var(--green);
+		outline-offset: 2px;
+	}
+	.b-label {
+		font-size: 0.78rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--muted);
+	}
+	.b-hours {
+		font-size: 1.5rem;
+		font-weight: 800;
+		letter-spacing: -0.03em;
+		color: var(--navy);
 	}
 	.travel-form {
 		display: flex;
@@ -646,7 +710,7 @@
 		margin: 0;
 	}
 	@media (max-width: 600px) {
-		.travel {
+		.buckets {
 			grid-template-columns: 1fr;
 		}
 	}

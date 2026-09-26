@@ -123,6 +123,12 @@
 								{u.balance.hours_travel}h for Dublin (${(Number(u.balance.hours_travel) * TRAVEL_RATE).toFixed(2)})
 								{#if u.travel_locked_at}&middot; <strong>locked</strong>{/if}
 							</span>
+							{#if data.travelBuckets[u.id]}
+								{@const b = data.travelBuckets[u.id]}
+								<span class="row-meta">
+									Visa {b.visa}h &middot; Accommodation {b.accommodation}h &middot; Flights {b.flights}h
+								</span>
+							{/if}
 							<form method="POST" action="?/travelLock" use:enhance>
 								<input type="hidden" name="user_id" value={u.id} />
 								<input type="hidden" name="locked" value={u.travel_locked_at ? 'no' : 'yes'} />
@@ -148,7 +154,6 @@
 							<select name="type" required>
 								<option value="manual_adjustment">Correction (+/-)</option>
 								<option value="reward_claimed">Reward given (deduct)</option>
-								<option value="travel_allocation">Move into travel fund (deduct)</option>
 							</select>
 							<input
 								name="amount"
