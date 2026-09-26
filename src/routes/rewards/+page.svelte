@@ -33,7 +33,9 @@
 				<h2 class="tease-head">Something's waiting at {FINISH}.</h2>
 				<p class="tease-copy">
 					We're keeping it quiet for now. Every approved hour counts toward it, including the ones
-					you spend on gear or bank for Dublin. And {FINISH} isn't the end, so keep building.
+					you spend on gear or bank for Dublin. {FINISH} hours also qualifies you to use your Dublin
+					travel stipend, however much your flight costs. And {FINISH} isn't the end, so keep
+					building.
 				</p>
 			</div>
 			<div class="tease-progress">

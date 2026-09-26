@@ -15,6 +15,7 @@
 			<a href="/#how-it-works">How it works</a>
 			<a href="/rewards">Your hours</a>
 			<a href="/ireland">Dublin</a>
+			<a href="/faq">FAQ</a>
 		</div>
 
 		<div class="col meta-col">

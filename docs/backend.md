@@ -151,8 +151,9 @@ be deleted, only offset with an equal and opposite `manual_adjustment` from
 `checkpoint_approved` is the only credit type produced automatically, and only
 by `review_hackclub_submission()` on an approval. `reward_claimed` debits are
 written by `claim_reward()` when a participant spends hours on `/claim`.
-`travel_allocation` and one-off corrections are entered by an admin from the
-roster on `/admin`.
+`travel_allocation` rows are written by `move_travel_hours()` when a
+participant banks hours for Dublin (or moves them back) on their dashboard.
+One-off corrections are entered by an admin from the roster on `/admin`.
 
 ### Spending hours
 

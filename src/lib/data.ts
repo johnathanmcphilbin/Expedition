@@ -243,6 +243,18 @@ export const drops: Drop[] = [
 /** Travel grant per approved hour banked toward Dublin. Only ever shown on request. */
 export const TRAVEL_RATE = 8;
 
+/**
+ * To use the travel stipend, banked hours must cover this share of the
+ * flight — but never more than TRAVEL_CAP_HOURS. Finishing the 40-hour
+ * Expedition always qualifies, however expensive the flight.
+ */
+export const TRAVEL_QUALIFY_SHARE = 0.5;
+export const TRAVEL_CAP_HOURS = 40;
+
+/** Approved hours needed to qualify for a flight of this cost. */
+export const hoursToQualify = (flightCost: number) =>
+	Math.min(TRAVEL_CAP_HOURS, Math.ceil((flightCost * TRAVEL_QUALIFY_SHARE) / TRAVEL_RATE));
+
 /** "$50 grant", or "$12.75" style for travel amounts */
 export const money = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
 

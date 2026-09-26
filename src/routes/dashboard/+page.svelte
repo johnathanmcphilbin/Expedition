@@ -2,7 +2,7 @@
 	import '$lib/styles/app.css';
 	import Footer from '$lib/components/Footer.svelte';
 	import { enhance } from '$app/forms';
-	import { TRAVEL_RATE, money } from '$lib/data';
+	import { TRAVEL_RATE, TRAVEL_CAP_HOURS, money } from '$lib/data';
 	import GrantAmount from '$lib/components/GrantAmount.svelte';
 	import type { PageData, ActionData } from './$types';
 
@@ -167,8 +167,11 @@
 				<a class="text-link" href="/ireland">About Dublin →</a>
 			</div>
 			<p class="hint block-hint">
-				Bank approved hours here instead of spending them on gear. Every hour you bank adds
-				<strong>{money(TRAVEL_RATE)}</strong> to a travel grant for getting you to Dublin on December 5th.
+				Bank approved hours here at <strong>{money(TRAVEL_RATE)}/hour</strong> towards your trip to Dublin
+				on December 5th. To qualify, you need enough approved hours to cover 50% of your flight, or the
+				full {TRAVEL_CAP_HOURS} hour Expedition. <strong>{TRAVEL_CAP_HOURS} hours is the maximum
+				requirement.</strong> Once you qualify, your stipend goes towards your flight and accommodation,
+				and you cover anything left over.
 			</p>
 			<div class="panel travel">
 				<div class="travel-total">

@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { TRAVEL_RATE, money } from '$lib/data';
+	import { TRAVEL_RATE, TRAVEL_CAP_HOURS, hoursToQualify, money } from '$lib/data';
+
+	// Worked examples, computed from the real rule so they can't drift from it.
+	const examples = [320, 800].map((flight) => {
+		const half = flight / 2;
+		const uncapped = Math.ceil(half / TRAVEL_RATE);
+		return { flight, half, uncapped, hours: hoursToQualify(flight), capped: uncapped > TRAVEL_CAP_HOURS };
+	});
 
 	const polaroids = [
 		{ src: '/polaroids/hapenny-bridge.webp', cls: 'p1', tilt: 4, caption: 'Ireland' },
@@ -19,30 +26,38 @@
 			</figure>
 		{/each}
 		<h2 class="headline">Dublin, December 5th</h2>
-		<p class="lede">One day of building with a hundred other people.</p>
-
-		<ul class="facts">
-			<li class="fact">
-				<span class="fact-big">Free</span>
-				<span class="fact-small">to attend</span>
-			</li>
-			<li class="fact">
-				<span class="fact-big">Optional</span>
-				<span class="fact-small">your hours count either way</span>
-			</li>
-			<li class="fact fact-grant">
-				<span class="fact-big">{money(TRAVEL_RATE)}</span>
-				<span class="fact-small">travel grant for every hour you bank</span>
-			</li>
-		</ul>
+		<p class="lede">A free, one-day hackathon with a hundred other people.</p>
 
 		<div class="travel">
-			<h3>Getting there</h3>
-			<ol class="steps">
-				<li><span class="step-n">1</span>Get hours approved</li>
-				<li><span class="step-n">2</span>Bank them for Dublin</li>
-				<li><span class="step-n">3</span>Your grant goes toward the trip</li>
-			</ol>
+			<h3 class="t-kicker">Travelling to Dublin</h3>
+			<p class="t-lead">
+				Bank your hours at <strong>{money(TRAVEL_RATE)}/hour</strong> towards your trip.
+			</p>
+			<p class="t-body">
+				To qualify, reach enough approved hours to cover <strong>50% of your flight</strong>, or
+				complete the full <strong>{TRAVEL_CAP_HOURS} hour Expedition</strong>.
+			</p>
+			<p class="t-cap">{TRAVEL_CAP_HOURS} hours is the maximum requirement.</p>
+			<p class="t-body">
+				Once you qualify, your travel stipend can go towards your flight and accommodation. You
+				cover anything left over.
+			</p>
+
+			<div class="t-examples">
+				<p class="t-ex-k">Example</p>
+				{#each examples as e (e.flight)}
+					<p class="t-ex">
+						{money(e.flight)} flight <span class="arr">→</span> 50% is {money(e.half)}
+						<span class="arr">→</span>
+						{#if e.capped}
+							normally {e.uncapped} hours, but the requirement caps at {TRAVEL_CAP_HOURS}
+							<span class="arr">→</span>
+						{/if}
+						<strong>{e.hours} approved hours qualifies you.</strong>
+					</p>
+				{/each}
+			</div>
+
 			<a class="btn" href="/dashboard#travel">Bank hours for Dublin</a>
 		</div>
 
@@ -91,77 +106,75 @@
 		color: var(--slate);
 	}
 
-	/* ---- the three things that matter ---- */
-	.facts {
-		list-style: none;
-		margin: 2.4rem 0 0;
-		padding: 0;
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 1rem;
+	/* ---- travelling to Dublin: one plain notice, like a note on the chart ---- */
+	.travel {
+		margin-top: 2.4rem;
 		max-width: 720px;
-	}
-	.fact {
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-		padding: 1.2rem 1.3rem;
+		padding: clamp(1.3rem, 3vw, 2rem) clamp(1.3rem, 3vw, 2.2rem);
 		background: var(--white);
 		border: 3px solid var(--navy);
 	}
-	.fact-big {
-		font-size: clamp(1.8rem, 4vw, 2.4rem);
-		font-weight: 800;
-		letter-spacing: -0.03em;
-		line-height: 1;
+	.t-kicker {
+		font-family: var(--font-mono);
+		font-size: 0.95rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
 		color: var(--navy);
 	}
-	.fact-small {
-		font-size: 0.9rem;
-		font-weight: 600;
-		color: var(--muted);
-	}
-	.fact-grant {
-		border-color: var(--green);
-		box-shadow: inset 0 0 0 1px var(--green);
-	}
-	.fact-grant .fact-big {
-		color: var(--green-dark);
-	}
-
-	/* ---- getting there ---- */
-	.travel {
-		margin-top: 2.6rem;
-	}
-	.travel h3 {
+	.t-lead {
+		margin-top: 0.8rem;
 		font-size: 1.3rem;
-		color: var(--navy);
-	}
-	.steps {
-		list-style: none;
-		margin: 1rem 0 1.6rem;
-		padding: 0;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.6rem 1.8rem;
-	}
-	.steps li {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
 		font-weight: 700;
 		color: var(--navy);
 	}
-	.step-n {
-		display: inline-grid;
-		place-items: center;
-		width: 1.7rem;
-		height: 1.7rem;
-		flex-shrink: 0;
-		background: var(--navy);
-		color: var(--white);
-		font-size: 0.85rem;
+	.t-body {
+		margin-top: 0.8rem;
+		font-size: 1.05rem;
+		line-height: 1.5;
+		color: var(--slate);
+		max-width: 56ch;
+	}
+	.t-body strong,
+	.t-lead strong {
+		color: var(--navy);
+	}
+	.t-cap {
+		margin: 1.2rem 0 0.4rem;
+		padding: 0.55rem 0;
+		border-top: 3px solid var(--navy);
+		border-bottom: 3px solid var(--navy);
+		font-size: clamp(1.25rem, 3vw, 1.6rem);
 		font-weight: 800;
+		letter-spacing: -0.01em;
+		text-transform: uppercase;
+		color: var(--navy);
+	}
+	.t-examples {
+		margin: 1.4rem 0 1.6rem;
+		padding-left: 1rem;
+		border-left: 3px solid var(--green);
+	}
+	.t-ex-k {
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--muted);
+	}
+	.t-ex {
+		margin-top: 0.45rem;
+		font-family: var(--font-mono);
+		font-size: 0.92rem;
+		line-height: 1.55;
+		color: var(--slate);
+	}
+	.t-ex strong {
+		color: var(--green-dark);
+	}
+	.arr {
+		color: var(--muted);
 	}
 	.dublin-section .btn {
 		background: var(--green);
@@ -273,12 +286,6 @@
 	}
 
 	@media (max-width: 700px) {
-		.facts {
-			grid-template-columns: 1fr;
-		}
-		.steps {
-			flex-direction: column;
-		}
 		.past-photos {
 			grid-template-columns: 1fr;
 		}
