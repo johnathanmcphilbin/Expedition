@@ -49,6 +49,9 @@
 		editingIdentity = !(d.firstName && d.lastName && d.email && d.githubUsername);
 	});
 
+	// Hardware doesn't need a live URL; it follows the repo rules on /hardware.
+	let hardware = $state(false);
+
 	let preview = $state<string | null>(null);
 	let dragging = $state(false);
 	let fileInput = $state<HTMLInputElement | null>(null);
@@ -250,15 +253,32 @@
 					<!-- 2 -->
 					<section class="step">
 						<h2 class="step-title"><span class="step-n">2</span> Show what you built</h2>
+						<label class="hw-toggle">
+							<input type="checkbox" name="hardware" value="yes" bind:checked={hardware} />
+							This is a hardware project
+						</label>
+						{#if hardware}
+							<div class="hw-note">
+								<p>
+									No live URL needed. Your repo needs a <code>JOURNAL.md</code> with an entry roughly
+									every hour, a README, photos/videos, and your BOM, schematics/CAD files and firmware
+									where they apply.
+								</p>
+								<a href="/hardware" target="_blank" rel="noopener">Full hardware rules ↗</a>
+							</div>
+						{/if}
 						<div class="grid-2 tight">
 							<div class="field">
 								<label for="code_url">Code link</label>
 								<input id="code_url" name="code_url" type="url" required placeholder="https://github.com/you/project" onblur={fixUrl} />
 							</div>
 							<div class="field">
-								<label for="playable_url">Demo link</label>
-								<input id="playable_url" name="playable_url" type="url" required placeholder="Where someone can try it" onblur={fixUrl} />
-								<span class="hint">A live site, a video, or a release download.</span>
+								<label for="playable_url">Demo link {#if hardware}<span class="optional">optional</span>{/if}</label>
+								<input id="playable_url" name="playable_url" type="url" required={!hardware}
+									placeholder={hardware ? 'A build video, if you have one' : 'Where someone can try it'} onblur={fixUrl} />
+								<span class="hint">
+									{hardware ? 'Leave it blank and we’ll use your repo.' : 'A live site, a video, or a release download.'}
+								</span>
 							</div>
 						</div>
 
@@ -447,6 +467,38 @@
 	}
 	.id-fields[hidden] {
 		display: none;
+	}
+	.hw-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.55rem;
+		margin-bottom: 1rem;
+		font-weight: 700;
+		color: var(--navy);
+		cursor: pointer;
+	}
+	.hw-toggle input {
+		width: 1.1rem;
+		height: 1.1rem;
+		accent-color: var(--green);
+	}
+	.hw-note {
+		margin-bottom: 1.2rem;
+		padding: 0.8rem 1rem;
+		background: var(--white);
+		border-left: 4px solid var(--green);
+		font-size: 0.92rem;
+		color: var(--slate);
+	}
+	.hw-note code {
+		font-family: var(--font-mono);
+		font-size: 0.9em;
+	}
+	.hw-note a {
+		display: inline-block;
+		margin-top: 0.4rem;
+		font-weight: 700;
+		color: var(--navy);
 	}
 	.birthday {
 		max-width: 16rem;

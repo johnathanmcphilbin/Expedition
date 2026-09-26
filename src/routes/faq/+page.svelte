@@ -2,8 +2,8 @@
 	import '$lib/styles/app.css';
 	import Footer from '$lib/components/Footer.svelte';
 
-	// Johnny's words, kept exactly as written.
-	const faq: { q: string; a: string[] }[] = [
+	// Johnny's words, in his voice.
+	const faq: { q: string; a: string[]; link?: { href: string; text: string } }[] = [
 		{
 			q: 'when is it?',
 			a: [
@@ -63,7 +63,10 @@
 		},
 		{
 			q: 'CAN I DO HARDWARE?',
-			a: ['YES. proper rules for how hardware journaling/submissions work are coming']
+			a: [
+				"YES. keep a JOURNAL.md in your repo with an entry roughly every hour, and make sure your repo has your BOM, schematics/CAD files and firmware. you dont need a live url for hardware"
+			],
+			link: { href: '/hardware', text: 'the full hardware rules →' }
 		},
 		{
 			q: 'do i have to go to ireland?',
@@ -99,6 +102,9 @@
 					{#each item.a as para, i (i)}
 						<dd>{para}</dd>
 					{/each}
+					{#if item.link}
+						<dd><a class="more" href={item.link.href}>{item.link.text}</a></dd>
+					{/if}
 				</div>
 			{/each}
 		</dl>
@@ -128,6 +134,10 @@
 		font-size: 1.15rem;
 		font-weight: 800;
 		letter-spacing: -0.01em;
+		color: var(--navy);
+	}
+	.more {
+		font-weight: 700;
 		color: var(--navy);
 	}
 	dd {

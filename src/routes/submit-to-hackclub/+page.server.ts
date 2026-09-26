@@ -121,7 +121,10 @@ export const actions: Actions = {
 				hackatimeUserId: hackatime.hackatimeUserId,
 				projectName,
 				codeUrl: url(form.get('code_url'), 'Code link', { required: true })!,
-				playableUrl: url(form.get('playable_url'), 'Demo link', { required: true })!,
+				// hardware has no live URL; the repo stands in for it (see /hardware)
+				playableUrl:
+					url(form.get('playable_url'), 'Demo link', { required: form.get('hardware') !== 'yes' }) ??
+					url(form.get('code_url'), 'Code link', { required: true })!,
 				description: text(form.get('description'), 'Description', { min: 20, max: 4000, required: true })!,
 				firstName: text(form.get('first_name'), 'First name', { max: 100, required: true })!,
 				lastName: text(form.get('last_name'), 'Last name', { max: 100, required: true })!,
