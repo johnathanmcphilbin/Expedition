@@ -16,6 +16,7 @@ import {
 } from '$lib/server/queries';
 import { connectionStatus, fetchProjectTimes, formatHours } from '$lib/server/hackatime';
 import { syncHackClubSubmissions } from '$lib/server/airtable';
+import { listOwnQueued, countQueuePending } from '$lib/server/queue';
 import { drops } from '$lib/data';
 import { text, hours, oneOf, ValidationError } from '$lib/server/validate';
 import type { TravelBucket } from '$lib/server/database.types';
@@ -32,6 +33,11 @@ export type DashboardProject = {
 	 *  docs/backend.md. Never used to compute hours, only to show status. */
 	submitted: boolean;
 	review: SubmissionReviewRow | null;
+	/** newest submission still waiting in Expedition's own review queue */
+	queued: {
+		status: 'pending' | 'changes_requested' | 'rejected';
+		participant_feedback: string | null;
+	} | null;
 	connected: boolean;
 };
 
@@ -40,15 +46,30 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	const hackatime = await connectionStatus(user.id);
 
-	const [balance, progress, ownReviews, pendingReviews, claims, connected, travelBuckets] = await Promise.all([
-		getBalance(user.id),
-		getProgress(user.id),
-		listOwnReviews(user.id),
-		isAdmin(user) ? countPendingReviews() : Promise.resolve(null),
-		listOwnClaims(user.id),
-		listConnectedProjects(user.id),
-		getTravelBuckets(user.id)
-	]);
+	const [balance, progress, ownReviews, pendingReviews, claims, connected, travelBuckets, queued] =
+		await Promise.all([
+			getBalance(user.id),
+			getProgress(user.id),
+			listOwnReviews(user.id),
+			isAdmin(user)
+				? Promise.all([countPendingReviews(), countQueuePending()]).then(([a, b]) => a + b)
+				: Promise.resolve(null),
+			listOwnClaims(user.id),
+			listConnectedProjects(user.id),
+			getTravelBuckets(user.id),
+			listOwnQueued(user.id)
+		]);
+
+	// newest queued submission per project, until it's been sent to Hack Club
+	const queuedByProject = new Map<string, DashboardProject['queued']>();
+	for (const q of queued) {
+		const key = q.project_name.toLowerCase();
+		if (queuedByProject.has(key)) continue;
+		queuedByProject.set(
+			key,
+			q.status === 'sent' ? null : { status: q.status, participant_feedback: q.participant_feedback }
+		);
+	}
 
 	let projects: DashboardProject[] = [];
 	let others: { name: string; seconds: number; tracked: string }[] = [];
@@ -84,13 +105,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				languages: t.languages.slice(0, 3),
 				submitted: rawNames.some((raw) => raw.includes(t.name.toLowerCase())),
 				review: reviewsByProject.get(t.name.toLowerCase()) ?? null,
+				queued: queuedByProject.get(t.name.toLowerCase()) ?? null,
 				connected: connectedSet.has(t.name)
 			}));
 
 		// Anything already submitted or reviewed stays visible even if it was
 		// never connected — hours they've earned shouldn't disappear.
 		projects = all
-			.filter((p) => p.connected || p.submitted || p.review)
+			.filter((p) => p.connected || p.submitted || p.review || p.queued)
 			.sort((a, b) => connected.indexOf(a.name) - connected.indexOf(b.name) || b.seconds - a.seconds);
 		others = all
 			.filter((p) => !projects.includes(p))

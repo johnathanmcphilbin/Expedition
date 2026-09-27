@@ -2,22 +2,22 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireUser } from '$lib/server/guards';
 import { connectionStatus, fetchProjectTimes, formatHours, fetchHackatimeProfile } from '$lib/server/hackatime';
-import { createSubmission } from '$lib/server/airtable';
 import {
 	listHackClubSubmissions,
 	listOwnReviews,
 	listConnectedProjects,
 	connectProject
 } from '$lib/server/queries';
-import { db } from '$lib/server/supabase';
-import { text, url, email, ValidationError } from '$lib/server/validate';
+import { ValidationError } from '$lib/server/validate';
+import { parseSubmissionFields } from '$lib/server/submission-fields';
+import { queueSubmission, listOwnQueued } from '$lib/server/queue';
 import { notifySubmission } from '$lib/server/notify';
 
 /**
- * The one place a participant submits a project. Expedition builds the row
- * in Hack Club's own Unified YSWS table itself (see createSubmission), rather
- * than embedding their Airtable form — so the Hackatime ID and project are
- * set on the server and the submission always links back to this account.
+ * The one place a participant submits a project. It waits in Expedition's
+ * review queue first; once a reviewer approves it, Expedition writes the row
+ * into Hack Club's own Unified YSWS table (see src/lib/server/queue.ts), with
+ * the Hackatime ID and project set on the server.
  */
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const user = requireUser(locals, '/submit-to-hackclub');
@@ -27,13 +27,21 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		redirect(303, '/auth/hackatime?next=/submit-to-hackclub');
 	}
 
-	const [times, submissions, reviews, connected, profile] = await Promise.all([
+	const [times, submissions, reviews, connected, profile, queued] = await Promise.all([
 		fetchProjectTimes(user.id),
 		listHackClubSubmissions(user.id),
 		listOwnReviews(user.id),
 		listConnectedProjects(user.id),
-		fetchHackatimeProfile(user.id)
+		fetchHackatimeProfile(user.id),
+		listOwnQueued(user.id)
 	]);
+
+	// newest queued submission per project, if it hasn't been sent on yet
+	const queuedByProject = new Map<string, string>();
+	for (const q of queued) {
+		const key = q.project_name.toLowerCase();
+		if (!queuedByProject.has(key) && q.status !== 'sent') queuedByProject.set(key, q.status);
+	}
 
 	const submittedNames = submissions.map((s) => (s.project_names_raw ?? '').toLowerCase());
 	const reviewByProject = new Map(reviews.map((r) => [r.hackatime_project.toLowerCase(), r]));
@@ -48,7 +56,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				seconds: t.totalSeconds,
 				tracked: formatHours(t.totalSeconds),
 				languages: t.languages.slice(0, 3),
-				status: review?.status ?? (submittedNames.some((n) => n.includes(key)) ? 'pending' : null),
+				status:
+					queuedByProject.get(key) ??
+					review?.status ??
+					(submittedNames.some((n) => n.includes(key)) ? 'pending' : null),
 				connected: connected.includes(t.name)
 			};
 		})
@@ -57,7 +68,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	// Prefilled so nobody retypes who they are: what they told Hack Club last
 	// time first, then their Hack Club account, then what Hackatime knows.
-	const last = submissions[0];
+	const last = queued[0] ?? submissions[0];
 	const [first, ...rest] = (user.display_name ?? '').split(' ');
 
 	return {
@@ -75,18 +86,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 const MAX_SCREENSHOT = 4 * 1024 * 1024;
 
-function birthday(value: FormDataEntryValue | null): string {
-	const raw = text(value, 'Birthday', { max: 10, required: true })!;
-	const d = new Date(`${raw}T00:00:00Z`);
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || Number.isNaN(d.getTime())) {
-		throw new ValidationError('Birthday must be a real date', 'birthday');
-	}
-	if (d.getTime() > Date.now() || d.getUTCFullYear() < 1900) {
-		throw new ValidationError('Birthday must be a real date', 'birthday');
-	}
-	return raw;
-}
-
 export const actions: Actions = {
 	default: async ({ request, locals }) => {
 		const user = requireUser(locals, '/submit-to-hackclub');
@@ -98,11 +97,11 @@ export const actions: Actions = {
 		const form = await request.formData();
 
 		try {
-			const projectName = text(form.get('project'), 'Project', { max: 200, required: true })!;
+			const fields = parseSubmissionFields(form);
 
 			// only a project that's actually in their own Hackatime counts
 			const times = await fetchProjectTimes(user.id);
-			if (times && !times.some((t) => t.name === projectName)) {
+			if (times && !times.some((t) => t.name === fields.project_name)) {
 				throw new ValidationError("That project isn't in your Hackatime", 'project');
 			}
 
@@ -117,79 +116,27 @@ export const actions: Actions = {
 				throw new ValidationError('That screenshot is over 4 MB. Try a smaller one', 'screenshot');
 			}
 
-			const submission = {
-				hackatimeUserId: hackatime.hackatimeUserId,
-				projectName,
-				codeUrl: url(form.get('code_url'), 'Code link', { required: true })!,
-				// hardware has no live URL; the repo stands in for it (see /hardware)
-				playableUrl:
-					url(form.get('playable_url'), 'Demo link', { required: form.get('hardware') !== 'yes' }) ??
-					url(form.get('code_url'), 'Code link', { required: true })!,
-				description: text(form.get('description'), 'Description', { min: 20, max: 4000, required: true })!,
-				firstName: text(form.get('first_name'), 'First name', { max: 100, required: true })!,
-				lastName: text(form.get('last_name'), 'Last name', { max: 100, required: true })!,
-				email: email(form.get('email'), 'Email'),
-				githubUsername: text(form.get('github_username'), 'GitHub username', { max: 100, required: true })!,
-				birthday: birthday(form.get('birthday')),
-				addressLine1: text(form.get('address_line1'), 'Address', { max: 200, required: true })!,
-				addressLine2: text(form.get('address_line2'), 'Address line 2', { max: 200 }),
-				city: text(form.get('city'), 'City', { max: 100, required: true })!,
-				state: text(form.get('state'), 'State / province', { max: 100, required: true })!,
-				country: text(form.get('country'), 'Country', { max: 100, required: true })!,
-				zip: text(form.get('zip'), 'Postal code', { max: 20, required: true })!,
-				heardAbout: text(form.get('heard_about'), 'How you heard', { max: 1000 }),
-				doingWell: text(form.get('doing_well'), 'What we do well', { max: 2000 }),
-				improve: text(form.get('improve'), 'What to improve', { max: 2000 })
-			};
-
-			const record = await createSubmission(submission, {
-				bytes: await file.arrayBuffer(),
-				contentType: file.type,
-				filename: file.name || 'screenshot.png'
-			});
-
-			await connectProject(user.id, projectName).catch(() => {});
-
-			// Cache it straight away, already linked to this account, so it
-			// shows up on their dashboard and in the review queue immediately.
-			await db()
-				.from('hackclub_submissions')
-				.upsert(
-					{
-						airtable_record_id: record.id,
-						user_id: user.id,
-						hackatime_user_id: submission.hackatimeUserId,
-						first_name: submission.firstName,
-						last_name: submission.lastName,
-						email: submission.email,
-						github_username: submission.githubUsername,
-						code_url: submission.codeUrl,
-						playable_url: submission.playableUrl,
-						description: submission.description,
-						project_names_raw: submission.projectName,
-						airtable_status: null,
-						airtable_created_at: record.createdTime,
-						synced_at: new Date().toISOString()
-					},
-					{ onConflict: 'airtable_record_id' }
-				);
+			// Waits for an Expedition reviewer; it only goes to Hack Club once
+			// approved (see src/lib/server/queue.ts).
+			await queueSubmission(user.id, hackatime.hackatimeUserId, fields, file);
+			await connectProject(user.id, fields.project_name).catch(() => {});
 
 			await notifySubmission({
-				name: `${submission.firstName} ${submission.lastName}`,
-				email: submission.email,
-				project: projectName,
-				codeUrl: submission.codeUrl,
-				playableUrl: submission.playableUrl,
-				description: submission.description
+				name: `${fields.first_name} ${fields.last_name}`,
+				email: fields.email,
+				project: fields.project_name,
+				codeUrl: fields.code_url,
+				playableUrl: fields.playable_url,
+				description: fields.description
 			});
 
-			return { submitted: projectName };
+			return { submitted: fields.project_name };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { message: e.message, field: e.field });
 			console.error('submit-to-hackclub failed', e);
 			return fail(502, {
 				message:
-					"Something went wrong sending this to Hack Club. Nothing was saved, so you can try again in a minute. If it keeps happening, let an organiser know."
+					"Something went wrong saving your submission. Nothing was saved, so you can try again in a minute. If it keeps happening, let an organiser know."
 			});
 		}
 	}

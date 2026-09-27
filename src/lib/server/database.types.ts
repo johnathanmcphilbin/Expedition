@@ -87,6 +87,51 @@ export type SubmissionReviewRow = {
 	updated_at: string;
 }
 
+export type QueuedSubmissionStatus = 'pending' | 'changes_requested' | 'rejected' | 'sent';
+
+/**
+ * A submission waiting for an Expedition reviewer before it goes to Hack
+ * Club. Personal fields (birthday, address) and the screenshot are cleared
+ * once it's sent.
+ */
+export type QueuedSubmissionRow = {
+	id: string;
+	user_id: string;
+	hackatime_user_id: string;
+	project_name: string;
+	hardware: boolean;
+	code_url: string;
+	playable_url: string;
+	description: string;
+	first_name: string;
+	last_name: string;
+	email: string;
+	github_username: string;
+	birthday: string | null;
+	address_line1: string | null;
+	address_line2: string | null;
+	city: string | null;
+	state: string | null;
+	country: string | null;
+	zip: string | null;
+	heard_about: string | null;
+	doing_well: string | null;
+	improve: string | null;
+	screenshot_path: string | null;
+	screenshot_type: string | null;
+	screenshot_name: string | null;
+	status: QueuedSubmissionStatus;
+	approved_hours: number | null;
+	internal_notes: string | null;
+	participant_feedback: string | null;
+	reviewer_id: string | null;
+	reviewed_at: string | null;
+	airtable_record_id: string | null;
+	sent_at: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
 export type HourTransactionRow = {
 	id: string;
 	user_id: string;
@@ -188,6 +233,7 @@ export interface Database {
 			hour_transactions: Table<HourTransactionRow>;
 			hackatime_connections: Table<HackatimeConnectionRow>;
 			expedition_projects: Table<ExpeditionProjectRow>;
+			submission_queue: Table<QueuedSubmissionRow>;
 		};
 		Views: {
 			user_hour_balances: { Row: HourBalanceRow; Relationships: [] };
@@ -237,6 +283,7 @@ export interface Database {
 			hour_transaction_type: HourTransactionType;
 			claim_status: ClaimStatus;
 			travel_bucket: TravelBucket;
+			queued_submission_status: QueuedSubmissionStatus;
 		};
 	};
 }

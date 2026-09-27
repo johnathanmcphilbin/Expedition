@@ -106,10 +106,11 @@
 	<div class="wrap">
 		{#if form && 'submitted' in form && form.submitted}
 			<section class="done panel">
-				<p class="section-label">Sent to Hack Club</p>
+				<p class="section-label">Submitted</p>
 				<h1 class="app-title">{form.submitted} is in.</h1>
 				<ol class="next">
 					<li>An Expedition reviewer looks at it against your Hackatime time.</li>
+					<li>Once it's approved, we send it on to Hack Club for you.</li>
 					<li>Approved hours land in your balance. Spend them on drops or bank them for Dublin.</li>
 					<li>If something needs fixing, you'll see a note on your dashboard.</li>
 				</ol>
@@ -123,8 +124,8 @@
 				<div>
 					<h1 class="app-title">Submit a project</h1>
 					<p class="hint lead">
-						One form, about five minutes. It goes straight to Hack Club and into the Expedition
-						review queue, with your Hackatime linked automatically.
+						One form, about five minutes. An Expedition reviewer checks it first, then we send it
+						on to Hack Club. Your Hackatime is linked automatically.
 					</p>
 				</div>
 			</div>

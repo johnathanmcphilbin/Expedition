@@ -46,6 +46,12 @@
 
 	type Stage = 'building' | 'submitted' | 'approved' | 'changes' | 'rejected';
 	function stageOf(p: (typeof data.projects)[number]): Stage {
+		// a submission still in Expedition's queue is the newest word on it
+		if (p.queued) {
+			if (p.queued.status === 'changes_requested') return 'changes';
+			if (p.queued.status === 'rejected') return 'rejected';
+			return 'submitted';
+		}
 		const st = p.review?.status;
 		if (st === 'approved') return 'approved';
 		if (st === 'changes_requested') return 'changes';
@@ -78,7 +84,7 @@
 			</div>
 			<div class="head-actions">
 				{#if data.pendingReviews !== null}
-					<a class="btn btn-outline" href="/admin/reviews">
+					<a class="btn btn-outline" href="/admin/reviews/incoming">
 						Review queue{data.pendingReviews ? ` (${data.pendingReviews})` : ''}
 					</a>
 				{/if}
@@ -325,7 +331,11 @@
 										</form>
 									{/if}
 								</div>
-								{#if p.review?.participant_feedback && p.review.status !== 'pending'}
+								{#if p.queued}
+									{#if p.queued.participant_feedback && p.queued.status !== 'pending'}
+										<p class="p-feedback">“{p.queued.participant_feedback}”</p>
+									{/if}
+								{:else if p.review?.participant_feedback && p.review.status !== 'pending'}
 									<p class="p-feedback">“{p.review.participant_feedback}”</p>
 								{/if}
 							</li>

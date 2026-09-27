@@ -57,7 +57,13 @@
 <main class="app-page review-page">
 	<div class="wrap">
 		<div class="app-head">
-			<h1 class="app-title">Review queue</h1>
+			<div>
+				<h1 class="app-title">Sent to Hack Club</h1>
+				<p class="hint">
+					Submissions already in Hack Club's Airtable.
+					<a class="incoming-link" href="/admin/reviews/incoming">New submissions waiting for review →</a>
+				</p>
+			</div>
 			<form method="GET" class="search-form">
 				<input type="hidden" name="status" value={data.filter} />
 				<input type="search" name="q" placeholder="Search name, email or project" value={data.search} aria-label="Search submissions" />
@@ -229,6 +235,10 @@
 </main>
 
 <style>
+	.incoming-link {
+		font-weight: 700;
+		color: var(--navy);
+	}
 	.search-form input[type='search'] {
 		min-width: 18rem;
 	}

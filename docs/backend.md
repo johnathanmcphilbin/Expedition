@@ -107,10 +107,16 @@ Hack Club's own **Unified YSWS** Airtable base (`appGcYrt3CFYab05y`, table
 `YSWS Project Submission`) is the canonical record of what a participant
 submitted. Expedition does not have — and must not grow — a second,
 Expedition-specific submission record. `/submit-to-hackclub` is Expedition's
-own form, but it writes that one real row straight into Hack Club's table
-(`createSubmission`), with the Hackatime ID and project set on the server.
-It replaced an embedded Airtable form whose Hackatime-ID prefill silently
-failed, leaving submissions that couldn't be matched to an account.
+own form, with the Hackatime ID and project set on the server.
+
+There is one holding step before that row exists. A new submission waits in
+`submission_queue` (see `src/lib/server/queue.ts` and migration 0010) until
+an Expedition reviewer on `/admin/reviews/incoming` edits and approves it.
+Approving creates the one real row in Hack Club's table (`createSubmission`),
+caches it in `hackclub_submissions`, credits the hours through
+`review_hackclub_submission()`, then clears the address, birthday and
+screenshot from Expedition's copy. Needs-changes and rejected submissions
+never reach Hack Club.
 
 Expedition's own tables only **cache** and **review** that submission:
 
