@@ -36,6 +36,53 @@
 			</div>
 		</div>
 
+		<section class="stats panel">
+			<div class="stats-head">
+				<p class="section-label">Right now</p>
+				{#await data.activity then a}
+					{#if a}<span class="hint">checked {new Date(a.checkedAt).toLocaleTimeString()}</span>{/if}
+				{/await}
+			</div>
+			{#await data.activity}
+				<p class="hint">Checking everyone's Hackatime…</p>
+			{:then a}
+				{#if a}
+					<div class="stat-grid">
+						<div class="s"><span class="s-n live">{a.activeNow}</span><span class="s-k">projects being worked on now<br /><em>last 15 min</em></span></div>
+						<div class="s"><span class="s-n">{a.active24h}</span><span class="s-k">worked on today<br /><em>last 24h</em></span></div>
+						<div class="s"><span class="s-n">{a.active7d}</span><span class="s-k">this week</span></div>
+						<div class="s"><span class="s-n">{a.connectedProjects}</span><span class="s-k">Hackatime projects connected<br /><em>by {a.builders} builders</em></span></div>
+						<div class="s"><span class="s-n">{a.trackedHours}h</span><span class="s-k">tracked on connected projects</span></div>
+					</div>
+					{#if a.working.length}
+						<details class="working">
+							<summary>Worked on in the last 24 hours ({a.working.length})</summary>
+							<ul>
+								{#each a.working as w (w.builder + w.project)}
+									<li>
+										<span class="w-p">{w.project}</span>
+										<span class="w-b">{w.builder} · {w.tracked}h tracked</span>
+										<span class="w-t">{new Date(w.lastBeat).toLocaleString()}</span>
+									</li>
+								{/each}
+							</ul>
+						</details>
+					{/if}
+					{#if a.unreachable}
+						<p class="hint">Couldn't reach Hackatime for {a.unreachable} builder{a.unreachable === 1 ? '' : 's'}, so they're not counted.</p>
+					{/if}
+				{:else}
+					<p class="hint">Couldn't load Hackatime activity just now.</p>
+				{/if}
+			{/await}
+			<div class="stat-grid small">
+				<div class="s"><span class="s-n">{data.overview.signedUp ?? '–'}</span><span class="s-k">signed up</span></div>
+				<div class="s"><span class="s-n">{data.overview.hackatime ?? '–'}</span><span class="s-k">connected Hackatime</span></div>
+				<div class="s"><span class="s-n">{data.pendingReviews}</span><span class="s-k">waiting for review</span></div>
+				<div class="s"><span class="s-n">{data.overview.checkpoints ?? '–'}</span><span class="s-k">checkpoints posted</span></div>
+			</div>
+		</section>
+
 		<div class="stat-row" style="margin-bottom:2.5rem">
 			<div class="stat-big">
 				<span class="n">{data.users.length}</span>
@@ -193,6 +240,91 @@
 <Footer />
 
 <style>
+	.stats {
+		margin-bottom: 2.5rem;
+		border: 3px solid var(--navy);
+	}
+	.stats-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 1rem;
+	}
+	.stat-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		gap: 1rem 1.5rem;
+	}
+	.stat-grid.small {
+		margin-top: 1.4rem;
+		padding-top: 1.1rem;
+		border-top: 2px solid var(--rule);
+	}
+	.s {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+	.s-n {
+		font-size: clamp(1.8rem, 4vw, 2.6rem);
+		font-weight: 800;
+		letter-spacing: -0.03em;
+		line-height: 1;
+		color: var(--navy);
+	}
+	.small .s-n {
+		font-size: 1.5rem;
+	}
+	.s-n.live {
+		color: var(--green-dark);
+	}
+	.s-k {
+		font-size: 0.82rem;
+		font-weight: 700;
+		color: var(--muted);
+	}
+	.s-k em {
+		font-style: normal;
+		font-weight: 500;
+	}
+	.working {
+		margin-top: 1.2rem;
+	}
+	.working summary {
+		cursor: pointer;
+		font-weight: 700;
+		color: var(--navy);
+	}
+	.working ul {
+		list-style: none;
+		margin: 0.7rem 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		max-height: 320px;
+		overflow-y: auto;
+	}
+	.working li {
+		display: grid;
+		grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+		gap: 1rem;
+		padding: 0.4rem 0;
+		border-bottom: 1px solid var(--rule);
+		font-size: 0.9rem;
+	}
+	.w-p {
+		font-weight: 800;
+		color: var(--navy);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.w-b,
+	.w-t {
+		color: var(--muted);
+		font-weight: 600;
+	}
 	.claims-note {
 		display: flex;
 		flex-direction: column;

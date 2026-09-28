@@ -12,6 +12,8 @@ import {
 	listAllTravelBuckets
 } from '$lib/server/queries';
 import { countAwaitingModeration } from '$lib/server/checkpoints';
+import { countQueuePending } from '$lib/server/queue';
+import { getActivityStats, getOverviewStats } from '$lib/server/stats';
 import { signedHours, text, oneOf, uuid, ValidationError } from '$lib/server/validate';
 
 // travel moves need a bucket and go through move_travel_hours, not here
@@ -20,16 +22,31 @@ const GRANT_TYPES = ['manual_adjustment', 'reward_claimed'] as const;
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
 
-	const [users, pendingReviews, claims, buckets, sharedWaiting] = await Promise.all([
+	const [users, pendingOld, pendingNew, claims, buckets, sharedWaiting, overview] = await Promise.all([
 		listUsersWithBalances(),
 		countPendingReviews(),
+		countQueuePending(),
 		listAllClaims(),
 		listAllTravelBuckets(),
-		countAwaitingModeration()
+		countAwaitingModeration(),
+		getOverviewStats()
 	]);
 
 	const travelBuckets = Object.fromEntries(buckets.map((b) => [b.user_id, b]));
-	return { users, pendingReviews, claims, travelBuckets, sharedWaiting };
+	return {
+		users,
+		pendingReviews: pendingOld + pendingNew,
+		claims,
+		travelBuckets,
+		sharedWaiting,
+		overview,
+		// streamed: the page renders straight away and this fills in when
+		// every builder's Hackatime has answered
+		activity: getActivityStats().catch((e) => {
+			console.error('activity stats', e);
+			return null;
+		})
+	};
 };
 
 export const actions: Actions = {
