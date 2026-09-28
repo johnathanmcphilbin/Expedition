@@ -6,7 +6,10 @@ import { text, url, email, ValidationError } from './validate';
  * both sides are held to exactly the same rules.
  */
 export type SubmissionFields = {
+	/** display name: the Hackatime projects joined with " + " */
 	project_name: string;
+	/** every Hackatime project that makes up this one Expedition project */
+	hackatime_projects: string[];
 	hardware: boolean;
 	code_url: string;
 	playable_url: string;
@@ -39,11 +42,28 @@ function birthday(value: FormDataEntryValue | null): string {
 	return raw;
 }
 
+function projects(form: FormData): string[] {
+	const names = [
+		...new Set(
+			form
+				.getAll('project')
+				.map((v) => (typeof v === 'string' ? v.trim() : ''))
+				.filter(Boolean)
+		)
+	];
+	if (!names.length) throw new ValidationError('Pick at least one Hackatime project', 'project');
+	if (names.length > 10) throw new ValidationError('Pick at most 10 Hackatime projects', 'project');
+	for (const n of names) if (n.length > 200) throw new ValidationError('Project name is too long', 'project');
+	return names;
+}
+
 export function parseSubmissionFields(form: FormData): SubmissionFields {
 	const hardware = form.get('hardware') === 'yes';
+	const hackatimeProjects = projects(form);
 	const codeUrl = url(form.get('code_url'), 'Code link', { required: true })!;
 	return {
-		project_name: text(form.get('project'), 'Project', { max: 200, required: true })!,
+		project_name: hackatimeProjects.join(' + '),
+		hackatime_projects: hackatimeProjects,
 		hardware,
 		code_url: codeUrl,
 		// hardware has no live URL; the repo stands in for it (see /hardware)

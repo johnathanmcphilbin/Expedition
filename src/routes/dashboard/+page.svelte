@@ -313,6 +313,21 @@
 											{finalLabel[stage]}{#if stage === 'approved' && p.review?.approved_hours} · {p.review.approved_hours}h{/if}
 										</li>
 									</ol>
+									<a
+										class="cp-line"
+										class:due={p.checkpointsUnlocked > p.checkpointsPosted}
+										href="/checkpoint?project={encodeURIComponent(p.name)}">
+										{#if p.checkpointsUnlocked > p.checkpointsPosted}
+											<span class="cp-dot" aria-hidden="true"></span>
+											{p.checkpointsUnlocked - p.checkpointsPosted === 1
+												? 'Checkpoint due'
+												: `${p.checkpointsUnlocked - p.checkpointsPosted} checkpoints due`} · post an update →
+										{:else if p.checkpointsPosted}
+											{p.checkpointsPosted} checkpoint{p.checkpointsPosted === 1 ? '' : 's'} posted →
+										{:else}
+											First checkpoint at 5h tracked
+										{/if}
+									</a>
 								</div>
 								<div class="p-total">
 									<span class="p-total-n">{p.tracked}</span>
@@ -849,6 +864,29 @@
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		color: var(--muted);
+	}
+	.cp-line {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin-top: 0.5rem;
+		font-size: 0.85rem;
+		font-weight: 700;
+		color: var(--muted);
+		text-decoration: none;
+	}
+	.cp-line:hover {
+		color: var(--navy);
+		text-decoration: underline;
+	}
+	.cp-line.due {
+		color: var(--green-dark);
+	}
+	.cp-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--green);
 	}
 	.p-actions {
 		display: flex;

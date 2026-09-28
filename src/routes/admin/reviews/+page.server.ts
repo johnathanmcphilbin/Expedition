@@ -8,11 +8,13 @@ import {
 	getHackClubSubmission,
 	getBalance,
 	searchUsers,
-	linkSubmissionToUser
+	linkSubmissionToUser,
+	reopenReview
 } from '$lib/server/queries';
 import { syncHackClubSubmissions, writeReviewToAirtable } from '$lib/server/airtable';
 import { fetchProjectTimes, formatHours } from '$lib/server/hackatime';
 import { submitReview } from '$lib/server/review';
+import { listProjectCheckpoints } from '$lib/server/checkpoints';
 import { hours, text, uuid, oneOf, ValidationError } from '$lib/server/validate';
 import type { SubmissionStatus } from '$lib/server/database.types';
 import type { QueueItem } from '$lib/server/queries';
@@ -112,6 +114,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		suggestedProject: string | null;
 		balance: Awaited<ReturnType<typeof getBalance>> | null;
 		linkCandidates: Awaited<ReturnType<typeof searchUsers>>;
+		checkpoints: Awaited<ReturnType<typeof listProjectCheckpoints>>;
 	} | null = null;
 
 	if (selectedRow) {
@@ -140,9 +143,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		const linkQuery = url.searchParams.get('link_q') ?? '';
 		const linkCandidates = !selectedRow.submission.user_id && linkQuery ? await searchUsers(linkQuery) : [];
 
+		const cpProjects = selectedRow.review?.hackatime_projects?.length
+			? selectedRow.review.hackatime_projects
+			: [selectedRow.review?.hackatime_project ?? suggestedProject].filter((n): n is string => !!n);
+		const checkpoints = selectedRow.submission.user_id
+			? (await Promise.all(cpProjects.map((n) => listProjectCheckpoints(selectedRow.submission.user_id!, n)))).flat()
+			: [];
+
 		detail = {
 			submission: selectedRow.submission,
 			review: selectedRow.review,
+			checkpoints,
 			hackatimeProjects,
 			suggestedProject,
 			balance,
@@ -174,6 +185,23 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
+	/** A rejected review back into the pending queue. Approved stays final. */
+	reopen: async ({ request, locals, url }) => {
+		const admin = requireAdmin(locals);
+		const form = await request.formData();
+		let submission = '';
+		try {
+			const reviewId = uuid(form.get('review_id')?.toString(), 'review');
+			submission = text(form.get('airtable_record_id'), 'Submission', { max: 200, required: true })!;
+			const result = await reopenReview(reviewId, admin.id);
+			if (!result.ok) return fail(409, { message: result.message });
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { message: e.message });
+			throw e;
+		}
+		redirect(303, `/admin/reviews?status=pending&submission=${encodeURIComponent(submission)}${url.searchParams.get('q') ? `&q=${encodeURIComponent(url.searchParams.get('q')!)}` : ''}`);
+	},
+
 	/**
 	 * Manually attach a submission to an Expedition account when Hack Club's
 	 * form never captured (or never matched) the submitter's Hackatime ID.
@@ -273,6 +301,7 @@ export const actions: Actions = {
 						airtable_record_id: airtableRecordId,
 						user_id: userId,
 						hackatime_project: hackatimeProject,
+						hackatime_projects: review.hackatime_projects,
 						submitted_hours: submittedHours ?? review.submitted_hours,
 						// matches review_hackclub_submission()'s own
 						// coalesce(p_approved_hours, approved_hours): a draft value

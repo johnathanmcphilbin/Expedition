@@ -17,6 +17,7 @@ import {
 import { connectionStatus, fetchProjectTimes, formatHours } from '$lib/server/hackatime';
 import { syncHackClubSubmissions } from '$lib/server/airtable';
 import { listOwnQueued, countQueuePending } from '$lib/server/queue';
+import { listOwnCheckpoints, unlockedCount } from '$lib/server/checkpoints';
 import { drops } from '$lib/data';
 import { text, hours, oneOf, ValidationError } from '$lib/server/validate';
 import type { TravelBucket } from '$lib/server/database.types';
@@ -39,6 +40,8 @@ export type DashboardProject = {
 		participant_feedback: string | null;
 	} | null;
 	connected: boolean;
+	checkpointsPosted: number;
+	checkpointsUnlocked: number;
 };
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -59,16 +62,23 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			getTravelBuckets(user.id),
 			listOwnQueued(user.id)
 		]);
+	const ownCheckpoints = await listOwnCheckpoints(user.id);
+	const checkpointsByProject = new Map<string, number>();
+	for (const c of ownCheckpoints) {
+		checkpointsByProject.set(c.hackatime_project, (checkpointsByProject.get(c.hackatime_project) ?? 0) + 1);
+	}
 
 	// newest queued submission per project, until it's been sent to Hack Club
 	const queuedByProject = new Map<string, DashboardProject['queued']>();
 	for (const q of queued) {
-		const key = q.project_name.toLowerCase();
-		if (queuedByProject.has(key)) continue;
-		queuedByProject.set(
-			key,
-			q.status === 'sent' ? null : { status: q.status, participant_feedback: q.participant_feedback }
-		);
+		for (const name of q.hackatime_projects?.length ? q.hackatime_projects : [q.project_name]) {
+			const key = name.toLowerCase();
+			if (queuedByProject.has(key)) continue;
+			queuedByProject.set(
+				key,
+				q.status === 'sent' ? null : { status: q.status, participant_feedback: q.participant_feedback }
+			);
+		}
 	}
 
 	let projects: DashboardProject[] = [];
@@ -93,7 +103,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		hackatimeUnavailable = times === null;
 
 		const rawNames = submissions.map((s) => (s.project_names_raw ?? '').toLowerCase());
-		const reviewsByProject = new Map(ownReviews.map((r) => [r.hackatime_project.toLowerCase(), r]));
+		// a review can cover several Hackatime projects; each of them shows it
+		const reviewsByProject = new Map(
+			ownReviews.flatMap((r) =>
+				(r.hackatime_projects?.length ? r.hackatime_projects : [r.hackatime_project]).map(
+					(n) => [n.toLowerCase(), r] as const
+				)
+			)
+		);
 		const connectedSet = new Set(connected);
 
 		const all = (times ?? [])
@@ -106,7 +123,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				submitted: rawNames.some((raw) => raw.includes(t.name.toLowerCase())),
 				review: reviewsByProject.get(t.name.toLowerCase()) ?? null,
 				queued: queuedByProject.get(t.name.toLowerCase()) ?? null,
-				connected: connectedSet.has(t.name)
+				connected: connectedSet.has(t.name),
+				checkpointsPosted: checkpointsByProject.get(t.name) ?? 0,
+				checkpointsUnlocked: unlockedCount(t.totalSeconds / 3600)
 			}));
 
 		// Anything already submitted or reviewed stays visible even if it was

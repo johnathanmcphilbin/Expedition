@@ -30,6 +30,9 @@
 				<a class="btn btn-outline" href="/admin/reviews/incoming">
 					Review queue{data.pendingReviews ? ` (${data.pendingReviews})` : ''}
 				</a>
+				<a class="btn btn-outline" href="/admin/checkpoints">
+					Shared checkpoints{data.sharedWaiting ? ` (${data.sharedWaiting})` : ''}
+				</a>
 			</div>
 		</div>
 

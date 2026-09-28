@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '$lib/styles/app.css';
 	import { enhance } from '$app/forms';
+	import CheckpointTimeline from '$lib/components/CheckpointTimeline.svelte';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -137,6 +138,19 @@
 						<p class="description">{s.description}</p>
 					{/if}
 
+					{#if s.user_id}
+						<CheckpointTimeline items={data.detail.checkpoints} />
+					{/if}
+
+					{#if data.detail.review?.status === 'rejected'}
+						<form class="reopen" method="POST" action="?/reopen" use:enhance>
+							<input type="hidden" name="review_id" value={data.detail.review.id} />
+							<input type="hidden" name="airtable_record_id" value={s.airtable_record_id} />
+							<span>Rejected. Changed your mind?</span>
+							<button class="btn btn-outline" type="submit">Move back to queue</button>
+						</form>
+					{/if}
+
 					<div class="review">
 						{#if !s.user_id}
 							<p class="row-title">Link this submission to an account</p>
@@ -235,6 +249,19 @@
 </main>
 
 <style>
+	.reopen {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		flex-wrap: wrap;
+		margin-top: 1.2rem;
+		padding: 0.7rem 1rem;
+		border-left: 4px solid var(--orange);
+		background: var(--paper);
+		font-weight: 700;
+		color: var(--navy);
+	}
 	.incoming-link {
 		font-weight: 700;
 		color: var(--navy);

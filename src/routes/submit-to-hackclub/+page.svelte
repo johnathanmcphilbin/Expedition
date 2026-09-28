@@ -14,11 +14,19 @@
 		rejected: 'Not approved'
 	};
 
-	let project = $state('');
+	// One Expedition project can be made of several Hackatime projects
+	// (people rename folders, split front/back end, etc.) — their hours add up.
+	let selected = $state<string[]>([]);
 	$effect(() => {
-		project = data.selected ?? (data.projects.length === 1 ? data.projects[0].name : '');
+		selected = data.selected ? [data.selected] : data.projects.length === 1 ? [data.projects[0].name] : [];
 	});
-	const chosen = $derived(data.projects.find((p) => p.name === project) ?? null);
+	const chosen = $derived(data.projects.filter((p) => selected.includes(p.name)));
+	const chosenSeconds = $derived(chosen.reduce((sum, p) => sum + p.seconds, 0));
+	function fmtHours(sec: number) {
+		const h = Math.floor(sec / 3600);
+		const m = Math.round((sec % 3600) / 60);
+		return h > 0 ? `${h}h ${m}m` : `${m}m`;
+	}
 
 	// Hackatime lists every folder ever opened — dozens of them. Show the few
 	// that matter and let search find the rest.
@@ -35,8 +43,10 @@
 		return showAll ? data.projects : data.projects.filter((p) => p.connected || p.seconds >= 60).slice(0, TOP);
 	});
 
-	function pick(name: string) {
-		project = name;
+	function toggle(name: string) {
+		selected = selected.includes(name) ? selected.filter((n) => n !== name) : [...selected, name];
+	}
+	function donePicking() {
 		picking = false;
 		query = '';
 	}
@@ -199,25 +209,31 @@
 					<!-- 1 -->
 					<section class="step">
 						<h2 class="step-title"><span class="step-n">1</span> Which project?</h2>
-						<input type="hidden" name="project" value={project} />
+						{#each selected as name (name)}
+							<input type="hidden" name="project" value={name} />
+						{/each}
 
-						{#if chosen && !picking}
+						{#if chosen.length && !picking}
 							<div class="project-card selected chosen">
 								<div>
-									<span class="pc-name">{chosen.name}</span>
+									<span class="pc-name">{chosen.map((c) => c.name).join(' + ')}</span>
 									<span class="pc-meta">
-										{chosen.tracked} tracked{#if chosen.languages.length}&nbsp;· {chosen.languages.join(', ')}{/if}
+										{fmtHours(chosenSeconds)} tracked{#if chosen.length > 1}&nbsp;across {chosen.length} Hackatime projects{/if}
 									</span>
 								</div>
 								<button type="button" class="btn btn-outline" onclick={() => (picking = true)}>Change</button>
 							</div>
-							{#if chosen.status}
+							{#if chosen.some((c) => c.status)}
 								<p class="hint step-hint-after">
-									You've already submitted this one ({statusLabel[chosen.status].toLowerCase()}). Submit again only if
+									You've already submitted {chosen.length > 1 ? 'some of these' : 'this one'}. Submit again only if
 									you've built more since.
 								</p>
 							{/if}
 						{:else}
+							<p class="hint step-hint">
+								Pick every Hackatime project that's part of this. If you renamed the folder or split it
+								into a few, tick all of them and their hours add up.
+							</p>
 							<input
 								class="project-search"
 								type="search"
@@ -229,8 +245,9 @@
 									<button
 										type="button"
 										class="project-card"
-										class:selected={project === p.name}
-										onclick={() => pick(p.name)}>
+										class:selected={selected.includes(p.name)}
+										aria-pressed={selected.includes(p.name)}
+										onclick={() => toggle(p.name)}>
 										<span class="pc-name">{p.name}</span>
 										<span class="pc-meta">
 											{p.tracked} tracked{#if p.languages.length}&nbsp;· {p.languages.join(', ')}{/if}
@@ -247,6 +264,14 @@
 								<button type="button" class="link-more" onclick={() => (showAll = true)}>
 									Show all {data.projects.length} projects
 								</button>
+							{/if}
+							{#if chosen.length}
+								<div class="pick-done">
+									<span>
+										{chosen.length} selected · {fmtHours(chosenSeconds)} tracked
+									</span>
+									<button type="button" class="btn" onclick={donePicking}>Done</button>
+								</div>
 							{/if}
 						{/if}
 					</section>
@@ -384,13 +409,13 @@
 						{/if}
 						<div class="submit-row">
 							<p class="submit-summary">
-								{#if chosen}
-									Submitting <strong>{chosen.name}</strong> · {chosen.tracked} tracked
+								{#if chosen.length}
+									Submitting <strong>{chosen.map((c) => c.name).join(' + ')}</strong> · {fmtHours(chosenSeconds)} tracked
 								{:else}
 									Pick a project above to submit.
 								{/if}
 							</p>
-							<button class="btn" type="submit" disabled={sending || !chosen}>
+							<button class="btn" type="submit" disabled={sending || !chosen.length}>
 								{sending ? 'Sending…' : 'Submit to Hack Club'}
 							</button>
 						</div>
@@ -554,6 +579,18 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 		gap: 0.8rem;
+	}
+	.pick-done {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-top: 1rem;
+		padding: 0.7rem 0.9rem;
+		background: var(--white);
+		border: 2px solid var(--green);
+		font-weight: 700;
+		color: var(--navy);
 	}
 	.project-search {
 		max-width: 420px;

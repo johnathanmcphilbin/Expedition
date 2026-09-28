@@ -39,12 +39,20 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	// newest queued submission per project, if it hasn't been sent on yet
 	const queuedByProject = new Map<string, string>();
 	for (const q of queued) {
-		const key = q.project_name.toLowerCase();
-		if (!queuedByProject.has(key) && q.status !== 'sent') queuedByProject.set(key, q.status);
+		for (const name of q.hackatime_projects?.length ? q.hackatime_projects : [q.project_name]) {
+			const key = name.toLowerCase();
+			if (!queuedByProject.has(key) && q.status !== 'sent') queuedByProject.set(key, q.status);
+		}
 	}
 
 	const submittedNames = submissions.map((s) => (s.project_names_raw ?? '').toLowerCase());
-	const reviewByProject = new Map(reviews.map((r) => [r.hackatime_project.toLowerCase(), r]));
+	const reviewByProject = new Map(
+		reviews.flatMap((r) =>
+			(r.hackatime_projects?.length ? r.hackatime_projects : [r.hackatime_project]).map(
+				(n) => [n.toLowerCase(), r] as const
+			)
+		)
+	);
 
 	const projects = (times ?? [])
 		.filter((t) => !t.archived)
@@ -101,8 +109,9 @@ export const actions: Actions = {
 
 			// only a project that's actually in their own Hackatime counts
 			const times = await fetchProjectTimes(user.id);
-			if (times && !times.some((t) => t.name === fields.project_name)) {
-				throw new ValidationError("That project isn't in your Hackatime", 'project');
+			const missing = times ? fields.hackatime_projects.filter((n) => !times.some((t) => t.name === n)) : [];
+			if (missing.length) {
+				throw new ValidationError(`"${missing[0]}" isn't in your Hackatime`, 'project');
 			}
 
 			const file = form.get('screenshot');
@@ -119,7 +128,7 @@ export const actions: Actions = {
 			// Waits for an Expedition reviewer; it only goes to Hack Club once
 			// approved (see src/lib/server/queue.ts).
 			await queueSubmission(user.id, hackatime.hackatimeUserId, fields, file);
-			await connectProject(user.id, fields.project_name).catch(() => {});
+			for (const n of fields.hackatime_projects) await connectProject(user.id, n).catch(() => {});
 
 			await notifySubmission({
 				name: `${fields.first_name} ${fields.last_name}`,

@@ -76,6 +76,8 @@ export type SubmissionReviewRow = {
 	airtable_record_id: string;
 	user_id: string;
 	hackatime_project: string;
+	/** set when one review covers several Hackatime projects */
+	hackatime_projects: string[] | null;
 	submitted_hours: number | null;
 	approved_hours: number | null;
 	status: SubmissionStatus;
@@ -99,6 +101,7 @@ export type QueuedSubmissionRow = {
 	user_id: string;
 	hackatime_user_id: string;
 	project_name: string;
+	hackatime_projects: string[];
 	hardware: boolean;
 	code_url: string;
 	playable_url: string;
@@ -128,6 +131,26 @@ export type QueuedSubmissionRow = {
 	reviewed_at: string | null;
 	airtable_record_id: string | null;
 	sent_at: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+export type CheckpointVisibility = 'private' | 'waiting' | 'shown' | 'hidden';
+
+/** A progress update posted every 5 tracked hours on a project. */
+export type CheckpointRow = {
+	id: string;
+	user_id: string;
+	hackatime_project: string;
+	number: number;
+	tracked_hours: number;
+	worked_on: string;
+	next_up: string | null;
+	image_path: string | null;
+	video_url: string | null;
+	visibility: CheckpointVisibility;
+	moderated_by: string | null;
+	moderated_at: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -234,6 +257,7 @@ export interface Database {
 			hackatime_connections: Table<HackatimeConnectionRow>;
 			expedition_projects: Table<ExpeditionProjectRow>;
 			submission_queue: Table<QueuedSubmissionRow>;
+			checkpoints: Table<CheckpointRow>;
 		};
 		Views: {
 			user_hour_balances: { Row: HourBalanceRow; Relationships: [] };
@@ -241,6 +265,10 @@ export interface Database {
 			user_travel_buckets: { Row: TravelBucketsRow; Relationships: [] };
 		};
 		Functions: {
+			reopen_review: {
+				Args: { p_review_id: string; p_admin_id: string };
+				Returns: void;
+			};
 			move_travel_hours: {
 				Args: { p_user_id: string; p_hours: number; p_bucket: TravelBucket };
 				Returns: void;
@@ -284,6 +312,7 @@ export interface Database {
 			claim_status: ClaimStatus;
 			travel_bucket: TravelBucket;
 			queued_submission_status: QueuedSubmissionStatus;
+			checkpoint_visibility: CheckpointVisibility;
 		};
 	};
 }

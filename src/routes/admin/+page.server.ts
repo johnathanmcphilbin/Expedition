@@ -11,6 +11,7 @@ import {
 	setTravelLock,
 	listAllTravelBuckets
 } from '$lib/server/queries';
+import { countAwaitingModeration } from '$lib/server/checkpoints';
 import { signedHours, text, oneOf, uuid, ValidationError } from '$lib/server/validate';
 
 // travel moves need a bucket and go through move_travel_hours, not here
@@ -19,15 +20,16 @@ const GRANT_TYPES = ['manual_adjustment', 'reward_claimed'] as const;
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
 
-	const [users, pendingReviews, claims, buckets] = await Promise.all([
+	const [users, pendingReviews, claims, buckets, sharedWaiting] = await Promise.all([
 		listUsersWithBalances(),
 		countPendingReviews(),
 		listAllClaims(),
-		listAllTravelBuckets()
+		listAllTravelBuckets(),
+		countAwaitingModeration()
 	]);
 
 	const travelBuckets = Object.fromEntries(buckets.map((b) => [b.user_id, b]));
-	return { users, pendingReviews, claims, travelBuckets };
+	return { users, pendingReviews, claims, travelBuckets, sharedWaiting };
 };
 
 export const actions: Actions = {

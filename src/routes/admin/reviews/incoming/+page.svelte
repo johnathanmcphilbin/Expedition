@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '$lib/styles/app.css';
 	import { enhance } from '$app/forms';
+	import CheckpointTimeline from '$lib/components/CheckpointTimeline.svelte';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -99,6 +100,16 @@
 						</a>
 					{/if}
 
+					<CheckpointTimeline items={data.detail.checkpoints} unlocked={data.detail.checkpointsUnlocked} />
+
+					{#if r.status === 'rejected' || r.status === 'changes_requested'}
+						<form class="reopen" method="POST" action="?/reopen" use:enhance>
+							<input type="hidden" name="id" value={r.id} />
+							<span>{r.status === 'rejected' ? 'Rejected' : 'Waiting on changes'}. Changed your mind?</span>
+							<button class="btn btn-outline" type="submit">Move back to queue</button>
+						</form>
+					{/if}
+
 					{#if sent}
 						<p class="sent-note">
 							Sent to Hack Club {r.sent_at ? new Date(r.sent_at).toLocaleString() : ''} with
@@ -124,20 +135,31 @@
 
 							<fieldset>
 								<legend>Project</legend>
-								<div class="grid-2 tight">
-									<div class="field">
-										<label for="project">Hackatime project</label>
-										{#if data.detail.projects.length}
-											<select id="project" name="project" value={r.project_name}>
-												{#each data.detail.projects as p (p.name)}
-													<option value={p.name}>{p.name} ({p.tracked})</option>
+								<div class="field">
+									<span class="field-label">Hackatime projects</span>
+									{#if data.detail.projects.length}
+										<div class="proj-list">
+											{#each data.detail.projects.filter((p) => data.detail?.picked.includes(p.name)) as p (p.name)}
+												<label class="proj"><input type="checkbox" name="project" value={p.name} checked /> {p.name} <span class="hint">{p.tracked}</span></label>
+											{/each}
+										</div>
+										<details class="proj-more">
+											<summary>Add another of their Hackatime projects</summary>
+											<div class="proj-list">
+												{#each data.detail.projects.filter((p) => !data.detail?.picked.includes(p.name)) as p (p.name)}
+													<label class="proj"><input type="checkbox" name="project" value={p.name} /> {p.name} <span class="hint">{p.tracked}</span></label>
 												{/each}
-											</select>
-										{:else}
-											<input id="project" name="project" type="text" value={r.project_name} required />
-											<span class="hint">Couldn't reach their Hackatime to list projects.</span>
-										{/if}
-									</div>
+											</div>
+										</details>
+									{:else}
+										{#each data.detail.picked as name (name)}
+											<input type="hidden" name="project" value={name} />
+										{/each}
+										<p>{data.detail.picked.join(', ')}</p>
+										<span class="hint">Couldn't reach their Hackatime to list projects.</span>
+									{/if}
+								</div>
+								<div class="grid-2 tight">
 									<label class="check">
 										<input type="checkbox" name="hardware" value="yes" bind:checked={hardware} />
 										Hardware project
@@ -412,6 +434,43 @@
 	}
 	.grid-2.tight {
 		gap: 0 1.2rem;
+	}
+	.reopen {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		flex-wrap: wrap;
+		margin: 1.2rem 0 0;
+		padding: 0.7rem 1rem;
+		border-left: 4px solid var(--orange);
+		background: var(--paper);
+		font-weight: 700;
+		color: var(--navy);
+	}
+	.proj-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		max-height: 220px;
+		overflow-y: auto;
+	}
+	.proj {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-weight: 600;
+		color: var(--navy);
+	}
+	.proj input {
+		accent-color: var(--green);
+	}
+	.proj-more summary {
+		margin: 0.5rem 0;
+		cursor: pointer;
+		font-size: 0.88rem;
+		font-weight: 700;
+		color: var(--blue-dark);
 	}
 	.check {
 		display: flex;

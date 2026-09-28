@@ -132,6 +132,16 @@ export async function decideQueued(
 	if (error) throw new Error(error.message);
 }
 
+/** Back to waiting, keeping any notes and feedback already written. */
+export async function reopenQueued(id: string): Promise<void> {
+	const { error } = await db()
+		.from('submission_queue')
+		.update({ status: 'pending', reviewer_id: null, reviewed_at: null })
+		.eq('id', id)
+		.in('status', ['rejected', 'changes_requested']);
+	if (error) throw new Error(error.message);
+}
+
 /**
  * Approve: create the row in Hack Club's Airtable, cache it, credit the hours
  * through review_hackclub_submission(), write the approved hours and
@@ -154,6 +164,10 @@ export async function sendQueued(params: {
 	if (!q) return { ok: false, message: 'That submission no longer exists.' };
 	if (q.status === 'sent') return { ok: false, message: 'This one has already been sent to Hack Club.' };
 
+	const projects = q.hackatime_projects?.length ? q.hackatime_projects : [q.project_name];
+	// Hack Club's field takes several names; commas are how their form lists them
+	const projectsForHackClub = projects.join(', ');
+
 	let recordId = q.airtable_record_id;
 	let createdTime = new Date().toISOString();
 
@@ -169,7 +183,7 @@ export async function sendQueued(params: {
 			const record = await createSubmission(
 				{
 					hackatimeUserId: q.hackatime_user_id,
-					projectName: q.project_name,
+					projectName: projectsForHackClub,
 					codeUrl: q.code_url,
 					playableUrl: q.playable_url,
 					description: q.description,
@@ -216,7 +230,7 @@ export async function sendQueued(params: {
 		code_url: q.code_url,
 		playable_url: q.playable_url,
 		description: q.description,
-		project_names_raw: q.project_name,
+		project_names_raw: projectsForHackClub,
 		airtable_status: null,
 		airtable_created_at: createdTime,
 		synced_at: new Date().toISOString()
@@ -226,7 +240,7 @@ export async function sendQueued(params: {
 		return { ok: false, message: `Sent to Hack Club, but couldn't record it here: ${cache.error.message}. Try again.` };
 	}
 
-	const review = await getOrCreateReview(recordId, q.user_id, q.project_name, params.submittedHours);
+	const review = await getOrCreateReview(recordId, q.user_id, q.project_name, params.submittedHours, projects);
 	const result = await submitReview({
 		reviewId: review.id,
 		reviewerId: params.reviewer.id,

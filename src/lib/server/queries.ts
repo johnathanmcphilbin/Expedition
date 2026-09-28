@@ -225,7 +225,9 @@ export async function getOrCreateReview(
 	airtableRecordId: string,
 	userId: string,
 	hackatimeProject: string,
-	submittedHours: number | null
+	submittedHours: number | null,
+	/** when one review covers several Hackatime projects */
+	hackatimeProjects?: string[]
 ): Promise<SubmissionReviewRow> {
 	const existing = await db()
 		.from('submission_reviews')
@@ -241,12 +243,24 @@ export async function getOrCreateReview(
 			airtable_record_id: airtableRecordId,
 			user_id: userId,
 			hackatime_project: hackatimeProject,
-			submitted_hours: submittedHours
+			submitted_hours: submittedHours,
+			...(hackatimeProjects && hackatimeProjects.length > 1 ? { hackatime_projects: hackatimeProjects } : {})
 		})
 		.select('*')
 		.single();
 	if (e) throw new Error(e.message);
 	return data as SubmissionReviewRow;
+}
+
+/** Rejected -> back in the queue as pending. Only rejected; approved paid out and stays final. */
+export async function reopenReview(reviewId: string, adminId: string): Promise<{ ok: true } | { ok: false; message: string }> {
+	const { error: e } = await db().rpc('reopen_review', { p_review_id: reviewId, p_admin_id: adminId });
+	if (e) {
+		if (/only a rejected/i.test(e.message)) return { ok: false, message: 'Only a rejected review can be moved back.' };
+		console.error('reopen_review', e.message);
+		return { ok: false, message: "Couldn't move it back just now. Try again." };
+	}
+	return { ok: true };
 }
 
 export async function countPendingReviews(): Promise<number> {

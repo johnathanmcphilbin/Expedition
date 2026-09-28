@@ -9,9 +9,11 @@ import {
 	screenshotUrl,
 	updateQueuedFields,
 	decideQueued,
-	sendQueued
+	sendQueued,
+	reopenQueued
 } from '$lib/server/queue';
 import { parseSubmissionFields } from '$lib/server/submission-fields';
+import { listProjectCheckpoints, unlockedCount } from '$lib/server/checkpoints';
 import { hours, text, uuid, oneOf, ValidationError } from '$lib/server/validate';
 
 const TABS = ['pending', 'changes_requested', 'rejected', 'sent'] as const;
@@ -43,13 +45,20 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			screenshotUrl(selected.screenshot_path)
 		]);
 		const projects = (times ?? []).map((t) => ({ name: t.name, tracked: formatHours(t.totalSeconds), seconds: t.totalSeconds }));
-		const match = projects.find((p) => p.name === selected.project_name);
+		const picked = selected.hackatime_projects?.length ? selected.hackatime_projects : [selected.project_name];
+		const matched = projects.filter((p) => picked.includes(p.name));
+		const checkpoints = (await Promise.all(picked.map((n) => listProjectCheckpoints(selected.user_id, n)))).flat();
 		detail = {
 			row: selected,
+			picked,
 			screenshot: shot,
 			projects,
 			hackatimeUnavailable: times === null,
-			trackedHours: match ? Math.round((match.seconds / 3600) * 100) / 100 : null,
+			checkpoints,
+			checkpointsUnlocked: matched.reduce((sum, p) => sum + unlockedCount(p.seconds / 3600), 0),
+			trackedHours: matched.length
+				? Math.round((matched.reduce((sum, p) => sum + p.seconds, 0) / 3600) * 100) / 100
+				: null,
 			balance
 		};
 	}
@@ -69,6 +78,20 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
+	/** Rejected / needs changes -> back to waiting, notes and feedback kept. */
+	reopen: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const form = await request.formData();
+		try {
+			const id = uuid(form.get('id')?.toString(), 'submission');
+			await reopenQueued(id);
+			redirect(303, `/admin/reviews/incoming?status=pending&id=${id}`);
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { message: e.message });
+			throw e;
+		}
+	},
+
 	/**
 	 * One form, four buttons: save the edits, then either leave it waiting,
 	 * ask for changes, reject, or approve — which sends it to Hack Club.
@@ -92,8 +115,9 @@ export const actions: Actions = {
 			const fields = parseSubmissionFields(form);
 
 			const times = await fetchProjectTimes(row.user_id);
-			if (times && !times.some((t) => t.name === fields.project_name)) {
-				throw new ValidationError("That project isn't in their Hackatime", 'project');
+			const missing = times ? fields.hackatime_projects.filter((n) => !times.some((t) => t.name === n)) : [];
+			if (missing.length) {
+				throw new ValidationError(`"${missing[0]}" isn't in their Hackatime`, 'project');
 			}
 
 			const approvedRaw = form.get('approved_hours');
@@ -112,14 +136,14 @@ export const actions: Actions = {
 			await updateQueuedFields(id, fields);
 
 			if (decision === 'approve') {
-				const match = times?.find((t) => t.name === fields.project_name);
+				const matched = (times ?? []).filter((t) => fields.hackatime_projects.includes(t.name));
 				const result = await sendQueued({
 					id,
 					reviewer,
 					approvedHours: approvedHours!,
 					internalNotes,
 					participantFeedback: feedback,
-					submittedHours: match ? match.totalSeconds / 3600 : null
+					submittedHours: matched.length ? matched.reduce((sum, t) => sum + t.totalSeconds, 0) / 3600 : null
 				});
 				if (!result.ok) return fail(502, { message: result.message });
 			} else {
