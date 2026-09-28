@@ -30,6 +30,7 @@
 				<a class="btn btn-outline" href="/admin/reviews">
 					Review queue{data.pendingReviews ? ` (${data.pendingReviews})` : ''}
 				</a>
+				<a class="btn btn-outline" href="/admin/projects">Projects</a>
 				<a class="btn btn-outline" href="/admin/checkpoints">
 					Shared checkpoints{data.sharedWaiting ? ` (${data.sharedWaiting})` : ''}
 				</a>
@@ -54,6 +55,7 @@
 						<div class="s"><span class="s-n">{a.connectedProjects}</span><span class="s-k">Hackatime projects connected<br /><em>by {a.builders} builders</em></span></div>
 						<div class="s"><span class="s-n">{a.trackedHours}h</span><span class="s-k">tracked on connected projects</span></div>
 					</div>
+					<p class="see-all"><a href="/admin/projects">See every connected project with its hours →</a></p>
 					{#if a.working.length}
 						<details class="working">
 							<summary>Worked on in the last 24 hours ({a.working.length})</summary>
@@ -286,6 +288,13 @@
 	.s-k em {
 		font-style: normal;
 		font-weight: 500;
+	}
+	.see-all {
+		margin-top: 1rem;
+	}
+	.see-all a {
+		font-weight: 700;
+		color: var(--navy);
 	}
 	.working {
 		margin-top: 1.2rem;

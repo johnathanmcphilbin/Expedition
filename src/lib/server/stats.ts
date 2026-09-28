@@ -24,7 +24,6 @@ export type ActivityStats = {
 };
 
 const TTL_MS = 2 * 60 * 1000;
-let cache: { at: number; value: ActivityStats } | null = null;
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
 	const out: R[] = new Array(items.length);
@@ -40,25 +39,72 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
 	return out;
 }
 
-export async function getActivityStats(): Promise<ActivityStats> {
-	if (cache && Date.now() - cache.at < TTL_MS) return cache.value;
+export type ConnectedProject = {
+	userId: string;
+	builder: string;
+	project: string;
+	seconds: number | null;
+	languages: string[];
+	lastBeat: string | null;
+	/** false when this builder's Hackatime couldn't be reached */
+	reachable: boolean;
+};
+
+let projectsCache: { at: number; value: { rows: ConnectedProject[]; checkedAt: string } } | null = null;
+
+/**
+ * Every connected project with its live Hackatime numbers. Shared by the
+ * admin stats box and the projects list; cached for a couple of minutes.
+ */
+export async function getConnectedProjects(): Promise<{ rows: ConnectedProject[]; checkedAt: string }> {
+	if (projectsCache && Date.now() - projectsCache.at < TTL_MS) return projectsCache.value;
 
 	const { data, error } = await db()
 		.from('expedition_projects')
 		.select('user_id, hackatime_project, users(display_name)');
 	if (error) throw new Error(error.message);
-	const rows = (data ?? []) as unknown as {
+	const raw = (data ?? []) as unknown as {
 		user_id: string;
 		hackatime_project: string;
 		users: { display_name: string | null } | null;
 	}[];
 
 	const byUser = new Map<string, { name: string; projects: string[] }>();
-	for (const r of rows) {
-		const u = byUser.get(r.user_id) ?? { name: (r.users?.display_name ?? 'Someone').split(' ')[0], projects: [] };
+	for (const r of raw) {
+		const u = byUser.get(r.user_id) ?? { name: r.users?.display_name ?? 'Unknown', projects: [] };
 		u.projects.push(r.hackatime_project);
 		byUser.set(r.user_id, u);
 	}
+
+	const results = await mapLimit([...byUser.entries()], 8, async ([userId, u]) => ({
+		userId,
+		u,
+		times: await fetchProjectTimes(userId)
+	}));
+
+	const rows: ConnectedProject[] = [];
+	for (const { userId, u, times } of results) {
+		for (const name of u.projects) {
+			const t = times?.find((p) => p.name === name);
+			rows.push({
+				userId,
+				builder: u.name,
+				project: name,
+				seconds: t ? t.totalSeconds : null,
+				languages: t ? t.languages.slice(0, 3) : [],
+				lastBeat: t?.mostRecentHeartbeat ?? null,
+				reachable: times !== null
+			});
+		}
+	}
+
+	const value = { rows, checkedAt: new Date().toISOString() };
+	projectsCache = { at: Date.now(), value };
+	return value;
+}
+
+export async function getActivityStats(): Promise<ActivityStats> {
+	const { rows, checkedAt } = await getConnectedProjects();
 
 	const now = Date.now();
 	const MIN = 60 * 1000;
@@ -66,49 +112,37 @@ export async function getActivityStats(): Promise<ActivityStats> {
 	let active24h = 0;
 	let active7d = 0;
 	let trackedSeconds = 0;
-	let unreachable = 0;
 	const working: ActivityStats['working'] = [];
 
-	const results = await mapLimit([...byUser.entries()], 8, async ([userId, u]) => ({
-		u,
-		times: await fetchProjectTimes(userId)
-	}));
-
-	for (const { u, times } of results) {
-		if (!times) {
-			unreachable++;
-			continue;
+	for (const r of rows) {
+		trackedSeconds += r.seconds ?? 0;
+		if (!r.lastBeat) continue;
+		const age = now - new Date(r.lastBeat).getTime();
+		if (age <= 15 * MIN) activeNow++;
+		if (age <= 24 * 60 * MIN) {
+			active24h++;
+			working.push({
+				project: r.project,
+				builder: r.builder.split(' ')[0],
+				lastBeat: r.lastBeat,
+				tracked: Math.round(((r.seconds ?? 0) / 3600) * 10) / 10
+			});
 		}
-		for (const name of u.projects) {
-			const t = times.find((p) => p.name === name);
-			if (!t) continue;
-			trackedSeconds += t.totalSeconds;
-			if (!t.mostRecentHeartbeat) continue;
-			const age = now - new Date(t.mostRecentHeartbeat).getTime();
-			if (age <= 15 * MIN) activeNow++;
-			if (age <= 24 * 60 * MIN) {
-				active24h++;
-				working.push({ project: name, builder: u.name, lastBeat: t.mostRecentHeartbeat, tracked: Math.round((t.totalSeconds / 3600) * 10) / 10 });
-			}
-			if (age <= 7 * 24 * 60 * MIN) active7d++;
-		}
+		if (age <= 7 * 24 * 60 * MIN) active7d++;
 	}
-
 	working.sort((a, b) => b.lastBeat.localeCompare(a.lastBeat));
 
-	const value: ActivityStats = {
+	return {
 		connectedProjects: rows.length,
-		builders: byUser.size,
+		builders: new Set(rows.map((r) => r.userId)).size,
 		activeNow,
 		active24h,
 		active7d,
 		trackedHours: Math.round(trackedSeconds / 360) / 10,
-		unreachable,
+		unreachable: new Set(rows.filter((r) => !r.reachable).map((r) => r.userId)).size,
 		working: working.slice(0, 20),
-		checkedAt: new Date().toISOString()
+		checkedAt
 	};
-	cache = { at: Date.now(), value };
-	return value;
 }
 
 /** Cheap counts straight from the database. */
