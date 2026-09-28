@@ -27,7 +27,7 @@
 		<div class="app-head">
 			<h1 class="app-title">Admin</h1>
 			<div class="head-actions">
-				<a class="btn btn-outline" href="/admin/reviews/incoming">
+				<a class="btn btn-outline" href="/admin/reviews">
 					Review queue{data.pendingReviews ? ` (${data.pendingReviews})` : ''}
 				</a>
 				<a class="btn btn-outline" href="/admin/checkpoints">

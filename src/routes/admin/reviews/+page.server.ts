@@ -14,7 +14,17 @@ import {
 import { syncHackClubSubmissions, writeReviewToAirtable } from '$lib/server/airtable';
 import { fetchProjectTimes, formatHours } from '$lib/server/hackatime';
 import { submitReview } from '$lib/server/review';
-import { listProjectCheckpoints } from '$lib/server/checkpoints';
+import { listProjectCheckpoints, unlockedCount } from '$lib/server/checkpoints';
+import {
+	listQueue,
+	getQueued,
+	screenshotUrl,
+	updateQueuedFields,
+	decideQueued,
+	sendQueued,
+	reopenQueued
+} from '$lib/server/queue';
+import { parseSubmissionFields } from '$lib/server/submission-fields';
 import { hours, text, uuid, oneOf, ValidationError } from '$lib/server/validate';
 import type { SubmissionStatus } from '$lib/server/database.types';
 import type { QueueItem } from '$lib/server/queries';
@@ -37,9 +47,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		syncError = e instanceof Error ? e.message : 'Could not sync Hack Club submissions.';
 	}
 
-	const [submissions, reviews] = await Promise.all([
+	const [submissions, reviews, queued] = await Promise.all([
 		listAllHackClubSubmissions(),
-		listAllReviewsWithSubmissions()
+		listAllReviewsWithSubmissions(),
+		listQueue()
 	]);
 
 	const reviewsBySubmission = new Map<string, QueueItem[]>();
@@ -66,46 +77,114 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		return { submission: s, review: active, status: active?.status ?? 'pending' };
 	});
 
+	// One list for everything: submissions already in Hack Club's Airtable
+	// ('hc') and ones still waiting in Expedition's own queue ('new'). A
+	// queued one that's been sent shows up as its 'hc' row instead.
+	type Item = {
+		kind: 'hc' | 'new';
+		key: string;
+		status: SubmissionStatus;
+		participant: string;
+		project: string | null;
+		submittedAt: string | null;
+		matched: boolean;
+		hardware: boolean;
+		searchText: string;
+	};
+	const items: Item[] = [
+		...rows.map((r) => ({
+			kind: 'hc' as const,
+			key: r.submission.airtable_record_id,
+			status: r.status,
+			participant:
+				[r.submission.first_name, r.submission.last_name].filter(Boolean).join(' ') ||
+				r.submission.email ||
+				r.submission.owner?.display_name ||
+				'Unknown',
+			project: r.review?.hackatime_project ?? r.submission.project_names_raw,
+			submittedAt: r.submission.airtable_created_at,
+			matched: !!r.submission.user_id,
+			hardware: false,
+			searchText: [r.submission.first_name, r.submission.last_name, r.submission.email, r.submission.github_username, r.submission.project_names_raw, r.review?.hackatime_project]
+				.filter(Boolean)
+				.join(' ')
+				.toLowerCase()
+		})),
+		...queued
+			.filter((qr) => qr.status !== 'sent')
+			.map((qr) => ({
+				kind: 'new' as const,
+				key: qr.id,
+				status: qr.status as SubmissionStatus,
+				participant: `${qr.first_name} ${qr.last_name}`.trim() || qr.owner?.display_name || 'Unknown',
+				project: qr.project_name,
+				submittedAt: qr.created_at,
+				matched: true,
+				hardware: qr.hardware,
+				searchText: [qr.first_name, qr.last_name, qr.email, qr.github_username, qr.project_name]
+					.join(' ')
+					.toLowerCase()
+			}))
+	].sort((a, b) => (b.submittedAt ?? '').localeCompare(a.submittedAt ?? ''));
+
+	const isPending = (st: SubmissionStatus) => st === 'pending' || st === 'in_review';
 	const counts = {
-		pending: rows.filter((r) => r.status === 'pending' || r.status === 'in_review').length,
-		changes_requested: rows.filter((r) => r.status === 'changes_requested').length,
-		approved: rows.filter((r) => r.status === 'approved').length,
-		rejected: rows.filter((r) => r.status === 'rejected').length,
-		all: rows.length
+		pending: items.filter((i) => isPending(i.status)).length,
+		changes_requested: items.filter((i) => i.status === 'changes_requested').length,
+		approved: items.filter((i) => i.status === 'approved').length,
+		rejected: items.filter((i) => i.status === 'rejected').length,
+		all: items.length
 	};
 
 	const filter = (url.searchParams.get('status') as Filter | null) ?? 'pending';
 	const validFilter = FILTERS.includes(filter) ? filter : 'pending';
 	const filtered =
 		validFilter === 'all'
-			? rows
+			? items
 			: validFilter === 'pending'
-				? rows.filter((r) => r.status === 'pending' || r.status === 'in_review')
-				: rows.filter((r) => r.status === validFilter);
+				? items.filter((i) => isPending(i.status))
+				: items.filter((i) => i.status === validFilter);
 
 	const q = (url.searchParams.get('q') ?? '').trim().toLowerCase();
-	const searched = q
-		? filtered.filter((r) => {
-				const s = r.submission;
-				const hay = [
-					s.first_name,
-					s.last_name,
-					s.email,
-					s.github_username,
-					s.project_names_raw,
-					r.review?.hackatime_project
-				]
-					.filter(Boolean)
-					.join(' ')
-					.toLowerCase();
-				return hay.includes(q);
-			})
-		: filtered;
+	const searched = q ? filtered.filter((i) => i.searchText.includes(q)) : filtered;
 
-	const selectedId = url.searchParams.get('submission');
-	const selectedRow = selectedId
-		? (rows.find((r) => r.submission.airtable_record_id === selectedId) ?? searched[0] ?? null)
-		: (searched[0] ?? null);
+	const newId = url.searchParams.get('new');
+	const hcId = url.searchParams.get('submission');
+	const selectedItem =
+		(newId && items.find((i) => i.kind === 'new' && i.key === newId)) ||
+		(hcId && items.find((i) => i.kind === 'hc' && i.key === hcId)) ||
+		searched[0] ||
+		null;
+	const selectedRow =
+		selectedItem?.kind === 'hc' ? (rows.find((r) => r.submission.airtable_record_id === selectedItem.key) ?? null) : null;
+
+	// ---- a queued ('new') submission: the editable, not-yet-sent form
+	let queuedDetail = null;
+	if (selectedItem?.kind === 'new') {
+		const row = queued.find((qr) => qr.id === selectedItem.key)!;
+		const [times, balance, shot] = await Promise.all([
+			fetchProjectTimes(row.user_id),
+			getBalance(row.user_id),
+			screenshotUrl(row.screenshot_path)
+		]);
+		const projects = (times ?? []).map((t) => ({ name: t.name, tracked: formatHours(t.totalSeconds), seconds: t.totalSeconds }));
+		const picked = row.hackatime_projects?.length ? row.hackatime_projects : [row.project_name];
+		const matched = projects.filter((p) => picked.includes(p.name));
+		const checkpoints = (await Promise.all(picked.map((n) => listProjectCheckpoints(row.user_id, n)))).flat();
+		queuedDetail = {
+			row,
+			picked,
+			screenshot: shot,
+			projects,
+			hackatimeUnavailable: times === null,
+			checkpoints,
+			checkpointsUnlocked: matched.reduce((sum, p) => sum + unlockedCount(p.seconds / 3600), 0),
+			trackedHours: matched.length
+				? Math.round((matched.reduce((sum, p) => sum + p.seconds, 0) / 3600) * 100) / 100
+				: null,
+			balance
+		};
+	}
 
 	let detail: {
 		submission: (typeof submissions)[number];
@@ -162,19 +241,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	return {
-		queue: searched.map((r) => ({
-			airtableRecordId: r.submission.airtable_record_id,
-			participant:
-				[r.submission.first_name, r.submission.last_name].filter(Boolean).join(' ') ||
-				r.submission.email ||
-				r.submission.owner?.display_name ||
-				'Unknown',
-			owner: r.submission.owner ?? null,
-			status: r.status,
-			project: r.review?.hackatime_project ?? r.submission.project_names_raw,
-			submittedAt: r.submission.airtable_created_at,
-			matched: !!r.submission.user_id
-		})),
+		queue: searched.map(({ searchText: _s, ...i }) => i),
+		selected: selectedItem ? { kind: selectedItem.kind, key: selectedItem.key } : null,
+		queuedDetail,
 		filter: validFilter,
 		counts,
 		search: q,
@@ -185,6 +254,100 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
+	/** Queued (not yet sent) submission: rejected / needs changes -> back to waiting. */
+	reopenNew: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const form = await request.formData();
+		let id: string;
+		try {
+			id = uuid(form.get('id')?.toString(), 'submission');
+			await reopenQueued(id);
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { message: e.message });
+			throw e;
+		}
+		redirect(303, `/admin/reviews?status=pending&new=${id}`);
+	},
+
+	/**
+	 * Queued (not yet sent) submission. One form, four buttons: save edits and
+	 * leave it waiting, ask for changes, reject, or approve — which sends it to
+	 * Hack Club's Airtable and credits the hours.
+	 */
+	saveNew: async ({ request, locals, url }) => {
+		const reviewer = requireAdmin(locals);
+		const form = await request.formData();
+
+		let id: string;
+		try {
+			id = uuid(form.get('id')?.toString(), 'submission');
+			const row = await getQueued(id);
+			if (!row) return fail(404, { message: 'That submission no longer exists.' });
+			if (row.status === 'sent') return fail(409, { message: 'This one has already been sent to Hack Club.' });
+
+			const decision = oneOf(
+				form.get('decision'),
+				['draft', 'approve', 'changes_requested', 'rejected'] as const,
+				'Decision'
+			);
+			const fields = parseSubmissionFields(form);
+
+			const times = await fetchProjectTimes(row.user_id);
+			const missing = times ? fields.hackatime_projects.filter((n) => !times.some((t) => t.name === n)) : [];
+			if (missing.length) {
+				throw new ValidationError(`"${missing[0]}" isn't in their Hackatime`, 'project');
+			}
+
+			const approvedRaw = form.get('approved_hours');
+			const approvedHours =
+				typeof approvedRaw === 'string' && approvedRaw.trim() ? hours(approvedRaw, 'Approved hours') : null;
+			const internalNotes = text(form.get('internal_notes'), 'Private notes', { max: 4000 });
+			const feedback = text(form.get('participant_feedback'), 'Feedback', { max: 4000 });
+
+			if (decision === 'approve' && approvedHours === null) {
+				return fail(400, { message: 'Set how many hours to approve before sending it.' });
+			}
+			if ((decision === 'changes_requested' || decision === 'rejected') && !feedback) {
+				return fail(400, { message: 'Give them some feedback to act on.' });
+			}
+
+			await updateQueuedFields(id, fields);
+
+			if (decision === 'approve') {
+				const matched = (times ?? []).filter((t) => fields.hackatime_projects.includes(t.name));
+				const result = await sendQueued({
+					id,
+					reviewer,
+					approvedHours: approvedHours!,
+					internalNotes,
+					participantFeedback: feedback,
+					submittedHours: matched.length ? matched.reduce((sum, t) => sum + t.totalSeconds, 0) / 3600 : null
+				});
+				if (!result.ok) return fail(502, { message: result.message });
+			} else {
+				await decideQueued(
+					id,
+					reviewer.id,
+					decision === 'draft' ? 'pending' : decision,
+					approvedHours,
+					internalNotes,
+					feedback
+				);
+			}
+
+			if (decision === 'draft') return { saved: true };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { message: e.message, field: e.field });
+			throw e;
+		}
+
+		// decided: move on to the next one in the same tab
+		const qs = new URLSearchParams();
+		if (url.searchParams.get('status')) qs.set('status', url.searchParams.get('status')!);
+		if (url.searchParams.get('q')) qs.set('q', url.searchParams.get('q')!);
+		redirect(303, `/admin/reviews${qs.toString() ? `?${qs}` : ''}`);
+	},
+
 	/** A rejected review back into the pending queue. Approved stays final. */
 	reopen: async ({ request, locals, url }) => {
 		const admin = requireAdmin(locals);

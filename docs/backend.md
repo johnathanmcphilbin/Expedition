@@ -111,7 +111,7 @@ own form, with the Hackatime ID and project set on the server.
 
 There is one holding step before that row exists. A new submission waits in
 `submission_queue` (see `src/lib/server/queue.ts` and migration 0010) until
-an Expedition reviewer on `/admin/reviews/incoming` edits and approves it.
+an Expedition reviewer on `/admin/reviews` (the one review page, shared with already-sent submissions) edits and approves it.
 Approving creates the one real row in Hack Club's table (`createSubmission`),
 caches it in `hackclub_submissions`, credits the hours through
 `review_hackclub_submission()`, then clears the address, birthday and

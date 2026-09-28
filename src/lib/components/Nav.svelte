@@ -74,7 +74,7 @@
 			<a href="/faq">FAQ</a>
 			{#if currentUser}
 				{#if currentUser.isAdmin}
-					<a href="/admin/reviews/incoming">Reviews</a>
+					<a href="/admin/reviews">Reviews</a>
 					<a href="/admin">Admin</a>
 				{/if}
 				<a href="/dashboard">Dashboard</a>

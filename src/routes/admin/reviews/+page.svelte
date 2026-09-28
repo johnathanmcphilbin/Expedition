@@ -22,13 +22,15 @@
 		rejected: 'Rejected'
 	};
 
-	function queueHref(submissionId: string) {
+	function queueHref(item: { kind: 'hc' | 'new'; key: string }) {
 		const p = new URLSearchParams();
 		p.set('status', data.filter);
 		if (data.search) p.set('q', data.search);
-		p.set('submission', submissionId);
+		p.set(item.kind === 'new' ? 'new' : 'submission', item.key);
 		return `/admin/reviews?${p}`;
 	}
+	const isSelected = (item: { kind: string; key: string }) =>
+		data.selected?.kind === item.kind && data.selected?.key === item.key;
 	function filterHref(status: string) {
 		const p = new URLSearchParams();
 		p.set('status', status);
@@ -51,6 +53,10 @@
 	$effect(() => {
 		selectedProject = data.detail?.suggestedProject ?? '';
 	});
+	let hardware = $state(false);
+	$effect(() => {
+		hardware = data.queuedDetail?.row.hardware ?? false;
+	});
 </script>
 
 <svelte:head><title>Review queue · Expedition</title></svelte:head>
@@ -59,10 +65,10 @@
 	<div class="wrap">
 		<div class="app-head">
 			<div>
-				<h1 class="app-title">Sent to Hack Club</h1>
+				<h1 class="app-title">Reviews</h1>
 				<p class="hint">
-					Submissions already in Hack Club's Airtable.
-					<a class="incoming-link" href="/admin/reviews/incoming">New submissions waiting for review →</a>
+					Everything in one place. Ones marked <strong>Not sent yet</strong> only go to Hack Club when you
+					approve them.
 				</p>
 			</div>
 			<form method="GET" class="search-form">
@@ -88,11 +94,8 @@
 		<div class="layout">
 			<!-- ---------- queue ---------- -->
 			<aside class="queue" aria-label="Submissions">
-				{#each data.queue as item (item.airtableRecordId)}
-					<a
-						class="qi"
-						class:active={data.detail?.submission.airtable_record_id === item.airtableRecordId}
-						href={queueHref(item.airtableRecordId)}>
+				{#each data.queue as item (item.kind + item.key)}
+					<a class="qi" class:active={isSelected(item)} href={queueHref(item)}>
 						<span class="qi-top">
 							<span class="qi-name">{item.participant}</span>
 							<span class="qi-time">{ago(item.submittedAt)}</span>
@@ -100,6 +103,8 @@
 						<span class="qi-project">{item.project ?? 'No project named'}</span>
 						<span class="qi-tags">
 							<span class="tag tag-{item.status}">{STATUS_LABEL[item.status]}</span>
+							{#if item.kind === 'new'}<span class="tag tag-new">Not sent yet</span>{/if}
+							{#if item.hardware}<span class="tag tag-warn">Hardware</span>{/if}
 							{#if !item.matched}<span class="tag tag-warn">No account</span>{/if}
 						</span>
 					</a>
@@ -110,7 +115,180 @@
 
 			<!-- ---------- the submission and its review ---------- -->
 			<section class="card">
-				{#if !data.detail}
+				{#if data.queuedDetail}
+					{@const r = data.queuedDetail.row}
+					{@const sent = r.status === 'sent'}
+
+					<header class="card-head">
+						<div>
+							<h2>{r.first_name} {r.last_name}</h2>
+							<p class="meta">
+								{r.project_name} &middot; submitted {new Date(r.created_at).toLocaleDateString()}
+								{#if data.queuedDetail.trackedHours !== null}&middot; <strong>{data.queuedDetail.trackedHours}h tracked</strong>{/if}
+								&middot; {data.queuedDetail.balance.hours_earned}h approved so far
+							</p>
+						</div>
+						<div class="links">
+							<a class="link-btn" href={r.code_url} target="_blank" rel="noopener noreferrer">Code ↗</a>
+							{#if r.playable_url !== r.code_url}
+								<a class="link-btn" href={r.playable_url} target="_blank" rel="noopener noreferrer">Demo ↗</a>
+							{/if}
+						</div>
+					</header>
+
+					{#if data.queuedDetail.screenshot}
+						<a class="shot" href={data.queuedDetail.screenshot} target="_blank" rel="noopener noreferrer">
+							<img src={data.queuedDetail.screenshot} alt="Their screenshot" />
+						</a>
+					{/if}
+
+					<CheckpointTimeline items={data.queuedDetail.checkpoints} unlocked={data.queuedDetail.checkpointsUnlocked} />
+
+					{#if r.status === 'rejected' || r.status === 'changes_requested'}
+						<form class="reopen" method="POST" action="?/reopenNew" use:enhance>
+							<input type="hidden" name="id" value={r.id} />
+							<span>{r.status === 'rejected' ? 'Rejected' : 'Waiting on changes'}. Changed your mind?</span>
+							<button class="btn btn-outline" type="submit">Move back to queue</button>
+						</form>
+					{/if}
+
+					{#if sent}
+						<p class="sent-note">
+							Sent to Hack Club {r.sent_at ? new Date(r.sent_at).toLocaleString() : ''} with
+							<strong>{r.approved_hours}h</strong> approved. Their address and birthday have been cleared
+							from here.
+							{#if r.airtable_record_id}
+								<a href="/admin/reviews?status=all&submission={r.airtable_record_id}">Open the sent submission →</a>
+							{/if}
+						</p>
+						<p class="description">{r.description}</p>
+					{:else}
+						<form
+							method="POST"
+							action="?/saveNew"
+							use:enhance={({ submitter }) => {
+								submitting = submitter?.getAttribute('value') ?? 'draft';
+								return async ({ update }) => {
+									await update({ reset: false });
+									submitting = null;
+								};
+							}}>
+							<input type="hidden" name="id" value={r.id} />
+
+							<fieldset>
+								<legend>Project</legend>
+								<div class="field">
+									<span class="field-label">Hackatime projects</span>
+									{#if data.queuedDetail.projects.length}
+										<div class="proj-list">
+											{#each data.queuedDetail.projects.filter((p) => data.queuedDetail?.picked.includes(p.name)) as p (p.name)}
+												<label class="proj"><input type="checkbox" name="project" value={p.name} checked /> {p.name} <span class="hint">{p.tracked}</span></label>
+											{/each}
+										</div>
+										<details class="proj-more">
+											<summary>Add another of their Hackatime projects</summary>
+											<div class="proj-list">
+												{#each data.queuedDetail.projects.filter((p) => !data.queuedDetail?.picked.includes(p.name)) as p (p.name)}
+													<label class="proj"><input type="checkbox" name="project" value={p.name} /> {p.name} <span class="hint">{p.tracked}</span></label>
+												{/each}
+											</div>
+										</details>
+									{:else}
+										{#each data.queuedDetail.picked as name (name)}
+											<input type="hidden" name="project" value={name} />
+										{/each}
+										<p>{data.queuedDetail.picked.join(', ')}</p>
+										<span class="hint">Couldn't reach their Hackatime to list projects.</span>
+									{/if}
+								</div>
+								<div class="grid-2 tight">
+									<label class="check">
+										<input type="checkbox" name="hardware" value="yes" bind:checked={hardware} />
+										Hardware project
+									</label>
+									<div class="field">
+										<label for="code_url">Code link</label>
+										<input id="code_url" name="code_url" type="url" required value={r.code_url} />
+									</div>
+									<div class="field">
+										<label for="playable_url">Demo link {#if hardware}<span class="optional">optional</span>{/if}</label>
+										<input id="playable_url" name="playable_url" type="url" required={!hardware} value={r.playable_url} />
+									</div>
+								</div>
+								<div class="field">
+									<label for="description">Description</label>
+									<textarea id="description" name="description" rows="4" required minlength="20" maxlength="4000">{r.description}</textarea>
+								</div>
+							</fieldset>
+
+							<fieldset>
+								<legend>Person</legend>
+								<div class="grid-2 tight">
+									<div class="field"><label for="first_name">First name</label><input id="first_name" name="first_name" type="text" required value={r.first_name} /></div>
+									<div class="field"><label for="last_name">Last name</label><input id="last_name" name="last_name" type="text" required value={r.last_name} /></div>
+									<div class="field"><label for="email">Email</label><input id="email" name="email" type="email" required value={r.email} /></div>
+									<div class="field"><label for="github_username">GitHub</label><input id="github_username" name="github_username" type="text" required value={r.github_username} /></div>
+									<div class="field"><label for="birthday">Birthday</label><input id="birthday" name="birthday" type="date" required value={r.birthday ?? ''} /></div>
+								</div>
+							</fieldset>
+
+							<fieldset>
+								<legend>Address</legend>
+								<div class="field"><label for="address_line1">Address</label><input id="address_line1" name="address_line1" type="text" required value={r.address_line1 ?? ''} /></div>
+								<div class="field"><label for="address_line2">Line 2 <span class="optional">optional</span></label><input id="address_line2" name="address_line2" type="text" value={r.address_line2 ?? ''} /></div>
+								<div class="grid-2 tight">
+									<div class="field"><label for="city">City</label><input id="city" name="city" type="text" required value={r.city ?? ''} /></div>
+									<div class="field"><label for="state">State / province</label><input id="state" name="state" type="text" required value={r.state ?? ''} /></div>
+									<div class="field"><label for="zip">Postal code</label><input id="zip" name="zip" type="text" required value={r.zip ?? ''} /></div>
+									<div class="field"><label for="country">Country</label><input id="country" name="country" type="text" required value={r.country ?? ''} /></div>
+								</div>
+							</fieldset>
+
+							<details class="extra">
+								<summary>Their feedback for Hack Club</summary>
+								<div class="field"><label for="heard_about">How did you hear about this?</label><input id="heard_about" name="heard_about" type="text" value={r.heard_about ?? ''} /></div>
+								<div class="field"><label for="doing_well">What are we doing well?</label><textarea id="doing_well" name="doing_well" rows="2">{r.doing_well ?? ''}</textarea></div>
+								<div class="field"><label for="improve">How can we improve?</label><textarea id="improve" name="improve" rows="2">{r.improve ?? ''}</textarea></div>
+							</details>
+
+							<fieldset class="decision">
+								<legend>Your review</legend>
+								<div class="field hours">
+									<label for="approved_hours">Hours to approve</label>
+									<input id="approved_hours" name="approved_hours" type="number" step="0.25" min="0" value={r.approved_hours ?? ''} />
+									{#if data.queuedDetail.trackedHours !== null}
+										<span class="hint">{data.queuedDetail.trackedHours}h tracked on this project in Hackatime.</span>
+									{/if}
+								</div>
+								<div class="field">
+									<label for="participant_feedback">Feedback to them</label>
+									<textarea id="participant_feedback" name="participant_feedback" rows="3" maxlength="4000">{r.participant_feedback ?? ''}</textarea>
+								</div>
+								<div class="field">
+									<label for="internal_notes">Private notes <span class="optional">only organisers see these</span></label>
+									<textarea id="internal_notes" name="internal_notes" rows="2" maxlength="4000">{r.internal_notes ?? ''}</textarea>
+								</div>
+
+								{#if form && 'message' in form && form.message}
+									<p class="error">{form.message}</p>
+								{:else if form && 'saved' in form && form.saved}
+									<p class="saved">Saved.</p>
+								{/if}
+
+								<div class="actions">
+									<button class="btn" type="submit" name="decision" value="approve" disabled={!!submitting}>
+										{submitting === 'approve' ? 'Sending…' : 'Approve & send to Hack Club'}
+									</button>
+									<button class="btn btn-outline" type="submit" name="decision" value="changes_requested" disabled={!!submitting}>Needs changes</button>
+									<button class="btn btn-outline" type="submit" name="decision" value="rejected" disabled={!!submitting}>Reject</button>
+									<button class="save-draft" type="submit" name="decision" value="draft" disabled={!!submitting}>
+										{submitting === 'draft' ? 'Saving…' : 'Save edits'}
+									</button>
+								</div>
+							</fieldset>
+						</form>
+					{/if}
+				{:else if !data.detail}
 					<p class="empty">Pick a submission on the left.</p>
 				{:else}
 					{@const s = data.detail.submission}
@@ -262,9 +440,115 @@
 		font-weight: 700;
 		color: var(--navy);
 	}
-	.incoming-link {
+	.shot {
+		display: block;
+		margin: 1.2rem 0;
+	}
+	.shot img {
+		display: block;
+		max-width: 100%;
+		max-height: 340px;
+		object-fit: contain;
+		border: 2px solid var(--rule);
+	}
+	.sent-note {
+		margin: 1.2rem 0;
+		padding: 0.8rem 1rem;
+		border-left: 4px solid var(--green);
+		background: var(--paper);
+		font-weight: 600;
+	}
+	.sent-note a {
+		display: block;
+		margin-top: 0.4rem;
+		color: var(--navy);
+	}
+	fieldset {
+		margin: 1.4rem 0 0;
+		padding: 1.2rem 0 0;
+		border: 0;
+		border-top: 2px solid var(--rule);
+	}
+	legend {
+		padding: 0 0.5rem 0 0;
+		font-size: 0.78rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.07em;
+		color: var(--muted);
+	}
+	.grid-2.tight {
+		gap: 0 1.2rem;
+	}
+	.check {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		font-weight: 700;
 		color: var(--navy);
+		align-self: center;
+	}
+	.check input {
+		width: 1.1rem;
+		height: 1.1rem;
+		accent-color: var(--green);
+	}
+	input[type='date'] {
+		font: inherit;
+		font-weight: 500;
+		color: var(--ink);
+		background: var(--white);
+		border: 2px solid var(--rule-strong);
+		padding: 0.6em 0.85em;
+		width: 100%;
+	}
+	.extra {
+		margin-top: 1.2rem;
+	}
+	.extra summary {
+		cursor: pointer;
+		font-weight: 700;
+		color: var(--navy);
+		margin-bottom: 0.8rem;
+	}
+	.decision {
+		border-top-color: var(--navy);
+	}
+	.hours {
+		max-width: 18rem;
+	}
+	.saved {
+		color: var(--green-dark);
+		font-weight: 700;
+		margin-bottom: 0.8rem;
+	}
+	.proj-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		max-height: 220px;
+		overflow-y: auto;
+	}
+	.proj {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-weight: 600;
+		color: var(--navy);
+	}
+	.proj input {
+		accent-color: var(--green);
+	}
+	.proj-more summary {
+		margin: 0.5rem 0;
+		cursor: pointer;
+		font-size: 0.88rem;
+		font-weight: 700;
+		color: var(--blue-dark);
+	}
+	.tag-new {
+		border-color: var(--blue);
+		color: var(--blue-dark);
 	}
 	.search-form input[type='search'] {
 		min-width: 18rem;

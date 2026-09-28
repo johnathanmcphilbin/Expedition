@@ -84,7 +84,7 @@
 			</div>
 			<div class="head-actions">
 				{#if data.pendingReviews !== null}
-					<a class="btn btn-outline" href="/admin/reviews/incoming">
+					<a class="btn btn-outline" href="/admin/reviews">
 						Review queue{data.pendingReviews ? ` (${data.pendingReviews})` : ''}
 					</a>
 				{/if}
