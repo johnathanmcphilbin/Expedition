@@ -20,6 +20,62 @@ function headers() {
 	return { Authorization: `Bearer ${config.airtable.apiKey}`, 'Content-Type': 'application/json' };
 }
 
+/**
+ * The justification fields on Hack Club's submission row that an Expedition
+ * reviewer can edit, by their exact Airtable names. Everything else on the
+ * row (name, address, automation fields) is Hack Club's own.
+ */
+export const JUSTIFICATION_FIELDS = [
+	{ name: 'Justification - Hackatime Project Name(s) + Date Range(s)', label: 'Hackatime project name(s) + date range(s)', rows: 2 },
+	{ name: 'Justification - Submitter Hackatime ID', label: 'Submitter Hackatime ID', rows: 1 },
+	{ name: 'Justification - Lapse Links, comma-separated', label: 'Lapse links, comma-separated', rows: 1 },
+	{ name: 'Justification - Specific Technical Features', label: 'Specific technical features', rows: 3 },
+	{ name: 'Justification - Deflation Justification', label: 'Deflation justification', rows: 2 },
+	{ name: 'Justification - Alternate Tracking Method', label: 'Alternate tracking method', rows: 2 },
+	{ name: 'Justification - Additional Justification', label: 'Additional justification', rows: 3 },
+	{ name: 'Optional - Override Hours Spent Justification', label: 'Override hours spent justification', rows: 4 },
+	{ name: 'Optional - Override Duplicate Justification', label: 'Override duplicate justification', rows: 2 },
+	{ name: 'Optional - Override Age Justification', label: 'Override age justification', rows: 2 }
+] as const;
+export type Justifications = Record<string, string | null>;
+
+const OVERRIDE_JUSTIFICATION = 'Optional - Override Hours Spent Justification';
+// what writeReviewToAirtable writes on its own, so it knows not to replace
+// anything a reviewer typed in themselves
+const AUTO_JUSTIFICATION_PREFIX = 'Expedition review:';
+
+/** The current justification values on a Hack Club submission row. */
+export async function getJustifications(recordId: string): Promise<Justifications> {
+	const u = new URL(`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${recordId}`);
+	for (const f of JUSTIFICATION_FIELDS) u.searchParams.append('fields[]', f.name);
+	const res = await fetch(u, { headers: headers(), signal: AbortSignal.timeout(15000) });
+	if (!res.ok) throw new Error(`Couldn't read the submission from Airtable (${res.status})`);
+	const fields = ((await res.json()) as { fields: Record<string, unknown> }).fields ?? {};
+	return Object.fromEntries(
+		JUSTIFICATION_FIELDS.map((f) => {
+			const v = fields[f.name];
+			return [f.name, v === undefined || v === null ? null : String(v)];
+		})
+	);
+}
+
+/** Write a reviewer's edits to the justification fields. Blank clears the field. */
+export async function saveJustifications(recordId: string, values: Justifications): Promise<void> {
+	const res = await fetch(
+		`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${recordId}`,
+		{
+			method: 'PATCH',
+			headers: headers(),
+			signal: AbortSignal.timeout(15000),
+			body: JSON.stringify({ typecast: true, fields: values })
+		}
+	);
+	if (!res.ok) {
+		const body = await res.text();
+		throw new Error(`Airtable didn't accept the justification (${res.status}): ${body.slice(0, 300)}`);
+	}
+}
+
 interface AirtableRecord<F> {
 	id: string;
 	createdTime: string;
@@ -182,8 +238,11 @@ export interface NewSubmission {
  */
 export async function createSubmission(
 	s: NewSubmission,
-	screenshot: { bytes: ArrayBuffer; contentType: string; filename: string }
+	screenshot: { bytes: ArrayBuffer; contentType: string; filename: string },
+	/** a reviewer's justification edits; blank ones are left out */
+	justifications: Justifications = {}
 ): Promise<{ id: string; createdTime: string }> {
+	const extra = Object.fromEntries(Object.entries(justifications).filter(([, v]) => v !== null && v !== ''));
 	const table = `${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}`;
 
 	const res = await fetch(table, {
@@ -214,7 +273,8 @@ export async function createSubmission(
 						'What are we doing well?': s.doingWell ?? undefined,
 						'How can we improve?': s.improve ?? undefined,
 						'Justification - Submitter Hackatime ID': s.hackatimeUserId,
-						'Justification - Hackatime Project Name(s) + Date Range(s)': s.projectName
+						'Justification - Hackatime Project Name(s) + Date Range(s)': s.projectName,
+						...extra
 					}
 				}
 			]
@@ -268,7 +328,7 @@ export async function writeReviewToAirtable(
 	};
 
 	const justification = [
-		`Expedition review: ${statusLabel[review.status]} (${review.hackatime_project})`,
+		`${AUTO_JUSTIFICATION_PREFIX} ${statusLabel[review.status]} (${review.hackatime_project})`,
 		reviewer && `Reviewer: ${reviewer.display_name ?? reviewer.email ?? reviewer.hackclub_id}`,
 		review.reviewed_at && `Reviewed at: ${new Date(review.reviewed_at).toLocaleString()}`,
 		review.participant_feedback && `Feedback to participant: ${review.participant_feedback}`,
@@ -276,6 +336,16 @@ export async function writeReviewToAirtable(
 	]
 		.filter(Boolean)
 		.join('\n');
+
+	// Only fill in the justification when it's empty or still our own
+	// automatic text; if a reviewer wrote their own, leave it alone.
+	let current: string | null = null;
+	try {
+		current = (await getJustifications(submission.airtable_record_id))[OVERRIDE_JUSTIFICATION];
+	} catch {
+		// can't tell, so keep the old behaviour and write it
+	}
+	const keepReviewers = !!current && !current.startsWith(AUTO_JUSTIFICATION_PREFIX);
 
 	const res = await fetch(
 		`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${submission.airtable_record_id}`,
@@ -286,7 +356,7 @@ export async function writeReviewToAirtable(
 			body: JSON.stringify({
 				fields: {
 					'Optional - Override Hours Spent': review.approved_hours ?? undefined,
-					'Optional - Override Hours Spent Justification': justification
+					...(keepReviewers ? {} : { [OVERRIDE_JUSTIFICATION]: justification })
 				}
 			})
 		}

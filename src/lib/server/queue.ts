@@ -1,5 +1,5 @@
 import { db } from './supabase';
-import { createSubmission, writeReviewToAirtable } from './airtable';
+import { createSubmission, writeReviewToAirtable, type Justifications } from './airtable';
 import { getOrCreateReview } from './queries';
 import { submitReview } from './review';
 import type { SubmissionFields } from './submission-fields';
@@ -99,10 +99,14 @@ export async function screenshotUrl(path: string | null): Promise<string | null>
 }
 
 /** A reviewer's edits to what was submitted. Not allowed once it's been sent. */
-export async function updateQueuedFields(id: string, fields: SubmissionFields): Promise<void> {
+export async function updateQueuedFields(
+	id: string,
+	fields: SubmissionFields,
+	justifications?: Justifications
+): Promise<void> {
 	const { error } = await db()
 		.from('submission_queue')
-		.update(fields)
+		.update(justifications ? { ...fields, justifications } : fields)
 		.eq('id', id)
 		.neq('status', 'sent');
 	if (error) throw new Error(error.message);
@@ -206,7 +210,8 @@ export async function sendQueued(params: {
 					bytes: await file.data.arrayBuffer(),
 					contentType: q.screenshot_type ?? 'image/png',
 					filename: q.screenshot_name ?? 'screenshot.png'
-				}
+				},
+				q.justifications ?? {}
 			);
 			recordId = record.id;
 			createdTime = record.createdTime;

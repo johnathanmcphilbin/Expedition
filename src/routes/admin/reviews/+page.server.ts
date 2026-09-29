@@ -11,7 +11,13 @@ import {
 	linkSubmissionToUser,
 	reopenReview
 } from '$lib/server/queries';
-import { syncHackClubSubmissions, writeReviewToAirtable } from '$lib/server/airtable';
+import {
+	syncHackClubSubmissions,
+	writeReviewToAirtable,
+	getJustifications,
+	saveJustifications,
+	JUSTIFICATION_FIELDS
+} from '$lib/server/airtable';
 import { fetchProjectTimes, formatHours } from '$lib/server/hackatime';
 import { submitReview } from '$lib/server/review';
 import { listProjectCheckpoints, unlockedCount } from '$lib/server/checkpoints';
@@ -24,7 +30,7 @@ import {
 	sendQueued,
 	reopenQueued
 } from '$lib/server/queue';
-import { parseSubmissionFields } from '$lib/server/submission-fields';
+import { parseSubmissionFields, parseJustifications } from '$lib/server/submission-fields';
 import { hours, text, uuid, oneOf, ValidationError } from '$lib/server/validate';
 import type { SubmissionStatus } from '$lib/server/database.types';
 import type { QueueItem } from '$lib/server/queries';
@@ -174,6 +180,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		queuedDetail = {
 			row,
 			picked,
+			justifications: {
+				'Justification - Hackatime Project Name(s) + Date Range(s)': picked.join(', '),
+				'Justification - Submitter Hackatime ID': row.hackatime_user_id,
+				...Object.fromEntries(Object.entries(row.justifications ?? {}).filter(([, v]) => v !== null))
+			} as Record<string, string | null>,
 			screenshot: shot,
 			projects,
 			hackatimeUnavailable: times === null,
@@ -194,6 +205,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		balance: Awaited<ReturnType<typeof getBalance>> | null;
 		linkCandidates: Awaited<ReturnType<typeof searchUsers>>;
 		checkpoints: Awaited<ReturnType<typeof listProjectCheckpoints>>;
+		justifications: Record<string, string | null> | null;
+		justificationsError: string | null;
 	} | null = null;
 
 	if (selectedRow) {
@@ -229,9 +242,19 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			? (await Promise.all(cpProjects.map((n) => listProjectCheckpoints(selectedRow.submission.user_id!, n)))).flat()
 			: [];
 
+		let justifications: Record<string, string | null> | null = null;
+		let justificationsError: string | null = null;
+		try {
+			justifications = await getJustifications(selectedRow.submission.airtable_record_id);
+		} catch (e) {
+			justificationsError = e instanceof Error ? e.message : "Couldn't read it from Airtable.";
+		}
+
 		detail = {
 			submission: selectedRow.submission,
 			review: selectedRow.review,
+			justifications,
+			justificationsError,
 			checkpoints,
 			hackatimeProjects,
 			suggestedProject,
@@ -243,6 +266,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	return {
 		queue: searched.map(({ searchText: _s, ...i }) => i),
 		selected: selectedItem ? { kind: selectedItem.kind, key: selectedItem.key } : null,
+		justificationFields: JUSTIFICATION_FIELDS.map((f, i) => ({ input: `just_${i}`, name: f.name, label: f.label, rows: f.rows })),
 		queuedDetail,
 		filter: validFilter,
 		counts,
@@ -254,6 +278,22 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
+	/** Edit Hack Club's justification fields on a submission that's already in their Airtable. */
+	saveJustification: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const form = await request.formData();
+		try {
+			const recordId = text(form.get('airtable_record_id'), 'Submission', { max: 200, required: true })!;
+			if (!/^rec[A-Za-z0-9]{10,20}$/.test(recordId)) return fail(400, { justMessage: 'Invalid submission.' });
+			await saveJustifications(recordId, parseJustifications(form));
+			return { justSaved: true };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { justMessage: e.message });
+			console.error('saveJustification', e);
+			return fail(502, { justMessage: "Airtable didn't accept that. Nothing changed, so you can try again." });
+		}
+	},
+
 	/** Queued (not yet sent) submission: rejected / needs changes -> back to waiting. */
 	reopenNew: async ({ request, locals }) => {
 		requireAdmin(locals);
@@ -311,7 +351,7 @@ export const actions: Actions = {
 				return fail(400, { message: 'Give them some feedback to act on.' });
 			}
 
-			await updateQueuedFields(id, fields);
+			await updateQueuedFields(id, fields, parseJustifications(form));
 
 			if (decision === 'approve') {
 				const matched = (times ?? []).filter((t) => fields.hackatime_projects.includes(t.name));

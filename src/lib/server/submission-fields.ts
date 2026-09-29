@@ -1,4 +1,16 @@
 import { text, url, email, ValidationError } from './validate';
+import { JUSTIFICATION_FIELDS, type Justifications } from './airtable';
+
+/**
+ * The justification section of a review form. Inputs are named `just_<n>`
+ * (Airtable's field names have commas and brackets in them), mapped back to
+ * the exact field name here. Blank means clear.
+ */
+export function parseJustifications(form: FormData): Justifications {
+	return Object.fromEntries(
+		JUSTIFICATION_FIELDS.map((f, i) => [f.name, text(form.get(`just_${i}`), f.label, { max: 5000 })])
+	);
+}
 
 /**
  * The fields of a project submission, as the participant fills them in and as

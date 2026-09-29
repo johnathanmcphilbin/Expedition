@@ -102,6 +102,8 @@ export type QueuedSubmissionRow = {
 	hackatime_user_id: string;
 	project_name: string;
 	hackatime_projects: string[];
+	/** reviewer edits to Hack Club's justification fields, by Airtable field name */
+	justifications: Record<string, string | null>;
 	hardware: boolean;
 	code_url: string;
 	playable_url: string;

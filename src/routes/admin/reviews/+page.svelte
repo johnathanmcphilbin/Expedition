@@ -2,6 +2,7 @@
 	import '$lib/styles/app.css';
 	import { enhance } from '$app/forms';
 	import CheckpointTimeline from '$lib/components/CheckpointTimeline.svelte';
+	import JustificationFields from '$lib/components/JustificationFields.svelte';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -251,6 +252,11 @@
 								<div class="field"><label for="improve">How can we improve?</label><textarea id="improve" name="improve" rows="2">{r.improve ?? ''}</textarea></div>
 							</details>
 
+							<details class="justify" open>
+								<summary>Hack Club justification <span class="optional">sent to Hack Club when you approve</span></summary>
+								<JustificationFields fields={data.justificationFields} values={data.queuedDetail.justifications} />
+							</details>
+
 							<fieldset class="decision">
 								<legend>Your review</legend>
 								<div class="field hours">
@@ -420,6 +426,24 @@
 							</form>
 						{/if}
 					</div>
+
+					<details class="justify" open>
+						<summary>Hack Club justification <span class="optional">saved straight to their Airtable</span></summary>
+						{#if data.detail.justifications}
+							<form method="POST" action="?/saveJustification" use:enhance={() => async ({ update }) => update({ reset: false })}>
+								<input type="hidden" name="airtable_record_id" value={s.airtable_record_id} />
+								<JustificationFields fields={data.justificationFields} values={data.detail.justifications} />
+								{#if form && 'justMessage' in form && form.justMessage}
+									<p class="error">{form.justMessage}</p>
+								{:else if form && 'justSaved' in form && form.justSaved}
+									<p class="saved">Saved to Hack Club's Airtable.</p>
+								{/if}
+								<button class="btn btn-outline" type="submit">Save to Hack Club</button>
+							</form>
+						{:else}
+							<p class="error">Couldn't load it from Airtable: {data.detail.justificationsError}</p>
+						{/if}
+					</details>
 				{/if}
 			</section>
 		</div>
@@ -427,6 +451,17 @@
 </main>
 
 <style>
+	.justify {
+		margin-top: 1.5rem;
+		padding-top: 1.2rem;
+		border-top: 2px solid var(--rule);
+	}
+	.justify summary {
+		cursor: pointer;
+		font-weight: 800;
+		color: var(--navy);
+		margin-bottom: 1rem;
+	}
 	.reopen {
 		display: flex;
 		align-items: center;
