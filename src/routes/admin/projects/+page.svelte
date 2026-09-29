@@ -51,7 +51,7 @@
 	const shown = $derived.by(() => {
 		const q = search.trim().toLowerCase();
 		const rows = data.projects.filter((r) => {
-			if (q && !`${r.project} ${r.builder} ${r.languages.join(' ')}`.toLowerCase().includes(q)) return false;
+			if (q && !`${r.project} ${r.builder} ${r.email ?? ''} ${r.languages.join(' ')}`.toLowerCase().includes(q)) return false;
 			if (stage !== 'all' && r.stage !== stage) return false;
 			if (minHours !== null && (r.hours ?? 0) < minHours) return false;
 			const a = age(r);
@@ -115,7 +115,7 @@
 		</nav>
 
 		<div class="filters">
-			<input class="f-search" type="search" placeholder="Search project, builder or language" aria-label="Search" bind:value={search} />
+			<input class="f-search" type="search" placeholder="Search project, builder, email or language" aria-label="Search" bind:value={search} />
 			<label class="f">
 				<span>Active</span>
 				<select bind:value={activity}>
@@ -159,7 +159,14 @@
 								<span class="p-name">{r.project}</span>
 								{#if r.languages.length}<span class="p-lang">{r.languages.join(', ')}</span>{/if}
 							</td>
-							<td class="builder">{r.builder}</td>
+							<td class="builder">
+								<span class="b-name">{r.builder}</span>
+								{#if r.email}
+									<a class="b-email" href="mailto:{r.email}">{r.email}</a>
+								{:else}
+									<span class="b-email muted">no email</span>
+								{/if}
+							</td>
 							<td class="num hours">{#if r.hours === null}<span class="muted" title={r.reachable ? 'Not in their Hackatime any more' : "Couldn't reach their Hackatime"}>–</span>{:else}{r.hours}h{/if}</td>
 							<td class="when" class:live={isLive(r)}>
 								{#if isLive(r)}<span class="dot" aria-hidden="true"></span>{/if}{ago(r.lastBeat)}
@@ -322,8 +329,17 @@
 		color: var(--muted);
 	}
 	.builder {
-		font-weight: 600;
 		white-space: nowrap;
+	}
+	.b-name {
+		display: block;
+		font-weight: 600;
+	}
+	.b-email {
+		display: block;
+		font-size: 0.8rem;
+		font-weight: 500;
+		color: var(--blue-dark);
 	}
 	.hours {
 		font-weight: 800;

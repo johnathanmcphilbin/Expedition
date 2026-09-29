@@ -13,8 +13,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const [connected, reviews, queued, hcSubs, checkpoints] = await Promise.all([
 		getConnectedProjects(),
 		db().from('submission_reviews').select('user_id, hackatime_project, hackatime_projects, status, approved_hours, airtable_record_id'),
-		db().from('submission_queue').select('id, user_id, project_name, hackatime_projects, status, created_at').neq('status', 'sent'),
-		db().from('hackclub_submissions').select('user_id, project_names_raw, airtable_record_id'),
+		db().from('submission_queue').select('id, user_id, project_name, hackatime_projects, status, created_at, email').neq('status', 'sent'),
+		db().from('hackclub_submissions').select('user_id, project_names_raw, airtable_record_id, email'),
 		db().from('checkpoints').select('user_id, hackatime_project')
 	]);
 
@@ -51,6 +51,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 		}
 	}
 
+	// an email they typed on a submission, used when their account has none
+	const typedEmail = new Map<string, string>();
+	for (const s of [...(hcSubs.data ?? []), ...(queued.data ?? [])]) {
+		if (s.user_id && s.email) typedEmail.set(s.user_id as string, s.email as string);
+	}
+
 	const posted = new Map<string, number>();
 	for (const c of checkpoints.data ?? []) {
 		const k = key(c.user_id, c.hackatime_project);
@@ -66,6 +72,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				id: key(r.userId, r.project),
 				project: r.project,
 				builder: r.builder,
+				email: typedEmail.get(r.userId) ?? r.email,
 				hours,
 				languages: r.languages,
 				lastBeat: r.lastBeat,

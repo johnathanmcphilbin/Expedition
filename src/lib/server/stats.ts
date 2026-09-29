@@ -1,5 +1,5 @@
 import { db } from './supabase';
-import { fetchProjectTimes } from './hackatime';
+import { fetchProjectTimes, fetchHackatimeProfile } from './hackatime';
 
 /**
  * Admin-only numbers about what's happening across Expedition right now.
@@ -42,6 +42,8 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
 export type ConnectedProject = {
 	userId: string;
 	builder: string;
+	/** from their Expedition account, else their Hackatime */
+	email: string | null;
 	project: string;
 	seconds: number | null;
 	languages: string[];
@@ -61,26 +63,32 @@ export async function getConnectedProjects(): Promise<{ rows: ConnectedProject[]
 
 	const { data, error } = await db()
 		.from('expedition_projects')
-		.select('user_id, hackatime_project, users(display_name)');
+		.select('user_id, hackatime_project, users(display_name, email)');
 	if (error) throw new Error(error.message);
 	const raw = (data ?? []) as unknown as {
 		user_id: string;
 		hackatime_project: string;
-		users: { display_name: string | null } | null;
+		users: { display_name: string | null; email: string | null } | null;
 	}[];
 
-	const byUser = new Map<string, { name: string; projects: string[] }>();
+	const byUser = new Map<string, { name: string; email: string | null; projects: string[] }>();
 	for (const r of raw) {
-		const u = byUser.get(r.user_id) ?? { name: r.users?.display_name ?? 'Unknown', projects: [] };
+		const u = byUser.get(r.user_id) ?? {
+			name: r.users?.display_name ?? 'Unknown',
+			email: r.users?.email ?? null,
+			projects: []
+		};
 		u.projects.push(r.hackatime_project);
 		byUser.set(r.user_id, u);
 	}
 
-	const results = await mapLimit([...byUser.entries()], 8, async ([userId, u]) => ({
-		userId,
-		u,
-		times: await fetchProjectTimes(userId)
-	}));
+	const results = await mapLimit([...byUser.entries()], 8, async ([userId, u]) => {
+		const [times, profile] = await Promise.all([
+			fetchProjectTimes(userId),
+			u.email ? Promise.resolve(null) : fetchHackatimeProfile(userId)
+		]);
+		return { userId, u: { ...u, email: u.email ?? profile?.email ?? null }, times };
+	});
 
 	const rows: ConnectedProject[] = [];
 	for (const { userId, u, times } of results) {
@@ -89,6 +97,7 @@ export async function getConnectedProjects(): Promise<{ rows: ConnectedProject[]
 			rows.push({
 				userId,
 				builder: u.name,
+				email: u.email,
 				project: name,
 				seconds: t ? t.totalSeconds : null,
 				languages: t ? t.languages.slice(0, 3) : [],
