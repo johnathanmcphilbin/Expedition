@@ -9,6 +9,11 @@
 
 	let grantingFor = $state<string | null>(null);
 
+	type BuilderRow = (typeof data.builders)[number];
+	const sum = (k: 'approved' | 'rewards' | 'travel' | 'available') =>
+		data.builders.reduce((t: number, b: BuilderRow) => t + Number(b[k]), 0);
+	const round = (n: number) => Math.round(n * 100) / 100;
+
 	const totalBanked = $derived(
 		data.users.reduce((sum, u) => sum + Number(u.balance.hours_available), 0)
 	);
@@ -29,6 +34,9 @@
 			<div class="head-actions">
 				<a class="btn btn-outline" href="/admin/reviews">
 					Review queue{data.pendingReviews ? ` (${data.pendingReviews})` : ''}
+				</a>
+				<a class="btn btn-outline" href="/admin/fulfilment">
+					Fulfilment{data.claims.filter((c) => c.status === 'requested').length ? ` (${data.claims.filter((c) => c.status === 'requested').length} to send)` : ''}
 				</a>
 				<a class="btn btn-outline" href="/admin/projects">Projects</a>
 				<a class="btn btn-outline" href="/admin/checkpoints">
@@ -116,132 +124,195 @@
 			</p>
 		</section>
 
-		<p class="section-label">Reward claims</p>
-		{#if data.claims.length}
-			<div class="row-list roster" style="margin-bottom:2.5rem">
-				{#each data.claims as c (c.id)}
-					<div class="roster-row">
-						<div class="roster-id">
-							<span class="row-title">{c.reward_name}</span>
-							<span class="row-meta">
-								{c.owner?.display_name ?? 'unknown'}{c.owner?.email ? ` · ${c.owner.email}` : ''}
-							</span>
-							{#if c.note}<span class="row-meta">“{c.note}”</span>{/if}
-						</div>
-						<div class="roster-balance">
-							<span class="row-title">{c.hours_cost}h</span>
-							<span class="row-meta">{new Date(c.created_at).toLocaleDateString()}</span>
-						</div>
-						<span class="status status-{c.status === 'fulfilled'
-							? 'approved'
-							: c.status === 'cancelled'
-								? 'rejected'
-								: 'pending'}">{c.status}</span>
+		<div class="b-head">
+			<p class="section-label">People with approved hours</p>
+			<p class="b-totals">
+				<strong>{data.builders.length}</strong> people ·
+				<strong>{round(sum('approved'))}h</strong> approved ·
+				<strong>{round(sum('rewards'))}h</strong> on rewards ·
+				<strong>{round(sum('travel'))}h</strong> banked for Dublin (${round(sum('travel') * TRAVEL_RATE)}) ·
+				<strong>{round(sum('available'))}h</strong> unspent
+			</p>
+		</div>
 
-						{#if c.status === 'requested'}
-							<form method="POST" action="?/fulfil" use:enhance style="display:inline">
-								<input type="hidden" name="claim_id" value={c.id} />
-								<button class="btn btn-outline" type="submit">Mark sent</button>
-							</form>
-							<form method="POST" action="?/cancel" use:enhance style="display:inline">
-								<input type="hidden" name="claim_id" value={c.id} />
-								<button class="link-action" type="submit">Cancel &amp; refund</button>
-							</form>
-						{/if}
-					</div>
-				{/each}
+		{#if data.builders.length}
+			<div class="table-wrap">
+				<table class="builders">
+					<thead>
+						<tr>
+							<th>Builder</th>
+							<th class="num">Approved</th>
+							<th>Rewards</th>
+							<th>Dublin travel fund</th>
+							<th class="num">Unspent</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each data.builders as u (u.id)}
+							<tr>
+								<td>
+									<span class="b-name">{u.name}</span>
+									{#if u.email}<a class="b-email" href="mailto:{u.email}">{u.email}</a>{:else}<span class="b-email muted">no email</span>{/if}
+								</td>
+								<td class="num strong">{u.approved}h</td>
+								<td>
+									{#if u.rewards > 0}
+										<span class="strong">{u.rewards}h</span>
+										<span class="b-sub">
+											{#each u.rewardItems as r, i (i)}{r.name}{r.status === 'requested' ? ' (to send)' : ''}{i < u.rewardItems.length - 1 ? ', ' : ''}{/each}
+										</span>
+									{:else}
+										<span class="muted">none</span>
+									{/if}
+								</td>
+								<td>
+									{#if u.travel > 0}
+										<span class="strong">{u.travel}h</span> <span class="b-sub-inline">${(u.travel * TRAVEL_RATE).toFixed(2)}</span>
+										{#if u.buckets}
+											<span class="b-sub">Visa {u.buckets.visa}h · Accommodation {u.buckets.accommodation}h · Flights {u.buckets.flights}h</span>
+										{/if}
+									{:else}
+										<span class="muted">none</span>
+									{/if}
+									{#if u.travel > 0 || u.travelLocked}
+										<form method="POST" action="?/travelLock" use:enhance class="lock">
+											<input type="hidden" name="user_id" value={u.id} />
+											<input type="hidden" name="locked" value={u.travelLocked ? 'no' : 'yes'} />
+											{#if u.travelLocked}<span class="locked">Locked</span>{/if}
+											<button class="text-btn" type="submit">{u.travelLocked ? 'Unlock' : 'Lock fund'}</button>
+										</form>
+									{/if}
+								</td>
+								<td class="num">
+									<span class="strong">{u.available}h</span>
+									{#if u.adjustments !== 0}
+										<span class="b-sub">{u.adjustments > 0 ? '+' : ''}{u.adjustments}h corrections</span>
+									{/if}
+								</td>
+								<td class="act">
+									{#if grantingFor === u.id}
+										<form
+											method="POST"
+											action="?/grant"
+											class="grant-form"
+											use:enhance={() => async ({ update }) => {
+												await update();
+												grantingFor = null;
+											}}>
+											<input type="hidden" name="user_id" value={u.id} />
+											<select name="type" required>
+												<option value="manual_adjustment">Correction (+/-)</option>
+												<option value="reward_claimed">Reward given (deduct)</option>
+											</select>
+											<input name="amount" type="number" step="0.25" placeholder="Hours" required style="width:6rem" />
+											<input name="note" type="text" maxlength="500" placeholder="Note (optional)" />
+											<button class="btn btn-outline" type="submit">Save</button>
+											<button type="button" class="link-action" onclick={() => (grantingFor = null)}>Cancel</button>
+										</form>
+										{#if form?.message}<p class="hint error">{form.message}</p>{/if}
+									{:else}
+										<button type="button" class="text-btn" onclick={() => (grantingFor = u.id)}>Adjust hours</button>
+									{/if}
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
 			</div>
 		{:else}
-			<p class="empty" style="margin-bottom:2.5rem">No claims yet.</p>
+			<p class="empty">Nobody has approved hours yet.</p>
 		{/if}
-
-		<p class="section-label">Everyone's hours</p>
-		<div class="row-list roster">
-			{#each data.users as u (u.id)}
-				<div class="roster-row">
-					<div class="roster-id">
-						<span class="row-title">{u.display_name ?? 'Unnamed'}</span>
-						<span class="row-meta">
-							{u.email ?? 'no email on file'}{u.slack_id ? ` · Slack ${u.slack_id}` : ''}
-						</span>
-					</div>
-					<div class="roster-balance">
-						<span class="row-title">{u.balance.hours_available}h</span>
-						<span class="row-meta">
-							{u.balance.hours_earned}h earned &middot; {u.balance.hours_spent}h spent
-						</span>
-						{#if Number(u.balance.hours_travel) > 0 || u.travel_locked_at}
-							<span class="row-meta">
-								{u.balance.hours_travel}h for Dublin (${(Number(u.balance.hours_travel) * TRAVEL_RATE).toFixed(2)})
-								{#if u.travel_locked_at}&middot; <strong>locked</strong>{/if}
-							</span>
-							{#if data.travelBuckets[u.id]}
-								{@const b = data.travelBuckets[u.id]}
-								<span class="row-meta">
-									Visa {b.visa}h &middot; Accommodation {b.accommodation}h &middot; Flights {b.flights}h
-								</span>
-							{/if}
-							<form method="POST" action="?/travelLock" use:enhance>
-								<input type="hidden" name="user_id" value={u.id} />
-								<input type="hidden" name="locked" value={u.travel_locked_at ? 'no' : 'yes'} />
-								<button class="text-btn" type="submit">
-									{u.travel_locked_at ? 'Unlock travel fund' : 'Lock travel fund'}
-								</button>
-							</form>
-						{/if}
-					</div>
-
-					{#if grantingFor === u.id}
-						<form
-							method="POST"
-							action="?/grant"
-							class="grant-form"
-							use:enhance={() => {
-								return async ({ update }) => {
-									await update();
-									grantingFor = null;
-								};
-							}}>
-							<input type="hidden" name="user_id" value={u.id} />
-							<select name="type" required>
-								<option value="manual_adjustment">Correction (+/-)</option>
-								<option value="reward_claimed">Reward given (deduct)</option>
-							</select>
-							<input
-								name="amount"
-								type="number"
-								step="0.25"
-								placeholder="Hours"
-								required
-								style="width:6rem" />
-							<input name="note" type="text" maxlength="500" placeholder="Note (optional)" />
-							<button class="btn btn-outline" type="submit">Save</button>
-							<button
-								type="button"
-								class="link-action"
-								onclick={() => (grantingFor = null)}>
-								Cancel
-							</button>
-						</form>
-						{#if form?.message}
-							<p class="hint error">{form.message}</p>
-						{/if}
-					{:else}
-						<button
-							type="button"
-							class="btn btn-outline"
-							onclick={() => (grantingFor = u.id)}>
-							Grant / deduct
-						</button>
-					{/if}
-				</div>
-			{/each}
-		</div>
 	</div>
 </main>
 <Footer />
 
 <style>
+	.b-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.5rem 1.5rem;
+		flex-wrap: wrap;
+		margin-bottom: 0.6rem;
+	}
+	.b-totals {
+		font-size: 0.9rem;
+		color: var(--slate);
+	}
+	.table-wrap {
+		overflow-x: auto;
+		background: var(--white);
+		border: 3px solid var(--navy);
+	}
+	table.builders {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.92rem;
+	}
+	.builders th {
+		padding: 0.65rem 0.9rem;
+		background: var(--navy);
+		color: var(--white);
+		text-align: left;
+		font-size: 0.75rem;
+		font-weight: 800;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		white-space: nowrap;
+	}
+	.builders td {
+		padding: 0.65rem 0.9rem;
+		border-top: 1px solid var(--rule);
+		vertical-align: top;
+	}
+	.builders tbody tr:nth-child(even) td {
+		background: #f7f9fb;
+	}
+	.builders .num {
+		text-align: right;
+		white-space: nowrap;
+	}
+	.strong {
+		font-weight: 800;
+		color: var(--navy);
+	}
+	.b-name {
+		display: block;
+		font-weight: 700;
+		color: var(--navy);
+	}
+	.b-email,
+	.b-sub {
+		display: block;
+		font-size: 0.8rem;
+		color: var(--muted);
+	}
+	.b-email {
+		color: var(--blue-dark);
+	}
+	.b-sub-inline {
+		font-size: 0.8rem;
+		color: var(--muted);
+	}
+	.muted {
+		color: var(--muted);
+	}
+	.lock {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-top: 0.3rem;
+	}
+	.locked {
+		font-size: 0.72rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		color: var(--orange-dark);
+	}
+	.act {
+		white-space: nowrap;
+	}
 	.stats {
 		margin-bottom: 2.5rem;
 		border: 3px solid var(--navy);
@@ -340,25 +411,6 @@
 		gap: 0.6rem;
 		align-items: flex-start;
 	}
-	.roster {
-		display: flex;
-		flex-direction: column;
-		gap: 0.7rem;
-	}
-	.roster-row {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 1rem;
-		padding: 1rem;
-		border: 1.5px solid var(--rule);
-	}
-	.roster-id {
-		display: flex;
-		flex-direction: column;
-		min-width: 14rem;
-		flex: 1;
-	}
 	.text-btn {
 		background: none;
 		border: 0;
@@ -369,11 +421,6 @@
 		color: var(--blue-dark);
 		text-decoration: underline;
 		cursor: pointer;
-	}
-	.roster-balance {
-		display: flex;
-		flex-direction: column;
-		text-align: right;
 	}
 	.grant-form {
 		display: flex;

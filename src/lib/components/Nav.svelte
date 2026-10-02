@@ -49,7 +49,7 @@
 
 <svelte:window onscroll={onScroll} />
 
-<header class="nav">
+<header class="nav" class:admin={!!currentUser?.isAdmin}>
 	<a
 		class="hc-mark"
 		href="https://hackclub.com"
@@ -75,6 +75,7 @@
 			{#if currentUser}
 				{#if currentUser.isAdmin}
 					<a href="/admin/reviews">Reviews</a>
+					<a href="/admin/fulfilment">Fulfilment</a>
 					<a href="/admin">Admin</a>
 				{/if}
 				<a href="/dashboard">Dashboard</a>
@@ -295,6 +296,16 @@
 	@media (max-width: 1180px) {
 		.count {
 			display: none;
+		}
+	}
+	/* admins carry the most links (Reviews, Fulfilment, Admin, Dashboard):
+	   tighter spacing, and the builder count lives on /admin instead */
+	.nav.admin .count {
+		display: none;
+	}
+	@media (min-width: 1181px) {
+		.nav.admin .links {
+			gap: 1.15rem;
 		}
 	}
 	/* signed-in nav carries more links (Reviews, Admin, Dashboard) */

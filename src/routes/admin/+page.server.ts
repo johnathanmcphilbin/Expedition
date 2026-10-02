@@ -15,6 +15,7 @@ import { countAwaitingModeration } from '$lib/server/checkpoints';
 import { countQueuePending } from '$lib/server/queue';
 import { getActivityStats, getOverviewStats } from '$lib/server/stats';
 import { signedHours, text, oneOf, uuid, ValidationError } from '$lib/server/validate';
+import { db } from '$lib/server/supabase';
 
 // travel moves need a bucket and go through move_travel_hours, not here
 const GRANT_TYPES = ['manual_adjustment', 'reward_claimed'] as const;
@@ -22,19 +23,54 @@ const GRANT_TYPES = ['manual_adjustment', 'reward_claimed'] as const;
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
 
-	const [users, pendingOld, pendingNew, claims, buckets, sharedWaiting, overview] = await Promise.all([
+	const [users, pendingOld, pendingNew, claims, buckets, sharedWaiting, overview, progress, subs] = await Promise.all([
 		listUsersWithBalances(),
 		countPendingReviews(),
 		countQueuePending(),
 		listAllClaims(),
 		listAllTravelBuckets(),
 		countAwaitingModeration(),
-		getOverviewStats()
+		getOverviewStats(),
+		// approved build hours only (checkpoint_approved), same figure as the 40h milestone
+		db().from('user_expedition_progress').select('user_id, hours_earned'),
+		db().from('hackclub_submissions').select('user_id, email, airtable_created_at').order('airtable_created_at', { ascending: false })
 	]);
 
 	const travelBuckets = Object.fromEntries(buckets.map((b) => [b.user_id, b]));
+	const approvedBy = new Map((progress.data ?? []).map((p) => [p.user_id as string, Number(p.hours_earned)]));
+	const typedEmail = new Map<string, string>();
+	for (const s of subs.data ?? []) if (s.user_id && s.email && !typedEmail.has(s.user_id)) typedEmail.set(s.user_id, s.email);
+
+	// Only people with approved hours, and where those hours have gone.
+	const builders = users
+		.filter((u) => (approvedBy.get(u.id) ?? 0) > 0)
+		.map((u) => {
+			const approved = approvedBy.get(u.id) ?? 0;
+			const live = claims.filter((c) => c.user_id === u.id && c.status !== 'cancelled');
+			const rewards = live.reduce((sum, c) => sum + Number(c.hours_cost), 0);
+			const travel = Number(u.balance.hours_travel);
+			const available = Number(u.balance.hours_available);
+			const round = (n: number) => Math.round(n * 100) / 100;
+			return {
+				id: u.id,
+				name: u.display_name ?? 'Unnamed',
+				email: u.email ?? typedEmail.get(u.id) ?? null,
+				approved,
+				rewards: round(rewards),
+				rewardItems: live.map((c) => ({ name: c.reward_name, status: c.status })),
+				travel,
+				travelLocked: !!u.travel_locked_at,
+				buckets: travelBuckets[u.id] ?? null,
+				available,
+				// anything the ledger has that isn't approval / claims / travel
+				adjustments: round(available - (approved - rewards - travel))
+			};
+		})
+		.sort((a, b) => b.approved - a.approved);
+
 	return {
 		users,
+		builders,
 		pendingReviews: pendingOld + pendingNew,
 		claims,
 		travelBuckets,

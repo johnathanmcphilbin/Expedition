@@ -458,7 +458,9 @@ export async function fulfilClaim(claimId: string, adminNotes: string | null): P
 			fulfilled_at: new Date().toISOString(),
 			admin_notes: adminNotes
 		})
-		.eq('id', claimId);
+		.eq('id', claimId)
+		// a cancelled (refunded) claim can't then be marked sent
+		.eq('status', 'requested');
 	if (e) throw new Error(e.message);
 }
 

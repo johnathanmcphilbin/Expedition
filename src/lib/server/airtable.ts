@@ -76,6 +76,37 @@ export async function saveJustifications(recordId: string, values: Justification
 	}
 }
 
+const ADDRESS_FIELDS = [
+	'First Name',
+	'Last Name',
+	'Address (Line 1)',
+	'Address (Line 2)',
+	'City',
+	'State / Province',
+	'ZIP / Postal Code',
+	'Country'
+] as const;
+
+/**
+ * Where to ship a claimed reward: the address on the person's Hack Club
+ * submission. Expedition never stores addresses itself.
+ */
+export async function getShippingAddress(recordId: string): Promise<string[] | null> {
+	const u = new URL(`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${recordId}`);
+	for (const f of ADDRESS_FIELDS) u.searchParams.append('fields[]', f);
+	const res = await fetch(u, { headers: headers(), signal: AbortSignal.timeout(10000) });
+	if (!res.ok) return null;
+	const f = ((await res.json()) as { fields: Record<string, string | undefined> }).fields ?? {};
+	if (!f['Address (Line 1)']) return null;
+	return [
+		[f['First Name'], f['Last Name']].filter(Boolean).join(' '),
+		f['Address (Line 1)'],
+		f['Address (Line 2)'],
+		[f['City'], f['State / Province'], f['ZIP / Postal Code']].filter(Boolean).join(', '),
+		f['Country']
+	].filter((l): l is string => !!l && !!l.trim());
+}
+
 interface AirtableRecord<F> {
 	id: string;
 	createdTime: string;
