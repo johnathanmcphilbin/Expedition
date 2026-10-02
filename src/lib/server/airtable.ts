@@ -1,6 +1,6 @@
 import { config } from './env';
 import { db } from './supabase';
-import type { HackClubSubmissionRow, SubmissionReviewRow, UserRow } from './database.types';
+import type { HackClubSubmissionRow, SubmissionReviewRow } from './database.types';
 
 /**
  * Hack Club's Unified YSWS Airtable — the canonical record of what was
@@ -39,10 +39,24 @@ export const JUSTIFICATION_FIELDS = [
 ] as const;
 export type Justifications = Record<string, string | null>;
 
-const OVERRIDE_JUSTIFICATION = 'Optional - Override Hours Spent Justification';
-// what writeReviewToAirtable writes on its own, so it knows not to replace
-// anything a reviewer typed in themselves
-const AUTO_JUSTIFICATION_PREFIX = 'Expedition review:';
+const ADDITIONAL_JUSTIFICATION = 'Justification - Additional Justification';
+const REVIEW_FEEDBACK_START = '--- Expedition feedback to participant ---';
+const REVIEW_FEEDBACK_END = '--- End Expedition feedback to participant ---';
+
+function withParticipantFeedback(current: string | null, feedback: string | null): string | null {
+	const value = current ?? '';
+	const start = value.indexOf(REVIEW_FEEDBACK_START);
+	const end = start < 0 ? -1 : value.indexOf(REVIEW_FEEDBACK_END, start);
+	const preserved =
+		start >= 0 && end >= 0
+			? `${value.slice(0, start).trimEnd()}\n${value.slice(end + REVIEW_FEEDBACK_END.length).trimStart()}`.trim()
+			: value.trim();
+	const managed = feedback
+		? `${REVIEW_FEEDBACK_START}\n${feedback}\n${REVIEW_FEEDBACK_END}`
+		: '';
+	const result = [preserved, managed].filter(Boolean).join('\n\n');
+	return result || null;
+}
 
 /** The current justification values on a Hack Club submission row. */
 export async function getJustifications(recordId: string): Promise<Justifications> {
@@ -347,36 +361,13 @@ export async function createSubmission(
  */
 export async function writeReviewToAirtable(
 	review: SubmissionReviewRow,
-	submission: HackClubSubmissionRow,
-	reviewer: UserRow | null
+	submission: HackClubSubmissionRow
 ): Promise<void> {
-	const statusLabel: Record<SubmissionReviewRow['status'], string> = {
-		pending: 'Pending',
-		in_review: 'Pending',
-		approved: 'Approved',
-		changes_requested: 'Needs Changes',
-		rejected: 'Rejected'
-	};
-
-	const justification = [
-		`${AUTO_JUSTIFICATION_PREFIX} ${statusLabel[review.status]} (${review.hackatime_project})`,
-		reviewer && `Reviewer: ${reviewer.display_name ?? reviewer.email ?? reviewer.hackclub_id}`,
-		review.reviewed_at && `Reviewed at: ${new Date(review.reviewed_at).toLocaleString()}`,
-		review.participant_feedback && `Feedback to participant: ${review.participant_feedback}`,
-		review.internal_notes && `Internal notes: ${review.internal_notes}`
-	]
-		.filter(Boolean)
-		.join('\n');
-
-	// Only fill in the justification when it's empty or still our own
-	// automatic text; if a reviewer wrote their own, leave it alone.
-	let current: string | null = null;
-	try {
-		current = (await getJustifications(submission.airtable_record_id))[OVERRIDE_JUSTIFICATION];
-	} catch {
-		// can't tell, so keep the old behaviour and write it
-	}
-	const keepReviewers = !!current && !current.startsWith(AUTO_JUSTIFICATION_PREFIX);
+	const current = await getJustifications(submission.airtable_record_id);
+	const additionalJustification = withParticipantFeedback(
+		current[ADDITIONAL_JUSTIFICATION],
+		review.participant_feedback
+	);
 
 	const res = await fetch(
 		`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${submission.airtable_record_id}`,
@@ -387,7 +378,7 @@ export async function writeReviewToAirtable(
 			body: JSON.stringify({
 				fields: {
 					'Optional - Override Hours Spent': review.approved_hours ?? undefined,
-					...(keepReviewers ? {} : { [OVERRIDE_JUSTIFICATION]: justification })
+					[ADDITIONAL_JUSTIFICATION]: additionalJustification
 				}
 			})
 		}

@@ -269,8 +269,7 @@ export async function sendQueued(params: {
 				reviewer_id: params.reviewer.id,
 				reviewed_at: new Date().toISOString()
 			},
-			{ ...cached, synced_at: cached.synced_at },
-			params.reviewer
+			{ ...cached, synced_at: cached.synced_at }
 		);
 	} catch (e) {
 		// the row and the hours are in; only the override fields are missing

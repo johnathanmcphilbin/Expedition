@@ -518,8 +518,7 @@ export const actions: Actions = {
 						created_at: review.created_at,
 						updated_at: new Date().toISOString()
 					},
-					submission,
-					reviewer
+					submission
 				);
 			} catch (e) {
 				// The review is already saved and the hours (if any) already
