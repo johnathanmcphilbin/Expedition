@@ -3,12 +3,13 @@
 	import { enhance } from '$app/forms';
 	import Footer from '$lib/components/Footer.svelte';
 	import { TRAVEL_RATE } from '$lib/data';
-	import { estimateTrip } from '$lib/travel-estimates';
+	import { skyscannerUrl } from '$lib/travel-estimates';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let grantingFor = $state<string | null>(null);
+	let findingAirports = $state(false);
 
 	type BuilderRow = (typeof data.builders)[number];
 	const sum = (k: 'approved' | 'rewards' | 'travel' | 'available') =>
@@ -32,6 +33,7 @@
 				<a class="btn btn-outline" href="/admin/fulfilment">
 					Fulfilment{data.claims.filter((c) => c.status === 'requested').length ? ` (${data.claims.filter((c) => c.status === 'requested').length} to send)` : ''}
 				</a>
+				<a class="btn btn-outline" href="/admin/arrivals">Arrivals</a>
 				<a class="btn btn-outline" href="/admin/projects">Projects</a>
 				<a class="btn btn-outline" href="/admin/checkpoints">
 					Shared checkpoints{data.sharedWaiting ? ` (${data.sharedWaiting})` : ''}
@@ -195,48 +197,22 @@
 							</tbody>
 						</table>
 					</section>
-					<section class="panel an-card wide">
-						<p class="section-label">Where people are from, and getting them to Dublin</p>
+					<section class="panel an-card">
+						<p class="section-label">Where people are from</p>
 						{#if an.countries.length}
-							{@const known = an.countries.filter((c) => c.trip)}
-							{@const everyone = known.reduce((t, c) => t + c.n * c.trip!.total, 0)}
-							<div class="trip-totals">
-								<div><span class="lt-n">{an.countriesKnown}</span><span class="lt-k">people with a country on file</span></div>
-								<div><span class="lt-n">{an.countries.length}</span><span class="lt-k">countries</span></div>
-								<div><span class="lt-n">${everyone.toLocaleString()}</span><span class="lt-k">est. flights + visas to bring all of them</span></div>
-								<div><span class="lt-n">${known.length ? Math.round(everyone / known.reduce((t, c) => t + c.n, 0)).toLocaleString() : '–'}</span><span class="lt-k">average per person</span></div>
-							</div>
-							<div class="table-scroll">
-								<table class="tracks-table trips">
-									<thead>
-										<tr><th>Country</th><th>People</th><th>Return flight</th><th>Visa</th><th>Per person</th><th>Hours to qualify</th><th>All of them</th><th></th></tr>
-									</thead>
-									<tbody>
-										{#each an.countries as c (c.country)}
-											<tr>
-												<th>{c.country}</th>
-												<td>{c.n}</td>
-												{#if c.trip}
-													<td>${c.trip.flight}</td>
-													<td>{c.trip.visa === null ? 'check' : c.trip.visa ? `$${c.trip.visa}` : 'none'}</td>
-													<td class="strong">${c.trip.total}</td>
-													<td>{c.trip.hoursToQualify}h</td>
-													<td>${(c.trip.total * c.n).toLocaleString()}</td>
-													<td><a href={c.trip.skyscanner} target="_blank" rel="noopener noreferrer">{c.trip.airport} → DUB ↗</a></td>
-												{:else}
-													<td colspan="6" class="muted">No estimate yet. Add it in src/lib/travel-estimates.ts</td>
-												{/if}
-											</tr>
-										{/each}
-									</tbody>
-								</table>
-							</div>
-							<p class="an-sub">
-								Country from each person's latest submission. Fares are rough economy returns in USD; open the Skyscanner link for today's price.
-								Hours to qualify = enough approved hours (at ${TRAVEL_RATE}/h) to cover half the flight, never more than 40.
-							</p>
+							{@const top = an.countries[0].n}
+							<ol class="funnel countries">
+								{#each an.countries.slice(0, 12) as c (c.country)}
+									<li title="{c.country}: {c.n} {c.n === 1 ? 'person' : 'people'}">
+										<span class="f-step">{c.country}</span>
+										<span class="f-track"><span class="f-bar" style="width:{(c.n / top) * 100}%"></span></span>
+										<span class="f-n">{c.n}</span>
+									</li>
+								{/each}
+							</ol>
+							<p class="an-sub">From the country on each person's latest submission · {an.countriesKnown} known</p>
 						{:else}
-							<p class="an-sub">No countries yet. They fill in from new submissions and the next Airtable sync.</p>
+							<p class="an-sub">No countries yet.</p>
 						{/if}
 					</section>
 				</div>
@@ -244,6 +220,54 @@
 				<p class="hint">Couldn't load analytics just now.</p>
 			{/if}
 		{/await}
+
+		<section class="panel trips-panel">
+			<div class="tl-head">
+				<p class="section-label">Getting people to Dublin</p>
+				<form method="POST" action="?/findAirports" use:enhance={() => { findingAirports = true; return async ({ update }) => { await update(); findingAirports = false; }; }} class="find-form">
+					<button class="text-btn" type="submit" disabled={findingAirports}>{findingAirports ? 'Finding…' : 'Find missing airports'}</button>
+					<button class="text-btn" type="submit" name="all" value="yes" disabled={findingAirports}>Redo all</button>
+				</form>
+			</div>
+			{#if form && 'airports' in form && form.airports}
+				{@const found = form.airports as { found: number; missed: number }}
+				<p class="hint">Found {found.found} airport{found.found === 1 ? '' : 's'}{found.missed ? `, couldn't place ${found.missed}` : ''}.</p>
+			{/if}
+			{#if data.travel.people}
+				<div class="trip-totals">
+					<div><span class="lt-n">{data.travel.people}</span><span class="lt-k">people with a home airport</span></div>
+					<div><span class="lt-n">${data.travel.total.toLocaleString()}</span><span class="lt-k">est. flights + visas for all of them</span></div>
+					<div><span class="lt-n">${Math.round(data.travel.total / data.travel.people).toLocaleString()}</span><span class="lt-k">average per person</span></div>
+					<div><span class="lt-n">{data.travel.countries.length}</span><span class="lt-k">countries</span></div>
+				</div>
+				<div class="table-scroll">
+					<table class="tracks-table trips">
+						<thead><tr><th>Country</th><th>People</th><th>Flying from</th><th>Avg. flight</th><th>Visa</th><th>All of them</th></tr></thead>
+						<tbody>
+							{#each data.travel.countries as c (c.country)}
+								<tr>
+									<th>{c.country}</th>
+									<td>{c.people}</td>
+									<td class="airports">
+										{#each c.airports as a, i (a.code)}<a href={skyscannerUrl(a.code)} target="_blank" rel="noopener noreferrer">{a.code}</a>{a.n > 1 ? ` ×${a.n}` : ''}{i < c.airports.length - 1 ? ', ' : ''}{/each}
+									</td>
+									<td>{c.avgFlight ? `$${c.avgFlight}` : 'no flight'}</td>
+									<td>{c.visa === null ? 'check' : c.visa ? `$${c.visa}` : 'none'}</td>
+									<td class="strong">${c.total.toLocaleString()}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+				<p class="an-sub">
+					Each person's departure is the nearest international airport to the city on their submission (only the airport is kept, not the address).
+					Fares are estimated from distance; click an airport for real prices on Skyscanner.
+					{#if data.travel.visaUnknown}{data.travel.visaUnknown} {data.travel.visaUnknown === 1 ? 'person needs' : 'people need'} their visa checked.{/if}
+				</p>
+			{:else}
+				<p class="an-sub">No home airports yet. Press "Find missing airports" to work them out from submissions.</p>
+			{/if}
+		</section>
 
 		<section class="ledger">
 			<div class="b-head">
@@ -327,25 +351,23 @@
 										{:else}
 											<span class="muted">none</span>
 										{/if}
-										{#await data.analytics then an}
-											{@const country = an?.userCountry[u.id]}
-											{@const trip = estimateTrip(country)}
-											{#if country}
-												<span class="b-sub trip-line">
-													<span>From {country}</span>
-													{#if trip && trip.total}
-														<span>
-															${trip.flight} flight + {trip.visa === null ? 'visa: check' : trip.visa ? `$${trip.visa} visa` : 'no visa'}
-															= <strong>${trip.total}</strong>
-														</span>
-														<span>
-															{u.approved >= trip.hoursToQualify ? 'Qualifies now' : `Qualifies at ${trip.hoursToQualify}h`}
-															· <a href={trip.skyscanner} target="_blank" rel="noopener noreferrer">flights ↗</a>
-														</span>
-													{/if}
+										{#if u.trip}
+											<span class="b-sub trip-line">
+												<span>
+													Flies from <a href={u.trip.skyscanner} target="_blank" rel="noopener noreferrer" title={u.trip.airportName}>{u.trip.airport}</a>
+													{#if u.trip.toAirportKm !== null}({u.trip.toAirportKm} km from home{u.trip.precision !== 'city' ? ', roughly' : ''}){/if}
 												</span>
-											{/if}
-										{/await}
+												{#if u.trip.flight}
+													<span>
+														${u.trip.flight} flight + {u.trip.visa === null ? 'visa: check' : u.trip.visa ? `$${u.trip.visa} visa` : 'no visa'}
+														= <strong>${u.trip.total}</strong>
+													</span>
+													<span>{u.approved >= u.trip.hoursToQualify ? 'Qualifies now' : `Qualifies at ${u.trip.hoursToQualify}h`}</span>
+												{:else}
+													<span>No flight needed</span>
+												{/if}
+											</span>
+										{/if}
 										{#if u.travel > 0 || u.travelLocked}
 											<form method="POST" action="?/travelLock" use:enhance class="lock">
 												<input type="hidden" name="user_id" value={u.id} />
@@ -480,6 +502,9 @@
 		color: var(--slate);
 		font-weight: 700;
 	}
+	.funnel.countries li {
+		grid-template-columns: 9rem minmax(0, 1fr) 2.5rem;
+	}
 	.funnel {
 		list-style: none;
 		margin: 0;
@@ -575,6 +600,20 @@
 	.ledger {
 		margin-top: 1rem;
 	}
+	.trips-panel {
+		margin-bottom: 2.5rem;
+		border: 2px solid var(--rule-strong);
+	}
+	.find-form {
+		display: flex;
+		gap: 1rem;
+	}
+	.trips td.airports {
+		text-align: left;
+	}
+	.trips-panel .tracks-table thead th:nth-child(3) {
+		text-align: left;
+	}
 	.trip-totals {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -609,9 +648,6 @@
 		white-space: nowrap;
 	}
 	.trips thead th:first-child {
-		text-align: left;
-	}
-	.trips .muted {
 		text-align: left;
 	}
 	.ledger-totals {

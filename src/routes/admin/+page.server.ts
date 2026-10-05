@@ -1,3 +1,6 @@
+import { listOrigins, backfillOrigins } from '$lib/server/origins';
+import { estimateTrip } from '$lib/travel-estimates';
+import { countryName } from '$lib/server/geo';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin } from '$lib/server/guards';
@@ -23,7 +26,7 @@ const GRANT_TYPES = ['manual_adjustment', 'reward_claimed'] as const;
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
 
-	const [users, pendingOld, pendingNew, claims, buckets, sharedWaiting, overview, progress, subs, approvedReviews] = await Promise.all([
+	const [users, pendingOld, pendingNew, claims, buckets, sharedWaiting, overview, progress, subs, approvedReviews, origins] = await Promise.all([
 		listUsersWithBalances(),
 		countPendingReviews(),
 		countQueuePending(),
@@ -38,8 +41,37 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.from('submission_reviews')
 			.select('user_id, hackatime_project, hackatime_projects, approved_hours, reviewed_at')
 			.eq('status', 'approved')
-			.order('reviewed_at', { ascending: true })
+			.order('reviewed_at', { ascending: true }),
+		listOrigins()
 	]);
+
+	// ---- getting people to Dublin: everyone we have an airport for
+	const tripBy = new Map(origins.map((o) => [o.user_id, { ...estimateTrip(o), country: countryName(o.country_code) }]));
+	const byCountry = new Map<string, { country: string; people: number; airports: Map<string, number>; flights: number; visa: number | null; total: number }>();
+	for (const t of tripBy.values()) {
+		const key = t.country ?? 'Unknown';
+		const c = byCountry.get(key) ?? { country: key, people: 0, airports: new Map(), flights: 0, visa: t.visa, total: 0 };
+		c.people++;
+		c.airports.set(t.airport, (c.airports.get(t.airport) ?? 0) + 1);
+		c.flights += t.flight;
+		c.total += t.total;
+		byCountry.set(key, c);
+	}
+	const travel = {
+		people: tripBy.size,
+		total: [...tripBy.values()].reduce((s, t) => s + t.total, 0),
+		visaUnknown: [...tripBy.values()].filter((t) => t.visa === null).length,
+		countries: [...byCountry.values()]
+			.map((c) => ({
+				country: c.country,
+				people: c.people,
+				airports: [...c.airports.entries()].sort((a, b) => b[1] - a[1]).map(([code, n]) => ({ code, n })),
+				avgFlight: Math.round(c.flights / c.people),
+				visa: c.visa,
+				total: c.total
+			}))
+			.sort((a, b) => b.total - a.total)
+	};
 
 	// what each person's approved hours came from
 	const projectsBy = new Map<string, { name: string; hours: number }[]>();
@@ -73,6 +105,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				email: u.email ?? typedEmail.get(u.id) ?? null,
 				approved,
 				projects: projectsBy.get(u.id) ?? [],
+				trip: tripBy.get(u.id) ?? null,
 				rewards: round(rewards),
 				rewardItems: live.map((c) => ({ name: c.reward_name, status: c.status })),
 				travel,
@@ -93,6 +126,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		travelBuckets,
 		sharedWaiting,
 		overview,
+		travel,
 		analytics: getReviewAnalytics().catch((e) => {
 			console.error('review analytics', e);
 			return null;
@@ -107,6 +141,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
+	/** Work out nearest airports for anyone who's submitted and doesn't have one. */
+	findAirports: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const form = await request.formData();
+		const result = await backfillOrigins({ all: form.get('all') === 'yes' });
+		return { airports: result };
+	},
+
 	/**
 	 * Freeze a participant's travel fund once their trip is being arranged —
 	 * after that they can't move hours in or out of it themselves.

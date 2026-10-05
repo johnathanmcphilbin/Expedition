@@ -4,9 +4,14 @@
 	import { enhance } from '$app/forms';
 	import { TRAVEL_RATE, TRAVEL_CAP_HOURS, money } from '$lib/data';
 	import GrantAmount from '$lib/components/GrantAmount.svelte';
+	import { skyscannerUrl } from '$lib/travel-estimates';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	let bookedDifferent = $state(false);
+	const fmtDublin = (iso: string) =>
+		new Date(iso).toLocaleString('en-IE', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Dublin' });
 
 	const flashText: Record<string, string> = {
 		connected: 'Hackatime connected. Now add the project you’re working on.',
@@ -166,6 +171,59 @@
 				{/each}
 			</ol>
 		</section>
+
+		<!-- ---------------- your flight ---------------- -->
+		{#if data.flight}
+			{@const f = data.flight}
+			<section class="block" id="flight">
+				<div class="block-head">
+					<h2>Your flight to Dublin</h2>
+					<span class="flight-status fs-{f.status}">
+						{f.status === 'booked' ? 'Booked' : f.status === 'changed' ? 'Booked (different flight)' : 'Please book this'}
+					</span>
+				</div>
+				<div class="panel flight-card">
+					<div class="leg">
+						<span class="leg-k">Getting there</span>
+						<strong class="leg-flight">{f.outFlight}</strong>
+						<span>{f.outFrom} → Dublin{f.outTerminal ? ` (${f.outTerminal})` : ''}</span>
+						{#if f.outDepartsLocal}<span>Departs {f.outDepartsLocal} (local time)</span>{/if}
+						<span>Lands <strong>{fmtDublin(f.outArrivesAt)}</strong> Irish time</span>
+					</div>
+					{#if f.retFlight || f.retDepartsAt}
+						<div class="leg">
+							<span class="leg-k">Going home</span>
+							{#if f.retFlight}<strong class="leg-flight">{f.retFlight}</strong>{/if}
+							{#if f.retDepartsAt}<span>Leaves Dublin <strong>{fmtDublin(f.retDepartsAt)}</strong></span>{/if}
+						</div>
+					{/if}
+					{#if f.price !== null}<p class="flight-note">About <strong>${f.price}</strong> return when we checked.</p>{/if}
+					{#if f.notes}<p class="flight-note">{f.notes}</p>{/if}
+
+					{#if f.status === 'suggested'}
+						<p class="flight-note">
+							Book exactly this flight so we can pick you up at the airport, then tell us below.
+							<a href={skyscannerUrl(f.outFrom)} target="_blank" rel="noopener noreferrer">Find it on Skyscanner ↗</a>
+						</p>
+						<form method="POST" action="?/bookFlight" use:enhance class="book-form">
+							<label>Booking reference <input name="booking_ref" required maxlength="20" placeholder="e.g. X7KQ2P" autocomplete="off" /></label>
+							<label class="check"><input type="checkbox" name="different" value="yes" bind:checked={bookedDifferent} /> I booked a different flight</label>
+							{#if bookedDifferent}
+								<label>Flight you booked <input name="booked_flight" required maxlength="80" placeholder="e.g. QR 571 / QR 17" /></label>
+								<label>Lands in Dublin (Irish time) <input name="booked_arrives_at" type="datetime-local" required /></label>
+							{/if}
+							<button class="btn" type="submit">I've booked it</button>
+						</form>
+						{#if form && 'flightMessage' in form && form.flightMessage}<p class="hint error">{form.flightMessage}</p>{/if}
+					{:else}
+						<p class="flight-note">
+							Thanks, you're booked{f.status === 'changed' && f.bookedFlight ? ` on ${f.bookedFlight}${f.bookedArrivesAt ? `, landing ${fmtDublin(f.bookedArrivesAt)}` : ''}` : ''}.
+							We'll meet you at the airport. If anything changes, tell an organiser straight away.
+						</p>
+					{/if}
+				</div>
+			</section>
+		{/if}
 
 		<!-- ---------------- travel fund ---------------- -->
 		<section class="block" id="travel">
@@ -414,6 +472,77 @@
 <Footer />
 
 <style>
+	.flight-status {
+		font-size: 0.75rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		padding: 0.15rem 0.5rem;
+		border: 2px solid currentColor;
+	}
+	.fs-suggested {
+		color: #a34a00;
+	}
+	.fs-booked,
+	.fs-changed {
+		color: #2f7a46;
+	}
+	.flight-card {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 1rem 2.5rem;
+	}
+	.leg {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		color: var(--slate);
+	}
+	.leg-k {
+		font-size: 0.75rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--muted);
+	}
+	.leg-flight {
+		font-size: 1.3rem;
+		color: var(--navy);
+	}
+	.flight-note {
+		flex-basis: 100%;
+		margin: 0;
+		color: var(--slate);
+	}
+	.flight-note a {
+		font-weight: 700;
+		color: var(--blue-dark);
+	}
+	.book-form {
+		flex-basis: 100%;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: 0.8rem 1.2rem;
+	}
+	.book-form label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		font-size: 0.85rem;
+		font-weight: 700;
+		color: var(--slate);
+	}
+	.book-form label.check {
+		flex-direction: row;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.book-form input:not([type='checkbox']) {
+		padding: 0.5rem 0.6rem;
+		border: 2px solid var(--rule-strong);
+		font: inherit;
+	}
 	.lead {
 		margin-top: 0.5rem;
 		font-size: 1rem;

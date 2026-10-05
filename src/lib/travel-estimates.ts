@@ -1,104 +1,105 @@
-import { hoursToQualify, TRAVEL_RATE } from '$lib/data';
+import { EVENT, hoursToQualify, TRAVEL_RATE } from '$lib/data';
 
 /**
- * Rough cost of getting someone from each country to Dublin, for planning
- * only. Fares are typical economy return to DUB in USD from the main
- * airport, booked a couple of months out; check the real price with the
- * Skyscanner link before promising anything. Visa is Ireland's short-stay
- * fee plus typical application-centre costs, 0 where that passport doesn't
- * need one, null where it needs checking.
- *
- * Edit these as real quotes come in. Keys match the country names the
- * admin analytics normalise to.
+ * Rough cost of getting someone to Dublin, for planning only: an economy
+ * return fare estimated from their departure airport's distance to Dublin,
+ * plus an Irish visa where their country needs one. Check the real fare with
+ * the Skyscanner link before promising anything.
  */
-type Route = { airport: string; flight: number; visa: number | null };
 
-export const ROUTES: Record<string, Route> = {
-	// Europe (no visa for EU/EEA/UK)
-	'United Kingdom': { airport: 'LHR', flight: 120, visa: 0 },
-	Spain: { airport: 'MAD', flight: 160, visa: 0 },
-	Portugal: { airport: 'LIS', flight: 170, visa: 0 },
-	France: { airport: 'CDG', flight: 170, visa: 0 },
-	Germany: { airport: 'FRA', flight: 180, visa: 0 },
-	Netherlands: { airport: 'AMS', flight: 150, visa: 0 },
-	Belgium: { airport: 'BRU', flight: 160, visa: 0 },
-	Italy: { airport: 'FCO', flight: 190, visa: 0 },
-	Poland: { airport: 'WAW', flight: 180, visa: 0 },
-	Romania: { airport: 'OTP', flight: 220, visa: 0 },
-	Hungary: { airport: 'BUD', flight: 200, visa: 0 },
-	Czechia: { airport: 'PRG', flight: 190, visa: 0 },
-	Greece: { airport: 'ATH', flight: 260, visa: 0 },
-	Sweden: { airport: 'ARN', flight: 210, visa: 0 },
-	Ukraine: { airport: 'KRK', flight: 300, visa: 0 },
-	Turkey: { airport: 'IST', flight: 350, visa: 85 },
+/** Close enough to Dublin that it's a bus or train, not a flight. */
+export const NO_FLIGHT_KM = 300;
 
-	// Americas
-	'United States': { airport: 'JFK', flight: 650, visa: 0 },
-	Canada: { airport: 'YYZ', flight: 800, visa: 0 },
-	Mexico: { airport: 'MEX', flight: 1000, visa: 0 },
-	Brazil: { airport: 'GRU', flight: 1100, visa: 0 },
-	Argentina: { airport: 'EZE', flight: 1300, visa: 0 },
-	Colombia: { airport: 'BOG', flight: 1050, visa: 85 },
-	Peru: { airport: 'LIM', flight: 1200, visa: null },
+/**
+ * Economy return to Dublin in USD from distance alone. Calibrated against
+ * typical fares (DEL ~$750, JFK ~$600, MAD ~$160, SYD ~$1,750); a departure
+ * that isn't a major gateway adds a connection.
+ */
+export function estimateFare(flightKm: number, hub: boolean): number {
+	if (flightKm < NO_FLIGHT_KM) return 0;
+	const base = flightKm < 2500 ? 60 + 0.07 * flightKm : 100 + 0.095 * flightKm;
+	return Math.round((base + (hub ? 0 : 120)) / 10) * 10;
+}
 
-	// Africa & Middle East
-	Egypt: { airport: 'CAI', flight: 600, visa: 85 },
-	Morocco: { airport: 'CMN', flight: 350, visa: 85 },
-	Nigeria: { airport: 'LOS', flight: 1100, visa: 85 },
-	Kenya: { airport: 'NBO', flight: 1000, visa: 85 },
-	'South Africa': { airport: 'JNB', flight: 1100, visa: null },
-	'United Arab Emirates': { airport: 'DXB', flight: 600, visa: 0 },
-	'Saudi Arabia': { airport: 'RUH', flight: 650, visa: null },
-	Israel: { airport: 'TLV', flight: 450, visa: 0 },
+/**
+ * Ireland's short-stay visa (€60) plus typical application-centre costs, in
+ * USD, for passports that need one. Assumes they hold the passport of the
+ * country they live in.
+ */
+const VISA_FEE = 85;
+const VISA_REQUIRED = new Set([
+	'IN', 'PK', 'BD', 'NP', 'LK', 'AF', 'CN', 'PH', 'ID', 'VN', 'TH', 'MM', 'KH', 'LA',
+	'EG', 'MA', 'DZ', 'TN', 'LY', 'NG', 'GH', 'KE', 'ET', 'UG', 'TZ', 'CM', 'SN', 'CI', 'ZW', 'ZM', 'SD',
+	'TR', 'IR', 'IQ', 'JO', 'LB', 'SY', 'YE', 'RU', 'BY', 'KZ', 'UZ', 'AZ', 'AM', 'GE',
+	'CO', 'BO', 'CU', 'DO', 'HT', 'JM'
+]);
+/** Visa-free for Ireland: EU/EEA/UK/Swiss, and the common exempt passports. */
+const VISA_FREE = new Set([
+	'IE', 'GB', 'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IT', 'LV', 'LT',
+	'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'CH',
+	'US', 'CA', 'MX', 'BR', 'AR', 'CL', 'UY', 'PY', 'CR', 'PA', 'GT', 'HN', 'SV', 'NI',
+	'AU', 'NZ', 'JP', 'KR', 'SG', 'MY', 'BN', 'HK', 'MO', 'TW', 'AE', 'IL', 'UA', 'RS', 'ME', 'MK', 'AL', 'BA', 'MD'
+]);
 
-	// Asia & Oceania
-	India: { airport: 'DEL', flight: 750, visa: 85 },
-	Pakistan: { airport: 'LHE', flight: 850, visa: 85 },
-	Bangladesh: { airport: 'DAC', flight: 950, visa: 85 },
-	Nepal: { airport: 'KTM', flight: 1000, visa: 85 },
-	'Sri Lanka': { airport: 'CMB', flight: 900, visa: 85 },
-	China: { airport: 'PEK', flight: 900, visa: 85 },
-	Philippines: { airport: 'MNL', flight: 1100, visa: 85 },
-	Indonesia: { airport: 'CGK', flight: 1000, visa: 85 },
-	Vietnam: { airport: 'SGN', flight: 1000, visa: 85 },
-	Malaysia: { airport: 'KUL', flight: 1000, visa: 0 },
-	Singapore: { airport: 'SIN', flight: 1100, visa: 0 },
-	Japan: { airport: 'NRT', flight: 1200, visa: 0 },
-	'South Korea': { airport: 'ICN', flight: 1100, visa: 0 },
-	Australia: { airport: 'SYD', flight: 1800, visa: 0 },
-	'New Zealand': { airport: 'AKL', flight: 2000, visa: 0 },
+/** Visa cost in USD: 0 if not needed, null if we haven't confirmed which. */
+export function visaFor(countryCode: string | null | undefined): number | null {
+	if (!countryCode) return null;
+	if (VISA_FREE.has(countryCode)) return 0;
+	if (VISA_REQUIRED.has(countryCode)) return VISA_FEE;
+	return null;
+}
 
-	Ireland: { airport: 'DUB', flight: 0, visa: 0 }
-};
+const yymmdd = (iso: string) => iso.slice(2, 10).replace(/-/g, '');
+
+/**
+ * Skyscanner.ie search from that airport to Dublin for the event: out the
+ * day before, home the day after.
+ */
+export const skyscannerUrl = (airport: string, out = EVENT.flyOutDate, home = EVENT.flyHomeDate) =>
+	`https://www.skyscanner.ie/transport/flights/${airport.toLowerCase()}/dub/${yymmdd(out)}/${yymmdd(home)}/?adultsv2=1&cabinclass=economy`;
 
 export type TripEstimate = {
 	airport: string;
+	airportName: string;
+	airportCity: string | null;
+	/** how far they live from that airport */
+	toAirportKm: number | null;
 	flight: number;
 	visa: number | null;
-	/** flight + visa (an unknown visa counts as 0 here) */
+	/** flight + visa (an unconfirmed visa counts as 0 here) */
 	total: number;
 	/** approved hours needed to qualify for the travel stipend */
 	hoursToQualify: number;
-	/** what those hours are worth as stipend, at TRAVEL_RATE */
 	stipendAtQualify: number;
+	/** worked out from their city, their region, or only their country */
+	precision: 'city' | 'region' | 'country';
 	skyscanner: string;
 };
 
-/** Skyscanner.ie search from that airport to Dublin; they pick the dates. */
-export const skyscannerUrl = (airport: string) =>
-	`https://www.skyscanner.ie/transport/flights/${airport.toLowerCase()}/dub/`;
-
-export function estimateTrip(country: string | null | undefined): TripEstimate | null {
-	const r = country ? ROUTES[country] : undefined;
-	if (!r) return null;
-	const hours = r.flight ? hoursToQualify(r.flight) : 0;
+export function estimateTrip(origin: {
+	airport: string;
+	airport_name: string;
+	airport_city: string | null;
+	country_code: string | null;
+	to_airport_km: number | null;
+	flight_km: number;
+	hub: boolean;
+	precision: 'city' | 'region' | 'country';
+}): TripEstimate {
+	const flight = estimateFare(origin.flight_km, origin.hub);
+	const visa = visaFor(origin.country_code);
+	const hours = flight ? hoursToQualify(flight) : 0;
 	return {
-		airport: r.airport,
-		flight: r.flight,
-		visa: r.visa,
-		total: r.flight + (r.visa ?? 0),
+		airport: origin.airport,
+		airportName: origin.airport_name,
+		airportCity: origin.airport_city,
+		toAirportKm: origin.to_airport_km,
+		flight,
+		visa,
+		total: flight + (visa ?? 0),
 		hoursToQualify: hours,
 		stipendAtQualify: hours * TRAVEL_RATE,
-		skyscanner: skyscannerUrl(r.airport)
+		precision: origin.precision,
+		skyscanner: skyscannerUrl(origin.airport)
 	};
 }

@@ -240,6 +240,19 @@ export const drops: Drop[] = [
 	{ hours: 40, value: 200, name: 'The 40-hour prize', art: 'keyboard', finisher: true }
 ];
 
+/**
+ * The event in Dublin. In December Ireland is on GMT, so Dublin time is UTC.
+ * Arriving the night before or that morning is ideal.
+ */
+export const EVENT = {
+	date: '2026-12-05',
+	startsAt: '2026-12-05T10:00:00Z',
+	/** best day to fly in from far away (lands the 4th or early the 5th) */
+	flyOutDate: '2026-12-04',
+	/** assumed day to fly home; change once the schedule is final */
+	flyHomeDate: '2026-12-06'
+};
+
 /** Travel grant per approved hour banked toward Dublin. Only ever shown on request. */
 export const TRAVEL_RATE = 8;
 

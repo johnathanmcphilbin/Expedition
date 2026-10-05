@@ -19,6 +19,7 @@ import { syncHackClubSubmissions } from '$lib/server/airtable';
 import { listOwnQueued, countQueuePending } from '$lib/server/queue';
 import { listOwnCheckpoints, unlockedCount } from '$lib/server/checkpoints';
 import { drops } from '$lib/data';
+import { getOwnFlight, confirmBooking } from '$lib/server/flights';
 import { text, hours, oneOf, ValidationError } from '$lib/server/validate';
 import type { TravelBucket } from '$lib/server/database.types';
 
@@ -62,7 +63,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			getTravelBuckets(user.id),
 			listOwnQueued(user.id)
 		]);
-	const ownCheckpoints = await listOwnCheckpoints(user.id);
+	const [ownCheckpoints, flight] = await Promise.all([listOwnCheckpoints(user.id), getOwnFlight(user.id)]);
 	const checkpointsByProject = new Map<string, number>();
 	for (const c of ownCheckpoints) {
 		checkpointsByProject.set(c.hackatime_project, (checkpointsByProject.get(c.hackatime_project) ?? 0) + 1);
@@ -166,6 +167,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		unlocks,
 		travelBuckets,
 		pendingReviews,
+		flight,
 		flash: url.searchParams.get('hackatime')
 	};
 };
@@ -202,6 +204,31 @@ export const actions: Actions = {
 			return { travelMoved: direction * amount, travelBucket: bucket };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { travelMessage: e.message });
+			throw e;
+		}
+	},
+
+	/** They've booked the flight an organiser gave them (or a different one). */
+	bookFlight: async ({ request, locals }) => {
+		const user = requireUser(locals, '/dashboard');
+		const form = await request.formData();
+		try {
+			const ref = text(form.get('booking_ref'), 'Booking reference', { max: 20, required: true })!;
+			let different: { flight: string; arrivesAt: string } | null = null;
+			if (form.get('different') === 'yes') {
+				const flight = text(form.get('booked_flight'), 'Flight you booked', { max: 80, required: true })!;
+				const raw = String(form.get('booked_arrives_at') ?? '').trim();
+				if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) {
+					throw new ValidationError('Add when it lands in Dublin (Irish time)', 'booked_arrives_at');
+				}
+				different = { flight, arrivesAt: new Date(`${raw}:00Z`).toISOString() };
+			}
+			if (!(await confirmBooking(user.id, { ref, different }))) {
+				return fail(404, { flightMessage: "We couldn't find a flight for you. Ask an organiser." });
+			}
+			return { flightBooked: true };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { flightMessage: e.message });
 			throw e;
 		}
 	},

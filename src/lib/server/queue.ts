@@ -1,3 +1,4 @@
+import { recordOrigin } from './origins';
 import { db } from './supabase';
 import { createSubmission, writeReviewToAirtable, type Justifications } from './airtable';
 import { getOrCreateReview } from './queries';
@@ -46,6 +47,10 @@ export async function queueSubmission(
 		await db().storage.from(BUCKET).remove([path]);
 		throw new Error(`Couldn't save the submission: ${error.message}`);
 	}
+	// nearest airport for travel planning; never blocks the submission
+	await recordOrigin(userId, { city: fields.city, state: fields.state, country: fields.country }).catch((e) =>
+		console.error('recordOrigin', e)
+	);
 	return data as QueuedSubmissionRow;
 }
 

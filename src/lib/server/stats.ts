@@ -1,4 +1,3 @@
-import { estimateTrip } from '$lib/travel-estimates';
 import { db } from './supabase';
 import { fetchProjectTimes, fetchHackatimeProfile } from './hackatime';
 
@@ -361,7 +360,7 @@ export async function getReviewAnalytics() {
 	const perCountry = new Map<string, number>();
 	for (const { country } of latestCountry.values()) perCountry.set(country, (perCountry.get(country) ?? 0) + 1);
 	const countries = [...perCountry.entries()]
-		.map(([country, n]) => ({ country, n, trip: estimateTrip(country) }))
+		.map(([country, n]) => ({ country, n }))
 		.sort((a, b) => b.n - a.n || a.country.localeCompare(b.country));
 	const userCountry = Object.fromEntries([...latestCountry.entries()].map(([id, v]) => [id, v.country]));
 

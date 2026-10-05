@@ -121,6 +121,21 @@ export async function getShippingAddress(recordId: string): Promise<string[] | n
 	].filter((l): l is string => !!l && !!l.trim());
 }
 
+/**
+ * Just the city, region and country from a submission's address, for
+ * working out someone's nearest airport. Street lines are never fetched.
+ */
+export async function getLocality(
+	recordId: string
+): Promise<{ city: string | null; state: string | null; country: string | null } | null> {
+	const u = new URL(`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${recordId}`);
+	for (const f of ['City', 'State / Province', 'Country']) u.searchParams.append('fields[]', f);
+	const res = await fetch(u, { headers: headers(), signal: AbortSignal.timeout(10000) });
+	if (!res.ok) return null;
+	const f = ((await res.json()) as { fields: Record<string, string | undefined> }).fields ?? {};
+	return { city: f['City']?.trim() || null, state: f['State / Province']?.trim() || null, country: f['Country']?.trim() || null };
+}
+
 interface AirtableRecord<F> {
 	id: string;
 	createdTime: string;

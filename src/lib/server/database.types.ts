@@ -163,6 +163,44 @@ export type CheckpointRow = {
 	updated_at: string;
 }
 
+/** Someone's nearest airport, worked out from their submission's city. */
+export type TravelOriginRow = {
+	user_id: string;
+	airport: string;
+	airport_name: string;
+	airport_city: string | null;
+	country_code: string | null;
+	to_airport_km: number | null;
+	flight_km: number;
+	hub: boolean;
+	precision: 'city' | 'region' | 'country';
+	updated_at: string;
+}
+
+export type TripFlightStatus = 'suggested' | 'booked' | 'changed' | 'cancelled';
+
+/** The flight an organiser told someone to take to Dublin, and their booking. */
+export type TripFlightRow = {
+	user_id: string;
+	out_flight: string;
+	out_from: string;
+	out_departs_local: string | null;
+	out_arrives_at: string;
+	out_terminal: 'T1' | 'T2' | null;
+	ret_flight: string | null;
+	ret_departs_at: string | null;
+	price_usd: number | null;
+	organiser_notes: string | null;
+	status: TripFlightStatus;
+	booked_flight: string | null;
+	booked_arrives_at: string | null;
+	booking_ref: string | null;
+	booked_at: string | null;
+	assigned_by: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
 export type HourTransactionRow = {
 	id: string;
 	user_id: string;
@@ -266,6 +304,8 @@ export interface Database {
 			expedition_projects: Table<ExpeditionProjectRow>;
 			submission_queue: Table<QueuedSubmissionRow>;
 			checkpoints: Table<CheckpointRow>;
+			travel_origins: Table<TravelOriginRow>;
+			trip_flights: Table<TripFlightRow>;
 		};
 		Views: {
 			user_hour_balances: { Row: HourBalanceRow; Relationships: [] };
