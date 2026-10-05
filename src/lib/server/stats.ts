@@ -1,4 +1,5 @@
 import { db } from './supabase';
+import { getVisits } from './plausible';
 import { fetchProjectTimes, fetchHackatimeProfile } from './hackatime';
 
 /**
@@ -256,7 +257,7 @@ function normaliseCountry(raw: string | null): string | null {
  */
 export async function getReviewAnalytics() {
 	const [users, connections, projects, hcSubs, queue, reviews, progress, reviewers, hcCountries, queueCountries] = await Promise.all([
-		db().from('users').select('id').like('hackclub_id', 'ident!%'),
+		db().from('users').select('id, created_at').like('hackclub_id', 'ident!%'),
 		db().from('hackatime_connections').select('user_id'),
 		db().from('expedition_projects').select('user_id'),
 		db().from('hackclub_submissions').select('airtable_record_id, user_id, airtable_created_at'),
@@ -276,7 +277,19 @@ export async function getReviewAnalytics() {
 	const submittedUsers = new Set(
 		[...(hcSubs.data ?? []), ...(queue.data ?? [])].map((r) => r.user_id).filter((id): id is string => !!id && real.has(id))
 	);
+	// ---- visits (Plausible) against sign-ups, from the first sign-up on
+	const signupDays = (users.data ?? []).map((u) => u.created_at.slice(0, 10)).sort();
+	const visits = signupDays.length ? await getVisits(signupDays[0]) : null;
+	const signupsByDay = new Map<string, number>();
+	for (const d of signupDays) signupsByDay.set(d, (signupsByDay.get(d) ?? 0) + 1);
+	const visitDays: { day: string; visitors: number; signups: number }[] = [];
+	for (let i = 29; i >= 0; i--) {
+		const day = new Date(Date.now() - i * 24 * HOUR_MS).toISOString().slice(0, 10);
+		visitDays.push({ day, visitors: visits?.daily[day] ?? 0, signups: signupsByDay.get(day) ?? 0 });
+	}
+
 	const funnel = [
+		...(visits ? [{ step: 'Visited the site', n: visits.visitors }] : []),
 		{ step: 'Signed up', n: real.size },
 		{ step: 'Connected Hackatime', n: distinct(connections.data) },
 		{ step: 'Added a project', n: distinct(projects.data) },
@@ -377,6 +390,17 @@ export async function getReviewAnalytics() {
 
 	return {
 		funnel,
+		visits: visits
+			? {
+					visitors: visits.visitors,
+					visits: visits.visits,
+					pageviews: visits.pageviews,
+					since: visits.from,
+					signups: real.size,
+					conversion: visits.visitors ? Math.round((real.size / visits.visitors) * 1000) / 10 : null,
+					days: visitDays
+				}
+			: null,
 		timeline,
 		countries,
 		countriesKnown: latestCountry.size,

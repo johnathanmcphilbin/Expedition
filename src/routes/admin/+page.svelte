@@ -112,6 +112,41 @@
 						</ol>
 					</section>
 
+					<section class="panel an-card wide">
+						<p class="section-label">Visits to sign-ups</p>
+						{#if an.visits}
+							{@const v = an.visits}
+							<div class="trip-totals">
+								<div><span class="lt-n">{v.visitors.toLocaleString()}</span><span class="lt-k">unique visitors since {new Date(v.since).toLocaleDateString('en-IE', { day: 'numeric', month: 'short' })}</span></div>
+								<div><span class="lt-n">{v.signups.toLocaleString()}</span><span class="lt-k">signed up</span></div>
+								<div><span class="lt-n">{v.conversion === null ? '–' : `${v.conversion}%`}</span><span class="lt-k">of visitors signed up</span></div>
+								<div><span class="lt-n">{v.pageviews.toLocaleString()}</span><span class="lt-k">pageviews · {v.visits.toLocaleString()} visits</span></div>
+							</div>
+							{#each [{ key: 'visitors', label: 'Visitors per day', cls: 'sub' }, { key: 'signups', label: 'Sign-ups per day', cls: 'dec' }] as m (m.key)}
+								{@const vals = v.days.map((d) => (m.key === 'visitors' ? d.visitors : d.signups))}
+								{@const max = Math.max(1, ...vals)}
+								<div class="mini">
+									<p class="mini-label">{m.label} <span class="muted">· last 30 days · peak {max}</span></p>
+									<svg class="mini-chart" viewBox="0 0 720 60" preserveAspectRatio="none" role="img" aria-label="{m.label}, last 30 days">
+										{#each v.days as d, i (d.day)}
+											{@const n = vals[i]}
+											<g>
+												<title>{new Date(d.day + 'T00:00:00Z').toLocaleDateString('en-IE', { day: 'numeric', month: 'short', timeZone: 'UTC' })}: {d.visitors} visitors, {d.signups} sign-ups{d.visitors ? ` (${Math.round((d.signups / d.visitors) * 100)}%)` : ''}</title>
+												<rect class="hit" x={i * 24} y="0" width="24" height="60" />
+												{#if n}<rect class="bar {m.cls}" x={i * 24 + 2} y={60 - (n / max) * 58} width="20" height={(n / max) * 58} rx="2" />{/if}
+											</g>
+										{/each}
+									</svg>
+								</div>
+							{/each}
+							<div class="mini-axis"><span>{v.days[0].day.slice(5)}</span><span>today</span></div>
+						{:else}
+							<p class="an-sub">
+								Add a Plausible Stats API key as <code>PLAUSIBLE_API_KEY</code> (Plausible → Settings → API keys) to see visits here and at the top of the funnel.
+							</p>
+						{/if}
+					</section>
+
 					{#if an.timeline.length}
 					{@const W = 720}
 						{@const H = 170}
@@ -492,6 +527,34 @@
 	}
 	.timeline .day:hover .hit {
 		fill: var(--paper);
+	}
+	.mini {
+		margin-top: 0.9rem;
+	}
+	.mini-label {
+		font-size: 0.82rem;
+		font-weight: 700;
+		color: var(--navy);
+		margin-bottom: 0.25rem;
+	}
+	.mini-chart {
+		display: block;
+		width: 100%;
+		height: 60px;
+		border-bottom: 1px solid var(--rule-strong);
+	}
+	.mini-chart .hit {
+		fill: transparent;
+	}
+	.mini-chart g:hover .hit {
+		fill: var(--paper);
+	}
+	.mini-axis {
+		display: flex;
+		justify-content: space-between;
+		margin-top: 0.25rem;
+		font-size: 0.75rem;
+		color: var(--muted);
 	}
 	.tl-table {
 		margin-top: 0.6rem;
