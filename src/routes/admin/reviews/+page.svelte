@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '$lib/styles/app.css';
-	import { enhance } from '$app/forms';
+	import { enhance, deserialize } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import CheckpointTimeline from '$lib/components/CheckpointTimeline.svelte';
 	import JustificationFields from '$lib/components/JustificationFields.svelte';
 	import type { PageData, ActionData } from './$types';
@@ -8,6 +9,7 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	const FILTERS = [
+		{ value: 'hardware', label: 'Hardware' },
 		{ value: 'pending', label: 'Pending' },
 		{ value: 'changes_requested', label: 'Needs changes' },
 		{ value: 'approved', label: 'Approved' },
@@ -57,6 +59,26 @@
 		selectedProject = data.detail?.suggestedProject ?? '';
 	});
 	let hardware = $state(false);
+	let hardwareNote = $state<string | null>(null);
+
+	// ticking Hardware saves straight away and moves it to the right tab,
+	// without needing the rest of the form to be valid
+	async function saveHardware(id: string, value: boolean) {
+		hardwareNote = 'Saving…';
+		const body = new FormData();
+		body.set('id', id);
+		body.set('hardware', value ? 'yes' : 'no');
+		try {
+			const res = await fetch('?/setHardware', { method: 'POST', body, headers: { 'x-sveltekit-action': 'true' } });
+			const result = deserialize(await res.text());
+			if (result.type !== 'success') throw new Error();
+			await invalidateAll();
+			hardwareNote = value ? 'Saved: now in the Hardware tab' : 'Saved: now in Pending';
+		} catch {
+			hardwareNote = "Couldn't save that. Try again.";
+			hardware = !value;
+		}
+	}
 	$effect(() => {
 		hardware = data.queuedDetail?.row.hardware ?? false;
 	});
@@ -119,6 +141,8 @@
 
 			<!-- ---------- the submission and its review ---------- -->
 			<section class="card">
+				<!-- keyed per submission: a fresh form each time, so nothing typed for the last one carries over -->
+				{#key `${data.selected?.kind}:${data.selected?.key}`}
 				{#if data.queuedDetail}
 					{@const r = data.queuedDetail.row}
 					{@const sent = r.status === 'sent'}
@@ -142,7 +166,8 @@
 
 					{#if data.queuedDetail.screenshot}
 						<a class="shot" href={data.queuedDetail.screenshot} target="_blank" rel="noopener noreferrer">
-							<img src={data.queuedDetail.screenshot} alt="Their screenshot" />
+							<!-- keyed: a new element per submission, so the last one's image never lingers while this one loads -->
+							{#key r.id}<img src={data.queuedDetail.screenshot} alt="Their screenshot" />{/key}
 						</a>
 					{/if}
 
@@ -216,8 +241,14 @@
 								</div>
 								<div class="grid-2 tight">
 									<label class="check">
-										<input type="checkbox" name="hardware" value="yes" bind:checked={hardware} />
+										<input
+											type="checkbox"
+											name="hardware"
+											value="yes"
+											bind:checked={hardware}
+											onchange={() => saveHardware(r.id, hardware)} />
 										Hardware project
+										{#if hardwareNote}<span class="hint">{hardwareNote}</span>{/if}
 									</label>
 									<div class="field">
 										<label for="code_url">Code link</label>
@@ -467,6 +498,7 @@
 						{/if}
 					</details>
 				{/if}
+				{/key}
 			</section>
 		</div>
 	</div>

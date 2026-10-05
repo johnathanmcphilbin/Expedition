@@ -30,14 +30,15 @@ import {
 	decideQueued,
 	sendQueued,
 	reopenQueued,
-	purgeStalePersonalData
+	purgeStalePersonalData,
+	setQueuedHardware
 } from '$lib/server/queue';
 import { parseSubmissionFields, parseJustifications } from '$lib/server/submission-fields';
 import { hours, text, uuid, oneOf, ValidationError } from '$lib/server/validate';
 import type { SubmissionStatus } from '$lib/server/database.types';
 import type { QueueItem } from '$lib/server/queries';
 
-const FILTERS = ['pending', 'changes_requested', 'approved', 'rejected', 'all'] as const;
+const FILTERS = ['hardware', 'pending', 'changes_requested', 'approved', 'rejected', 'all'] as const;
 type Filter = (typeof FILTERS)[number];
 
 const STATUSES = ['pending', 'in_review', 'changes_requested', 'approved', 'rejected'] as const;
@@ -157,8 +158,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	};
 	const trackItems = items.filter(inTrack);
 
+	// hardware waiting for review has its own tab; Pending is software only
 	const counts = {
-		pending: trackItems.filter((i) => isPending(i.status)).length,
+		hardware: trackItems.filter((i) => i.hardware && isPending(i.status)).length,
+		pending: trackItems.filter((i) => !i.hardware && isPending(i.status)).length,
 		changes_requested: trackItems.filter((i) => i.status === 'changes_requested').length,
 		approved: trackItems.filter((i) => i.status === 'approved').length,
 		rejected: trackItems.filter((i) => i.status === 'rejected').length,
@@ -170,9 +173,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const filtered =
 		validFilter === 'all'
 			? trackItems
-			: validFilter === 'pending'
-				? trackItems.filter((i) => isPending(i.status))
-				: trackItems.filter((i) => i.status === validFilter);
+			: validFilter === 'hardware'
+				? trackItems.filter((i) => i.hardware && isPending(i.status))
+				: validFilter === 'pending'
+					? trackItems.filter((i) => !i.hardware && isPending(i.status))
+					: trackItems.filter((i) => i.status === validFilter);
 
 	const q = (url.searchParams.get('q') ?? '').trim().toLowerCase();
 	const searched = q ? filtered.filter((i) => i.searchText.includes(q)) : filtered;
@@ -349,6 +354,20 @@ export const actions: Actions = {
 	 * leave it waiting, ask for changes, reject, or approve — which sends it to
 	 * Hack Club's Airtable and credits the hours.
 	 */
+	/** Just the Hardware tick, saved on its own as soon as it changes. */
+	setHardware: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const form = await request.formData();
+		try {
+			const id = uuid(form.get('id')?.toString(), 'submission');
+			await setQueuedHardware(id, form.get('hardware') === 'yes');
+			return { hardwareSaved: true };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { message: e.message });
+			throw e;
+		}
+	},
+
 	saveNew: async ({ request, locals, url }) => {
 		const reviewer = requireAdmin(locals);
 		const form = await request.formData();

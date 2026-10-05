@@ -119,6 +119,12 @@ export async function updateQueuedFields(
 	if (error) throw new Error(error.message);
 }
 
+/** Move a not-yet-sent submission between the software and hardware queues. */
+export async function setQueuedHardware(id: string, hardware: boolean): Promise<void> {
+	const { error } = await db().from('submission_queue').update({ hardware }).eq('id', id).neq('status', 'sent');
+	if (error) throw new Error(error.message);
+}
+
 /** Needs changes / reject / back to pending: stays in Expedition only. */
 export async function decideQueued(
 	id: string,
