@@ -3,6 +3,7 @@
 	import { enhance } from '$app/forms';
 	import Footer from '$lib/components/Footer.svelte';
 	import { TRAVEL_RATE } from '$lib/data';
+	import { estimateTrip } from '$lib/travel-estimates';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -16,15 +17,6 @@
 	// "3h", "1.5d" — waits run from hours to days
 	const fmtWait = (h: number) => (h < 48 ? `${Math.round(h * 10) / 10}h` : `${Math.round((h / 24) * 10) / 10}d`);
 
-	const totalBanked = $derived(
-		data.users.reduce((sum, u) => sum + Number(u.balance.hours_available), 0)
-	);
-	const totalTravel = $derived(
-		data.users.reduce((sum, u) => sum + Number(u.balance.hours_travel), 0)
-	);
-	const totalEarned = $derived(
-		data.users.reduce((sum, u) => sum + Number(u.balance.hours_earned), 0)
-	);
 </script>
 
 <svelte:head><title>Admin · Expedition</title></svelte:head>
@@ -203,21 +195,45 @@
 							</tbody>
 						</table>
 					</section>
-					<section class="panel an-card">
-						<p class="section-label">Where people are from</p>
+					<section class="panel an-card wide">
+						<p class="section-label">Where people are from, and getting them to Dublin</p>
 						{#if an.countries.length}
-							{@const top = an.countries[0].n}
-							<ol class="funnel countries">
-								{#each an.countries.slice(0, 12) as c (c.country)}
-									<li title="{c.country}: {c.n} {c.n === 1 ? 'person' : 'people'} ({Math.round((c.n / an.countriesKnown) * 100)}%)">
-										<span class="f-step">{c.country}</span>
-										<span class="f-track"><span class="f-bar" style="width:{(c.n / top) * 100}%"></span></span>
-										<span class="f-n">{c.n}</span>
-									</li>
-								{/each}
-							</ol>
+							{@const known = an.countries.filter((c) => c.trip)}
+							{@const everyone = known.reduce((t, c) => t + c.n * c.trip!.total, 0)}
+							<div class="trip-totals">
+								<div><span class="lt-n">{an.countriesKnown}</span><span class="lt-k">people with a country on file</span></div>
+								<div><span class="lt-n">{an.countries.length}</span><span class="lt-k">countries</span></div>
+								<div><span class="lt-n">${everyone.toLocaleString()}</span><span class="lt-k">est. flights + visas to bring all of them</span></div>
+								<div><span class="lt-n">${known.length ? Math.round(everyone / known.reduce((t, c) => t + c.n, 0)).toLocaleString() : '–'}</span><span class="lt-k">average per person</span></div>
+							</div>
+							<div class="table-scroll">
+								<table class="tracks-table trips">
+									<thead>
+										<tr><th>Country</th><th>People</th><th>Return flight</th><th>Visa</th><th>Per person</th><th>Hours to qualify</th><th>All of them</th><th></th></tr>
+									</thead>
+									<tbody>
+										{#each an.countries as c (c.country)}
+											<tr>
+												<th>{c.country}</th>
+												<td>{c.n}</td>
+												{#if c.trip}
+													<td>${c.trip.flight}</td>
+													<td>{c.trip.visa === null ? 'check' : c.trip.visa ? `$${c.trip.visa}` : 'none'}</td>
+													<td class="strong">${c.trip.total}</td>
+													<td>{c.trip.hoursToQualify}h</td>
+													<td>${(c.trip.total * c.n).toLocaleString()}</td>
+													<td><a href={c.trip.skyscanner} target="_blank" rel="noopener noreferrer">{c.trip.airport} → DUB ↗</a></td>
+												{:else}
+													<td colspan="6" class="muted">No estimate yet. Add it in src/lib/travel-estimates.ts</td>
+												{/if}
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+							</div>
 							<p class="an-sub">
-								From the country on each person's latest submission · {an.countriesKnown} {an.countriesKnown === 1 ? 'person' : 'people'} known{#if an.countries.length > 12} · {an.countries.length - 12} more countries{/if}
+								Country from each person's latest submission. Fares are rough economy returns in USD; open the Skyscanner link for today's price.
+								Hours to qualify = enough approved hours (at ${TRAVEL_RATE}/h) to cover half the flight, never more than 40.
 							</p>
 						{:else}
 							<p class="an-sub">No countries yet. They fill in from new submissions and the next Airtable sync.</p>
@@ -229,136 +245,150 @@
 			{/if}
 		{/await}
 
-		<div class="stat-row" style="margin-bottom:2.5rem">
-			<div class="stat-big">
-				<span class="n">{data.users.length}</span>
-				<span class="k">builders</span>
+		<section class="ledger">
+			<div class="b-head">
+				<p class="section-label">Where approved hours have gone</p>
 			</div>
-			<div class="stat-big green">
-				<span class="n">{totalBanked}h</span>
-				<span class="k">available for gear</span>
-			</div>
-			<div class="stat-big">
-				<span class="n">${(totalTravel * TRAVEL_RATE).toFixed(0)}</span>
-				<span class="k">travel funds ({totalTravel}h)</span>
-			</div>
-			<div class="stat-big">
-				<span class="n">{totalEarned}h</span>
-				<span class="k">verified, all-time</span>
-			</div>
-		</div>
 
-		<!-- There is currently no self-service way for a builder to request gear
-		     for banked hours; the grant/deduct tool below is the only way to
-		     record one, by hand, once you've agreed to it some other way (Slack,
-		     email, in person). Submissions and reviews live at /admin/reviews. -->
-		<section class="claims-note panel" style="margin-bottom:2.5rem">
-			<p class="section-label">Reviewing submissions</p>
-			<p class="hint">
-				Hack Club submissions and Expedition's own review decisions are handled on the
-				<a href="/admin/reviews">review queue</a>, not here. This page is only the hours ledger.
-			</p>
-		</section>
+			<div class="ledger-totals">
+				<div><span class="lt-n">{data.builders.length}</span><span class="lt-k">people with approved hours</span></div>
+				<div><span class="lt-n">{round(sum('approved'))}h</span><span class="lt-k">approved</span></div>
+				<div><span class="lt-n">{round(sum('travel'))}h</span><span class="lt-k">in travel funds · ${round(sum('travel') * TRAVEL_RATE)}</span></div>
+				<div><span class="lt-n">{round(sum('rewards'))}h</span><span class="lt-k">on rewards</span></div>
+				<div><span class="lt-n">{round(sum('available'))}h</span><span class="lt-k">not spent yet</span></div>
+				<p class="legend ledger-legend">
+					<span><i class="sw travel"></i>Dublin travel fund</span>
+					<span><i class="sw rewards"></i>Rewards</span>
+					<span><i class="sw unspent"></i>Not spent yet</span>
+				</p>
+			</div>
 
-		<div class="b-head">
-			<p class="section-label">People with approved hours</p>
-			<p class="b-totals">
-				<strong>{data.builders.length}</strong> people ·
-				<strong>{round(sum('approved'))}h</strong> approved ·
-				<strong>{round(sum('rewards'))}h</strong> on rewards ·
-				<strong>{round(sum('travel'))}h</strong> banked for Dublin (${round(sum('travel') * TRAVEL_RATE)}) ·
-				<strong>{round(sum('available'))}h</strong> unspent
-			</p>
-		</div>
-
-		{#if data.builders.length}
-			<div class="table-wrap">
-				<table class="builders">
-					<thead>
-						<tr>
-							<th>Builder</th>
-							<th class="num">Approved</th>
-							<th>Rewards</th>
-							<th>Dublin travel fund</th>
-							<th class="num">Unspent</th>
-							<th></th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each data.builders as u (u.id)}
+			{#if data.builders.length}
+				<div class="table-wrap">
+					<table class="builders">
+						<thead>
 							<tr>
-								<td>
-									<span class="b-name">{u.name}</span>
-									{#if u.email}<a class="b-email" href="mailto:{u.email}">{u.email}</a>{:else}<span class="b-email muted">no email</span>{/if}
-								</td>
-								<td class="num strong">{u.approved}h</td>
-								<td>
-									{#if u.rewards > 0}
-										<span class="strong">{u.rewards}h</span>
-										<span class="b-sub">
-											{#each u.rewardItems as r, i (i)}{r.name}{r.status === 'requested' ? ' (to send)' : ''}{i < u.rewardItems.length - 1 ? ', ' : ''}{/each}
-										</span>
-									{:else}
-										<span class="muted">none</span>
-									{/if}
-								</td>
-								<td>
-									{#if u.travel > 0}
-										<span class="strong">{u.travel}h</span> <span class="b-sub-inline">${(u.travel * TRAVEL_RATE).toFixed(2)}</span>
-										{#if u.buckets}
-											<span class="b-sub">Visa {u.buckets.visa}h · Accommodation {u.buckets.accommodation}h · Flights {u.buckets.flights}h</span>
-										{/if}
-									{:else}
-										<span class="muted">none</span>
-									{/if}
-									{#if u.travel > 0 || u.travelLocked}
-										<form method="POST" action="?/travelLock" use:enhance class="lock">
-											<input type="hidden" name="user_id" value={u.id} />
-											<input type="hidden" name="locked" value={u.travelLocked ? 'no' : 'yes'} />
-											{#if u.travelLocked}<span class="locked">Locked</span>{/if}
-											<button class="text-btn" type="submit">{u.travelLocked ? 'Unlock' : 'Lock fund'}</button>
-										</form>
-									{/if}
-								</td>
-								<td class="num">
-									<span class="strong">{u.available}h</span>
-									{#if u.adjustments !== 0}
-										<span class="b-sub">{u.adjustments > 0 ? '+' : ''}{u.adjustments}h corrections</span>
-									{/if}
-								</td>
-								<td class="act">
-									{#if grantingFor === u.id}
-										<form
-											method="POST"
-											action="?/grant"
-											class="grant-form"
-											use:enhance={() => async ({ update }) => {
-												await update();
-												grantingFor = null;
-											}}>
-											<input type="hidden" name="user_id" value={u.id} />
-											<select name="type" required>
-												<option value="manual_adjustment">Correction (+/-)</option>
-												<option value="reward_claimed">Reward given (deduct)</option>
-											</select>
-											<input name="amount" type="number" step="0.25" placeholder="Hours" required style="width:6rem" />
-											<input name="note" type="text" maxlength="500" placeholder="Note (optional)" />
-											<button class="btn btn-outline" type="submit">Save</button>
-											<button type="button" class="link-action" onclick={() => (grantingFor = null)}>Cancel</button>
-										</form>
-										{#if form?.message}<p class="hint error">{form.message}</p>{/if}
-									{:else}
-										<button type="button" class="text-btn" onclick={() => (grantingFor = u.id)}>Adjust hours</button>
-									{/if}
-								</td>
+								<th>Builder</th>
+								<th>Approved for</th>
+								<th class="split-col">Where it's gone</th>
+								<th>Travel fund</th>
+								<th></th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{:else}
-			<p class="empty">Nobody has approved hours yet.</p>
-		{/if}
+						</thead>
+						<tbody>
+							{#each data.builders as u (u.id)}
+								{@const unspent = Math.max(u.available, 0)}
+								{@const whole = u.travel + u.rewards + unspent || 1}
+								<tr>
+									<td>
+										<span class="b-name">{u.name}</span>
+										{#if u.email}<a class="b-email" href="mailto:{u.email}">{u.email}</a>{:else}<span class="b-email muted">no email</span>{/if}
+									</td>
+									<td>
+										<span class="strong">{u.approved}h</span>
+										{#each u.projects as pr, i (i)}
+											<span class="b-sub">{pr.name} · {pr.hours}h</span>
+										{/each}
+										{#if u.adjustments !== 0}
+											<span class="b-sub">{u.adjustments > 0 ? '+' : ''}{u.adjustments}h corrections</span>
+										{/if}
+									</td>
+									<td class="split-col">
+										<span class="split" role="img" aria-label="{u.travel}h travel, {u.rewards}h rewards, {unspent}h not spent">
+											{#if u.travel > 0}<span class="seg travel" style="flex-grow:{u.travel / whole}" title="Dublin travel fund: {u.travel}h (${(u.travel * TRAVEL_RATE).toFixed(2)})"></span>{/if}
+											{#if u.rewards > 0}<span class="seg rewards" style="flex-grow:{u.rewards / whole}" title="Rewards: {u.rewards}h"></span>{/if}
+											{#if unspent > 0}<span class="seg unspent" style="flex-grow:{unspent / whole}" title="Not spent yet: {unspent}h"></span>{/if}
+										</span>
+										<span class="split-text">
+											{#if u.travel > 0}<span>{u.travel}h travel</span>{/if}
+											{#if u.rewards > 0}<span>{u.rewards}h rewards</span>{/if}
+											{#if unspent > 0}<span>{unspent}h unspent</span>{/if}
+										</span>
+										{#if u.rewardItems.length}
+											<span class="b-sub">
+												{#each u.rewardItems as r, i (i)}{r.name}{r.status === 'requested' ? ' (to send)' : ' (sent)'}{i < u.rewardItems.length - 1 ? ', ' : ''}{/each}
+											</span>
+										{/if}
+									</td>
+									<td>
+										{#if u.travel > 0}
+											<span class="strong">${(u.travel * TRAVEL_RATE).toFixed(2)}</span>
+											{#if u.buckets}
+												<span class="b-sub">
+													{[
+														u.buckets.flights ? `Flights ${u.buckets.flights}h` : '',
+														u.buckets.accommodation ? `Stay ${u.buckets.accommodation}h` : '',
+														u.buckets.visa ? `Visa ${u.buckets.visa}h` : ''
+													]
+														.filter(Boolean)
+														.join(' · ')}
+												</span>
+											{/if}
+										{:else}
+											<span class="muted">none</span>
+										{/if}
+										{#await data.analytics then an}
+											{@const country = an?.userCountry[u.id]}
+											{@const trip = estimateTrip(country)}
+											{#if country}
+												<span class="b-sub trip-line">
+													<span>From {country}</span>
+													{#if trip && trip.total}
+														<span>
+															${trip.flight} flight + {trip.visa === null ? 'visa: check' : trip.visa ? `$${trip.visa} visa` : 'no visa'}
+															= <strong>${trip.total}</strong>
+														</span>
+														<span>
+															{u.approved >= trip.hoursToQualify ? 'Qualifies now' : `Qualifies at ${trip.hoursToQualify}h`}
+															· <a href={trip.skyscanner} target="_blank" rel="noopener noreferrer">flights ↗</a>
+														</span>
+													{/if}
+												</span>
+											{/if}
+										{/await}
+										{#if u.travel > 0 || u.travelLocked}
+											<form method="POST" action="?/travelLock" use:enhance class="lock">
+												<input type="hidden" name="user_id" value={u.id} />
+												<input type="hidden" name="locked" value={u.travelLocked ? 'no' : 'yes'} />
+												{#if u.travelLocked}<span class="locked">Locked</span>{/if}
+												<button class="text-btn" type="submit">{u.travelLocked ? 'Unlock' : 'Lock fund'}</button>
+											</form>
+										{/if}
+									</td>
+									<td class="act">
+										{#if grantingFor === u.id}
+											<form
+												method="POST"
+												action="?/grant"
+												class="grant-form"
+												use:enhance={() => async ({ update }) => {
+													await update();
+													grantingFor = null;
+												}}>
+												<input type="hidden" name="user_id" value={u.id} />
+												<select name="type" required>
+													<option value="manual_adjustment">Correction (+/-)</option>
+													<option value="reward_claimed">Reward given (deduct)</option>
+												</select>
+												<input name="amount" type="number" step="0.25" placeholder="Hours" required style="width:6rem" />
+												<input name="note" type="text" maxlength="500" placeholder="Note (optional)" />
+												<button class="btn btn-outline" type="submit">Save</button>
+												<button type="button" class="link-action" onclick={() => (grantingFor = null)}>Cancel</button>
+											</form>
+											{#if form?.message}<p class="hint error">{form.message}</p>{/if}
+										{:else}
+											<button type="button" class="text-btn" onclick={() => (grantingFor = u.id)}>Adjust</button>
+										{/if}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{:else}
+				<p class="empty">Nobody has approved hours yet.</p>
+			{/if}
+		</section>
 	</div>
 </main>
 <Footer />
@@ -449,9 +479,6 @@
 		cursor: pointer;
 		color: var(--slate);
 		font-weight: 700;
-	}
-	.funnel.countries li {
-		grid-template-columns: 9rem minmax(0, 1fr) 2.5rem;
 	}
 	.funnel {
 		list-style: none;
@@ -544,9 +571,114 @@
 		.f-pct {
 			grid-column: 1 / -1;
 		}
-		.funnel.countries li {
-			grid-template-columns: 1fr auto;
-		}
+	}
+	.ledger {
+		margin-top: 1rem;
+	}
+	.trip-totals {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+		gap: 0.8rem 1.5rem;
+		margin-bottom: 1rem;
+	}
+	.trip-totals div {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+	}
+	.table-scroll {
+		overflow-x: auto;
+	}
+	.trip-line {
+		margin-top: 0.3rem;
+	}
+	.trip-line > span {
+		display: block;
+	}
+	.trip-line strong {
+		color: var(--navy);
+	}
+	.trip-line a {
+		white-space: nowrap;
+		color: var(--blue-dark);
+		font-weight: 700;
+	}
+	.trips a {
+		font-weight: 700;
+		color: var(--blue-dark);
+		white-space: nowrap;
+	}
+	.trips thead th:first-child {
+		text-align: left;
+	}
+	.trips .muted {
+		text-align: left;
+	}
+	.ledger-totals {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		gap: 0.8rem 1.5rem;
+		margin-bottom: 1rem;
+		padding: 1rem 1.2rem;
+		background: var(--white);
+		border: 2px solid var(--rule-strong);
+	}
+	.ledger-legend {
+		grid-column: 1 / -1;
+		padding-top: 0.7rem;
+		border-top: 1px solid var(--rule);
+	}
+	.ledger-totals div {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+	}
+	.lt-n {
+		font-size: 1.5rem;
+		font-weight: 800;
+		color: var(--navy);
+		line-height: 1;
+	}
+	.lt-k {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--muted);
+	}
+	.sw.travel,
+	.seg.travel {
+		background: #338eda;
+	}
+	.sw.rewards,
+	.seg.rewards {
+		background: #2f9e57;
+	}
+	.sw.unspent,
+	.seg.unspent {
+		background: #c9d3dc;
+	}
+	.split-col {
+		min-width: 220px;
+	}
+	.split {
+		display: flex;
+		gap: 2px;
+		height: 12px;
+		margin-top: 0.3rem;
+		background: var(--white);
+	}
+	.seg {
+		display: block;
+		min-width: 4px;
+		border-radius: 2px;
+	}
+	.split-text {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0 0.8rem;
+		margin-top: 0.35rem;
+		font-size: 0.82rem;
+		font-weight: 700;
+		color: var(--slate);
 	}
 	.b-head {
 		display: flex;
@@ -555,10 +687,6 @@
 		gap: 0.5rem 1.5rem;
 		flex-wrap: wrap;
 		margin-bottom: 0.6rem;
-	}
-	.b-totals {
-		font-size: 0.9rem;
-		color: var(--slate);
 	}
 	.table-wrap {
 		overflow-x: auto;
@@ -589,10 +717,6 @@
 	.builders tbody tr:nth-child(even) td {
 		background: #f7f9fb;
 	}
-	.builders .num {
-		text-align: right;
-		white-space: nowrap;
-	}
 	.strong {
 		font-weight: 800;
 		color: var(--navy);
@@ -610,10 +734,6 @@
 	}
 	.b-email {
 		color: var(--blue-dark);
-	}
-	.b-sub-inline {
-		font-size: 0.8rem;
-		color: var(--muted);
 	}
 	.muted {
 		color: var(--muted);
@@ -724,12 +844,6 @@
 	.w-t {
 		color: var(--muted);
 		font-weight: 600;
-	}
-	.claims-note {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		align-items: flex-start;
 	}
 	.text-btn {
 		background: none;

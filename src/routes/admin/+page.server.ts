@@ -23,7 +23,7 @@ const GRANT_TYPES = ['manual_adjustment', 'reward_claimed'] as const;
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
 
-	const [users, pendingOld, pendingNew, claims, buckets, sharedWaiting, overview, progress, subs] = await Promise.all([
+	const [users, pendingOld, pendingNew, claims, buckets, sharedWaiting, overview, progress, subs, approvedReviews] = await Promise.all([
 		listUsersWithBalances(),
 		countPendingReviews(),
 		countQueuePending(),
@@ -33,8 +33,24 @@ export const load: PageServerLoad = async ({ locals }) => {
 		getOverviewStats(),
 		// approved build hours only (checkpoint_approved), same figure as the 40h milestone
 		db().from('user_expedition_progress').select('user_id, hours_earned'),
-		db().from('hackclub_submissions').select('user_id, email, airtable_created_at').order('airtable_created_at', { ascending: false })
+		db().from('hackclub_submissions').select('user_id, email, airtable_created_at').order('airtable_created_at', { ascending: false }),
+		db()
+			.from('submission_reviews')
+			.select('user_id, hackatime_project, hackatime_projects, approved_hours, reviewed_at')
+			.eq('status', 'approved')
+			.order('reviewed_at', { ascending: true })
 	]);
+
+	// what each person's approved hours came from
+	const projectsBy = new Map<string, { name: string; hours: number }[]>();
+	for (const r of approvedReviews.data ?? []) {
+		const list = projectsBy.get(r.user_id) ?? [];
+		list.push({
+			name: (r.hackatime_projects?.length ? r.hackatime_projects : [r.hackatime_project]).join(' + '),
+			hours: Number(r.approved_hours ?? 0)
+		});
+		projectsBy.set(r.user_id, list);
+	}
 
 	const travelBuckets = Object.fromEntries(buckets.map((b) => [b.user_id, b]));
 	const approvedBy = new Map((progress.data ?? []).map((p) => [p.user_id as string, Number(p.hours_earned)]));
@@ -56,6 +72,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				name: u.display_name ?? 'Unnamed',
 				email: u.email ?? typedEmail.get(u.id) ?? null,
 				approved,
+				projects: projectsBy.get(u.id) ?? [],
 				rewards: round(rewards),
 				rewardItems: live.map((c) => ({ name: c.reward_name, status: c.status })),
 				travel,

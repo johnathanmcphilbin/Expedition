@@ -442,14 +442,17 @@ export type AdminClaim = RewardClaimRow & {
 export async function listAllClaims(): Promise<AdminClaim[]> {
 	const { data, error: e } = await db()
 		.from('reward_claims')
-		.select('*, users(display_name, email)')
+		.select('*, users(display_name, email, hackclub_id)')
 		.order('created_at', { ascending: false });
 	if (e) throw new Error(e.message);
 	return (
 		(data ?? []) as unknown as (RewardClaimRow & {
-			users: Pick<UserRow, 'display_name' | 'email'> | null;
+			users: Pick<UserRow, 'display_name' | 'email' | 'hackclub_id'> | null;
 		})[]
-	).map((c) => ({ ...c, owner: c.users }));
+	)
+		// stress-test accounts (not real Hack Club sign-ins) never need posting
+		.filter((c) => c.users?.hackclub_id?.startsWith('ident!'))
+		.map(({ users, ...c }) => ({ ...c, owner: users ? { display_name: users.display_name, email: users.email } : null }));
 }
 
 export async function fulfilClaim(claimId: string, adminNotes: string | null): Promise<void> {

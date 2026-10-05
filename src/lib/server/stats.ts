@@ -1,3 +1,4 @@
+import { estimateTrip } from '$lib/travel-estimates';
 import { db } from './supabase';
 import { fetchProjectTimes, fetchHackatimeProfile } from './hackatime';
 
@@ -220,7 +221,16 @@ const COUNTRY_ALIASES: Record<string, string> = {
 	rou: 'Romania',
 	ca: 'Canada',
 	de: 'Germany',
-	deutschland: 'Germany'
+	deutschland: 'Germany',
+	uae: 'United Arab Emirates',
+	'u.a.e.': 'United Arab Emirates',
+	korea: 'South Korea',
+	'republic of korea': 'South Korea',
+	'czech republic': 'Czechia',
+	türkiye: 'Turkey',
+	turkiye: 'Turkey',
+	brasil: 'Brazil',
+	'viet nam': 'Vietnam'
 };
 
 /** Free-text country → one consistent name, so "USA" and "United States" count together. */
@@ -350,7 +360,10 @@ export async function getReviewAnalytics() {
 	for (const r of queueCountries.data ?? []) noteCountry(r.user_id, r.country, r.created_at);
 	const perCountry = new Map<string, number>();
 	for (const { country } of latestCountry.values()) perCountry.set(country, (perCountry.get(country) ?? 0) + 1);
-	const countries = [...perCountry.entries()].map(([country, n]) => ({ country, n })).sort((a, b) => b.n - a.n || a.country.localeCompare(b.country));
+	const countries = [...perCountry.entries()]
+		.map(([country, n]) => ({ country, n, trip: estimateTrip(country) }))
+		.sort((a, b) => b.n - a.n || a.country.localeCompare(b.country));
+	const userCountry = Object.fromEntries([...latestCountry.entries()].map(([id, v]) => [id, v.country]));
 
 	// ---- hours
 	const approvedSubs = subs.filter((s) => s.outcome === 'approved');
@@ -368,6 +381,7 @@ export async function getReviewAnalytics() {
 		timeline,
 		countries,
 		countriesKnown: latestCountry.size,
+		userCountry,
 		speed: {
 			waiting: waiting.length,
 			oldestWaitingHours: oldest ? round1((now - new Date(oldest).getTime()) / HOUR_MS) : null,
