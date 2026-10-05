@@ -9,7 +9,7 @@ import {
 	unlockedCount,
 	CHECKPOINT_EVERY_HOURS
 } from '$lib/server/checkpoints';
-import { text, url, uuid, ValidationError } from '$lib/server/validate';
+import { text, url, uuid, ValidationError, isAllowedImage } from '$lib/server/validate';
 
 const MAX_IMAGE = 4 * 1024 * 1024;
 
@@ -66,7 +66,7 @@ export const actions: Actions = {
 			let image = form.get('image');
 			if (!(image instanceof File) || image.size === 0) image = null;
 			if (image) {
-				if (!image.type.startsWith('image/')) throw new ValidationError('The screenshot needs to be an image');
+				if (!isAllowedImage(image)) throw new ValidationError('The screenshot needs to be a PNG, JPEG, WebP, GIF or AVIF image');
 				if (image.size > MAX_IMAGE) throw new ValidationError('That screenshot is over 4 MB. Try a smaller one');
 			}
 			if (!image && !videoUrl) throw new ValidationError('Add a screenshot or a video link');

@@ -25,6 +25,7 @@
 
 	function queueHref(item: { kind: 'hc' | 'new'; key: string }) {
 		const p = new URLSearchParams();
+		p.set('track', data.track);
 		p.set('status', data.filter);
 		if (data.search) p.set('q', data.search);
 		p.set(item.kind === 'new' ? 'new' : 'submission', item.key);
@@ -34,6 +35,7 @@
 		data.selected?.kind === item.kind && data.selected?.key === item.key;
 	function filterHref(status: string) {
 		const p = new URLSearchParams();
+		p.set('track', data.track);
 		p.set('status', status);
 		if (data.search) p.set('q', data.search);
 		return `/admin/reviews?${p}`;
@@ -73,6 +75,7 @@
 				</p>
 			</div>
 			<form method="GET" class="search-form">
+				<input type="hidden" name="track" value={data.track} />
 				<input type="hidden" name="status" value={data.filter} />
 				<input type="search" name="q" placeholder="Search name, email or project" value={data.search} aria-label="Search submissions" />
 			</form>
@@ -83,6 +86,15 @@
 				Couldn't refresh from Airtable, so this may be out of date. <span class="hint">({data.syncError})</span>
 			</p>
 		{/if}
+
+		<nav class="tracks" aria-label="Software or hardware">
+			{#each [{ v: 'software', l: 'Software' }, { v: 'hardware', l: 'Hardware' }, { v: 'all', l: 'All' }] as t (t.v)}
+				<a href="/admin/reviews?track={t.v}&status=pending" class:active={data.track === t.v}>
+					{t.l}
+					<span class="track-count">{data.trackCounts[t.v as 'software' | 'hardware' | 'all']} waiting</span>
+				</a>
+			{/each}
+		</nav>
 
 		<nav class="tabs" aria-label="Filter by status">
 			{#each FILTERS as f (f.value)}
@@ -143,6 +155,15 @@
 						</a>
 					{/if}
 
+{#if data.queuedDetail.priorApprovals.length}
+						<div class="prior-warn" role="alert">
+							<strong>⚠ Hours already approved on this project:</strong>
+							{#each data.queuedDetail.priorApprovals as a (a.recordId)}
+								<span>{a.hours}h on {a.projects.join(', ')}{a.reviewedAt ? ` (${new Date(a.reviewedAt).toLocaleDateString()})` : ''}</span>
+							{/each}
+							<em>Only approve time tracked since then. The Hackatime total above includes it.</em>
+						</div>
+					{/if}
 					<CheckpointTimeline items={data.queuedDetail.checkpoints} unlocked={data.queuedDetail.checkpointsUnlocked} />
 
 					{#if r.status === 'rejected' || r.status === 'changes_requested'}
@@ -323,6 +344,15 @@
 					{/if}
 
 					{#if s.user_id}
+{#if data.detail.priorApprovals.length}
+							<div class="prior-warn" role="alert">
+								<strong>⚠ Hours already approved on this project:</strong>
+								{#each data.detail.priorApprovals as a (a.recordId)}
+									<span>{a.hours}h on {a.projects.join(', ')}{a.reviewedAt ? ` (${new Date(a.reviewedAt).toLocaleDateString()})` : ''}</span>
+								{/each}
+								<em>Only approve time tracked since then. The Hackatime total above includes it.</em>
+							</div>
+						{/if}
 						<CheckpointTimeline items={data.detail.checkpoints} />
 					{/if}
 
@@ -342,6 +372,7 @@
 								It didn't match anyone automatically. Find the participant, link them, then review as normal.
 							</p>
 							<form method="GET" class="link-search">
+								<input type="hidden" name="track" value={data.track} />
 								<input type="hidden" name="status" value={data.filter} />
 								{#if data.search}<input type="hidden" name="q" value={data.search} />{/if}
 								<input type="hidden" name="submission" value={s.airtable_record_id} />
@@ -451,6 +482,55 @@
 </main>
 
 <style>
+	.prior-warn {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem 0.8rem;
+		margin: 1rem 0;
+		padding: 0.8rem 1rem;
+		background: #fff4e5;
+		border: 2px solid #c25e00;
+		color: #5c2c00;
+		font-size: 0.9rem;
+	}
+	.prior-warn strong,
+	.prior-warn em {
+		flex-basis: 100%;
+	}
+	.prior-warn em {
+		font-style: normal;
+		font-size: 0.85rem;
+	}
+	.tracks {
+		display: flex;
+		margin-bottom: 1rem;
+		border: 3px solid var(--navy);
+		width: fit-content;
+		max-width: 100%;
+	}
+	.tracks a {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+		padding: 0.55rem 1.3rem;
+		background: var(--white);
+		text-decoration: none;
+		font-weight: 800;
+		font-size: 1rem;
+		color: var(--navy);
+	}
+	.tracks a + a {
+		border-left: 3px solid var(--navy);
+	}
+	.tracks a.active {
+		background: var(--navy);
+		color: var(--white);
+	}
+	.track-count {
+		font-size: 0.75rem;
+		font-weight: 600;
+		opacity: 0.8;
+	}
 	.justify {
 		margin-top: 1.5rem;
 		padding-top: 1.2rem;

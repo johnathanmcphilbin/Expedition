@@ -8,7 +8,7 @@ import {
 	listConnectedProjects,
 	connectProject
 } from '$lib/server/queries';
-import { ValidationError } from '$lib/server/validate';
+import { ValidationError, isAllowedImage } from '$lib/server/validate';
 import { parseSubmissionFields } from '$lib/server/submission-fields';
 import { queueSubmission, listOwnQueued } from '$lib/server/queue';
 import { notifySubmission } from '$lib/server/notify';
@@ -114,12 +114,21 @@ export const actions: Actions = {
 				throw new ValidationError(`"${missing[0]}" isn't in your Hackatime`, 'project');
 			}
 
+			// one waiting submission per project, so the same hours can't be queued twice
+			const waiting = (await listOwnQueued(user.id)).filter((q) => q.status === 'pending');
+			const dupe = fields.hackatime_projects.find((n) =>
+				waiting.some((q) => (q.hackatime_projects?.length ? q.hackatime_projects : [q.project_name]).includes(n))
+			);
+			if (dupe) {
+				throw new ValidationError(`"${dupe}" is already waiting for review. Hang tight until it's decided.`, 'project');
+			}
+
 			const file = form.get('screenshot');
 			if (!(file instanceof File) || file.size === 0) {
 				throw new ValidationError('Add a screenshot of your project', 'screenshot');
 			}
-			if (!file.type.startsWith('image/')) {
-				throw new ValidationError('The screenshot needs to be an image', 'screenshot');
+			if (!isAllowedImage(file)) {
+				throw new ValidationError('The screenshot needs to be a PNG, JPEG, WebP, GIF or AVIF image', 'screenshot');
 			}
 			if (file.size > MAX_SCREENSHOT) {
 				throw new ValidationError('That screenshot is over 4 MB. Try a smaller one', 'screenshot');
@@ -127,7 +136,7 @@ export const actions: Actions = {
 
 			// Waits for an Expedition reviewer; it only goes to Hack Club once
 			// approved (see src/lib/server/queue.ts).
-			await queueSubmission(user.id, hackatime.hackatimeUserId, fields, file);
+			await queueSubmission(user.id, hackatime.hackatimeUserId, fields, file, form.get('library') === 'yes');
 			for (const n of fields.hackatime_projects) await connectProject(user.id, n).catch(() => {});
 
 			await notifySubmission({

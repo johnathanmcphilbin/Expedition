@@ -18,7 +18,8 @@ export async function queueSubmission(
 	userId: string,
 	hackatimeUserId: string,
 	fields: SubmissionFields,
-	screenshot: File
+	screenshot: File,
+	libraryOptIn = false
 ): Promise<QueuedSubmissionRow> {
 	const ext = (screenshot.name.match(/\.(\w{2,5})$/)?.[1] ?? 'png').toLowerCase();
 	const path = `${userId}/${crypto.randomUUID()}.${ext}`;
@@ -36,7 +37,8 @@ export async function queueSubmission(
 			hackatime_user_id: hackatimeUserId,
 			screenshot_path: path,
 			screenshot_type: screenshot.type,
-			screenshot_name: screenshot.name || `screenshot.${ext}`
+			screenshot_name: screenshot.name || `screenshot.${ext}`,
+			library_opt_in: libraryOptIn
 		})
 		.select('*')
 		.single();
@@ -168,6 +170,32 @@ export async function sendQueued(params: {
 	if (!q) return { ok: false, message: 'That submission no longer exists.' };
 	if (q.status === 'sent') return { ok: false, message: 'This one has already been sent to Hack Club.' };
 
+	// Claim it first, so a double click or two reviewers at once can't create
+	// two Airtable rows and credit the hours twice. A lock older than two
+	// minutes is from a request that died and can be taken over.
+	const stale = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+	const { data: locked, error: lockError } = await db()
+		.from('submission_queue')
+		.update({ sending_at: new Date().toISOString() })
+		.eq('id', q.id)
+		.neq('status', 'sent')
+		.or(`sending_at.is.null,sending_at.lt.${stale}`)
+		.select('id');
+	if (lockError) return { ok: false, message: `Couldn't start sending it: ${lockError.message}` };
+	if (!locked?.length) return { ok: false, message: 'This one is already being sent. Refresh in a moment.' };
+
+	try {
+		return await sendLocked(q, params);
+	} finally {
+		await db().from('submission_queue').update({ sending_at: null }).eq('id', q.id);
+	}
+}
+
+async function sendLocked(
+	q: QueuedSubmissionRow,
+	params: Parameters<typeof sendQueued>[0]
+): Promise<{ ok: true; airtableRecordId: string } | { ok: false; message: string }> {
+
 	const projects = q.hackatime_projects?.length ? q.hackatime_projects : [q.project_name];
 	// Hack Club's field takes several names; commas are how their form lists them
 	const projectsForHackClub = projects.join(', ');
@@ -237,6 +265,7 @@ export async function sendQueued(params: {
 		description: q.description,
 		project_names_raw: projectsForHackClub,
 		airtable_status: null,
+		country: q.country,
 		airtable_created_at: createdTime,
 		synced_at: new Date().toISOString()
 	};
@@ -291,12 +320,84 @@ export async function sendQueued(params: {
 			address_line2: null,
 			city: null,
 			state: null,
-			country: null,
+			// country stays, for where-people-are-from analytics
+			zip: null,
+			// a library project keeps its screenshot to show there
+			...(q.library_opt_in ? {} : { screenshot_path: null })
+		})
+		.eq('id', q.id);
+	if (q.screenshot_path && !q.library_opt_in) await db().storage.from(BUCKET).remove([q.screenshot_path]);
+
+	return { ok: true, airtableRecordId: recordId };
+}
+
+/**
+ * Approved projects whose builder ticked "show this in the library". Only
+ * public-safe columns are selected: first name, project, links, description
+ * and the screenshot — never surname, email, birthday or address.
+ */
+export async function listLibraryProjects(limit = 120): Promise<
+	{ id: string; first_name: string; project: string; description: string; code_url: string; playable_url: string; hardware: boolean; image_url: string | null; sent_at: string | null }[]
+> {
+	const { data, error } = await db()
+		.from('submission_queue')
+		.select('id, first_name, project_name, description, code_url, playable_url, hardware, screenshot_path, sent_at')
+		.eq('status', 'sent')
+		.eq('library_opt_in', true)
+		.order('sent_at', { ascending: false })
+		.limit(limit);
+	if (error) {
+		console.error('listLibraryProjects', error.message);
+		return [];
+	}
+	const rows = data ?? [];
+	const paths = rows.map((r) => r.screenshot_path).filter((p): p is string => !!p);
+	const urls = new Map<string, string>();
+	if (paths.length) {
+		const { data: signed } = await db().storage.from(BUCKET).createSignedUrls(paths, 60 * 60);
+		for (const s of signed ?? []) if (s.path && s.signedUrl) urls.set(s.path, s.signedUrl);
+	}
+	return rows.map((r) => ({
+		id: r.id,
+		first_name: (r.first_name ?? 'A builder').trim().split(' ')[0],
+		project: r.project_name,
+		description: r.description,
+		code_url: r.code_url,
+		playable_url: r.playable_url,
+		hardware: r.hardware,
+		image_url: r.screenshot_path ? (urls.get(r.screenshot_path) ?? null) : null,
+		sent_at: r.sent_at
+	}));
+}
+
+/**
+ * Rejected and needs-changes submissions never reach Hack Club, so their
+ * address, birthday and screenshot would otherwise sit here for good. A
+ * month after the decision they're wiped; reopening one after that means
+ * the participant resubmits. Runs best-effort when the review page loads.
+ */
+export async function purgeStalePersonalData(days = 30): Promise<void> {
+	const cutoff = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
+	const { data, error } = await db()
+		.from('submission_queue')
+		.select('id, screenshot_path')
+		.in('status', ['rejected', 'changes_requested'])
+		.lt('reviewed_at', cutoff)
+		.or('address_line1.not.is.null,birthday.not.is.null,screenshot_path.not.is.null');
+	if (error || !data?.length) return;
+	const ids = data.map((r) => r.id);
+	await db()
+		.from('submission_queue')
+		.update({
+			birthday: null,
+			address_line1: null,
+			address_line2: null,
+			city: null,
+			state: null,
 			zip: null,
 			screenshot_path: null
 		})
-		.eq('id', q.id);
-	if (q.screenshot_path) await db().storage.from(BUCKET).remove([q.screenshot_path]);
-
-	return { ok: true, airtableRecordId: recordId };
+		.in('id', ids);
+	const paths = data.map((r) => r.screenshot_path).filter((p): p is string => !!p);
+	if (paths.length) await db().storage.from(BUCKET).remove(paths);
 }

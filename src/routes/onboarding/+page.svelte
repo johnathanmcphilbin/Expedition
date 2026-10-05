@@ -7,7 +7,8 @@
 
 	const flashText: Record<string, string> = {
 		denied: 'Hackatime connection was cancelled.',
-		failed: 'Hackatime connection failed. Try again.'
+		failed: 'Hackatime connection failed. Try again.',
+		taken: 'That Hackatime account is already connected to another Expedition account. Each Hackatime account can only be on one. Ask an organiser if that’s wrong.'
 	};
 </script>
 

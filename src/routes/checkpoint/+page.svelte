@@ -100,7 +100,7 @@
 							}}
 							ondragleave={() => (dragging = false)}
 							ondrop={onDrop}>
-							<input bind:this={fileInput} class="sr-only" type="file" name="image" accept="image/*"
+							<input bind:this={fileInput} class="sr-only" type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
 								onchange={(e) => showPreview(e.currentTarget.files?.[0])} />
 							{#if preview}
 								<img src={preview} alt="Screenshot preview" />

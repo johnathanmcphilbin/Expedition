@@ -1,6 +1,6 @@
 import { redirect, type RequestHandler } from '@sveltejs/kit';
 import { exchangeCode, fetchClaims, upsertUser } from '$lib/server/hca';
-import { consumeOAuthState, createSession } from '$lib/server/session';
+import { consumeOAuthState, createSession, safeNext } from '$lib/server/session';
 import { callbackUrl } from '$lib/server/env';
 import { connectionStatus } from '$lib/server/hackatime';
 
@@ -16,7 +16,7 @@ export const GET: RequestHandler = async ({ url, cookies, request, getClientAddr
 		redirect(303, '/?auth=failed');
 	}
 
-	const next = cookies.get('oauth_hca_next');
+	const next = safeNext(cookies.get('oauth_hca_next'));
 	cookies.delete('oauth_hca_next', { path: '/' });
 
 	const accessToken = await exchangeCode(code, callbackUrl(url.origin, '/auth/callback'));
@@ -37,11 +37,11 @@ export const GET: RequestHandler = async ({ url, cookies, request, getClientAddr
 	} catch {
 		// Auth and the local session are already complete. A temporary status
 		// lookup failure must not turn a successful sign-in into a 500.
-		redirect(303, next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard');
+		redirect(303, next ?? '/dashboard');
 	}
 	if (!hackatime.connected) {
 		redirect(303, '/onboarding');
 	}
 
-	redirect(303, next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard');
+	redirect(303, next ?? '/dashboard');
 };

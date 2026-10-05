@@ -120,6 +120,18 @@ export async function saveConnection(
 	if (error) throw new Error(`Could not save Hackatime connection: ${error.message}`);
 }
 
+/** True when another Expedition account already has this Hackatime account. */
+export async function hackatimeLinkedElsewhere(hackatimeUserId: string, userId: string): Promise<boolean> {
+	const { data, error } = await db()
+		.from('hackatime_connections')
+		.select('user_id')
+		.eq('hackatime_user_id', hackatimeUserId)
+		.neq('user_id', userId)
+		.limit(1);
+	if (error) throw new Error(`Could not check Hackatime connection: ${error.message}`);
+	return (data ?? []).length > 0;
+}
+
 /** Connection status WITHOUT tokens — safe to send to the browser. */
 export async function connectionStatus(
 	userId: string

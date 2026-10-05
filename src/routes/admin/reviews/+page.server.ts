@@ -9,7 +9,8 @@ import {
 	getBalance,
 	searchUsers,
 	linkSubmissionToUser,
-	reopenReview
+	reopenReview,
+	listPriorApprovals
 } from '$lib/server/queries';
 import {
 	syncHackClubSubmissions,
@@ -28,7 +29,8 @@ import {
 	updateQueuedFields,
 	decideQueued,
 	sendQueued,
-	reopenQueued
+	reopenQueued,
+	purgeStalePersonalData
 } from '$lib/server/queue';
 import { parseSubmissionFields, parseJustifications } from '$lib/server/submission-fields';
 import { hours, text, uuid, oneOf, ValidationError } from '$lib/server/validate';
@@ -52,6 +54,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	} catch (e) {
 		syncError = e instanceof Error ? e.message : 'Could not sync Hack Club submissions.';
 	}
+
+	purgeStalePersonalData().catch((e) => console.error('purgeStalePersonalData', e));
 
 	const [submissions, reviews, queued] = await Promise.all([
 		listAllHackClubSubmissions(),
@@ -97,6 +101,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		hardware: boolean;
 		searchText: string;
 	};
+	// hardware is ticked on the submission form; a queued submission that's
+	// since been sent keeps its flag via its Airtable record id. Anything
+	// submitted before the checkbox existed counts as software.
+	const hardwareByRecord = new Map(
+		queued.filter((qr) => qr.airtable_record_id).map((qr) => [qr.airtable_record_id as string, qr.hardware])
+	);
+
 	const items: Item[] = [
 		...rows.map((r) => ({
 			kind: 'hc' as const,
@@ -110,7 +121,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			project: r.review?.hackatime_project ?? r.submission.project_names_raw,
 			submittedAt: r.submission.airtable_created_at,
 			matched: !!r.submission.user_id,
-			hardware: false,
+			hardware: hardwareByRecord.get(r.submission.airtable_record_id) ?? false,
 			searchText: [r.submission.first_name, r.submission.last_name, r.submission.email, r.submission.github_username, r.submission.project_names_raw, r.review?.hackatime_project]
 				.filter(Boolean)
 				.join(' ')
@@ -134,22 +145,34 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	].sort((a, b) => (b.submittedAt ?? '').localeCompare(a.submittedAt ?? ''));
 
 	const isPending = (st: SubmissionStatus) => st === 'pending' || st === 'in_review';
+
+	// software and hardware are separate queues; 'all' shows both
+	const trackParam = url.searchParams.get('track');
+	const track = trackParam === 'hardware' || trackParam === 'all' ? trackParam : 'software';
+	const inTrack = (i: Item) => track === 'all' || (track === 'hardware') === i.hardware;
+	const trackCounts = {
+		software: items.filter((i) => !i.hardware && isPending(i.status)).length,
+		hardware: items.filter((i) => i.hardware && isPending(i.status)).length,
+		all: items.filter((i) => isPending(i.status)).length
+	};
+	const trackItems = items.filter(inTrack);
+
 	const counts = {
-		pending: items.filter((i) => isPending(i.status)).length,
-		changes_requested: items.filter((i) => i.status === 'changes_requested').length,
-		approved: items.filter((i) => i.status === 'approved').length,
-		rejected: items.filter((i) => i.status === 'rejected').length,
-		all: items.length
+		pending: trackItems.filter((i) => isPending(i.status)).length,
+		changes_requested: trackItems.filter((i) => i.status === 'changes_requested').length,
+		approved: trackItems.filter((i) => i.status === 'approved').length,
+		rejected: trackItems.filter((i) => i.status === 'rejected').length,
+		all: trackItems.length
 	};
 
 	const filter = (url.searchParams.get('status') as Filter | null) ?? 'pending';
 	const validFilter = FILTERS.includes(filter) ? filter : 'pending';
 	const filtered =
 		validFilter === 'all'
-			? items
+			? trackItems
 			: validFilter === 'pending'
-				? items.filter((i) => isPending(i.status))
-				: items.filter((i) => i.status === validFilter);
+				? trackItems.filter((i) => isPending(i.status))
+				: trackItems.filter((i) => i.status === validFilter);
 
 	const q = (url.searchParams.get('q') ?? '').trim().toLowerCase();
 	const searched = q ? filtered.filter((i) => i.searchText.includes(q)) : filtered;
@@ -176,10 +199,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		const projects = (times ?? []).map((t) => ({ name: t.name, tracked: formatHours(t.totalSeconds), seconds: t.totalSeconds }));
 		const picked = row.hackatime_projects?.length ? row.hackatime_projects : [row.project_name];
 		const matched = projects.filter((p) => picked.includes(p.name));
-		const checkpoints = (await Promise.all(picked.map((n) => listProjectCheckpoints(row.user_id, n)))).flat();
+		const [checkpoints, priorApprovals] = await Promise.all([
+			Promise.all(picked.map((n) => listProjectCheckpoints(row.user_id, n))).then((l) => l.flat()),
+			listPriorApprovals(row.user_id, picked, row.airtable_record_id)
+		]);
 		queuedDetail = {
 			row,
 			picked,
+			priorApprovals,
 			justifications: {
 				'Justification - Hackatime Project Name(s) + Date Range(s)': picked.join(', '),
 				'Justification - Submitter Hackatime ID': row.hackatime_user_id,
@@ -205,6 +232,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		balance: Awaited<ReturnType<typeof getBalance>> | null;
 		linkCandidates: Awaited<ReturnType<typeof searchUsers>>;
 		checkpoints: Awaited<ReturnType<typeof listProjectCheckpoints>>;
+		priorApprovals: Awaited<ReturnType<typeof listPriorApprovals>>;
 		justifications: Record<string, string | null> | null;
 		justificationsError: string | null;
 	} | null = null;
@@ -242,6 +270,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			? (await Promise.all(cpProjects.map((n) => listProjectCheckpoints(selectedRow.submission.user_id!, n)))).flat()
 			: [];
 
+		const priorApprovals = selectedRow.submission.user_id
+			? await listPriorApprovals(selectedRow.submission.user_id, cpProjects, selectedRow.submission.airtable_record_id)
+			: [];
+
 		let justifications: Record<string, string | null> | null = null;
 		let justificationsError: string | null = null;
 		try {
@@ -256,6 +288,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			justifications,
 			justificationsError,
 			checkpoints,
+			priorApprovals,
 			hackatimeProjects,
 			suggestedProject,
 			balance,
@@ -266,6 +299,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	return {
 		queue: searched.map(({ searchText: _s, ...i }) => i),
 		selected: selectedItem ? { kind: selectedItem.kind, key: selectedItem.key } : null,
+		track,
+		trackCounts,
 		justificationFields: JUSTIFICATION_FIELDS.map((f, i) => ({ input: `just_${i}`, name: f.name, label: f.label, rows: f.rows })),
 		queuedDetail,
 		filter: validFilter,
@@ -385,6 +420,7 @@ export const actions: Actions = {
 		const qs = new URLSearchParams();
 		if (url.searchParams.get('status')) qs.set('status', url.searchParams.get('status')!);
 		if (url.searchParams.get('q')) qs.set('q', url.searchParams.get('q')!);
+		if (url.searchParams.get('track')) qs.set('track', url.searchParams.get('track')!);
 		redirect(303, `/admin/reviews${qs.toString() ? `?${qs}` : ''}`);
 	},
 
@@ -429,6 +465,7 @@ export const actions: Actions = {
 		const qs = new URLSearchParams();
 		if (url.searchParams.get('status')) qs.set('status', url.searchParams.get('status')!);
 		if (url.searchParams.get('q')) qs.set('q', url.searchParams.get('q')!);
+		if (url.searchParams.get('track')) qs.set('track', url.searchParams.get('track')!);
 		qs.set('submission', form.get('airtable_record_id')!.toString());
 		redirect(303, `/admin/reviews?${qs}`);
 	},
@@ -539,6 +576,7 @@ export const actions: Actions = {
 		const qs = new URLSearchParams();
 		if (url.searchParams.get('status')) qs.set('status', url.searchParams.get('status')!);
 		if (url.searchParams.get('q')) qs.set('q', url.searchParams.get('q')!);
+		if (url.searchParams.get('track')) qs.set('track', url.searchParams.get('track')!);
 		redirect(303, `/admin/reviews${qs.toString() ? `?${qs}` : ''}`);
 	}
 };

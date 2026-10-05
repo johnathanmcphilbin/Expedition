@@ -138,6 +138,7 @@ interface SubmissionFields {
 	'Justification - Submitter Hackatime ID'?: string;
 	'Justification - Hackatime Project Name(s) + Date Range(s)'?: string;
 	'Automation - Status'?: string;
+	Country?: string;
 	// The only fields on this row meant for a reviewer's own answer — Hack
 	// Club's own automation reads these as a manual override of the hours it
 	// would otherwise compute. There is no separate status/reviewer/feedback
@@ -231,6 +232,7 @@ export async function syncHackClubSubmissions(
 			project_names_raw:
 				r.fields['Justification - Hackatime Project Name(s) + Date Range(s)'] ?? null,
 			airtable_status: r.fields['Automation - Status'] ?? null,
+			country: r.fields['Country']?.trim() || null,
 			airtable_created_at: r.createdTime
 		};
 	});

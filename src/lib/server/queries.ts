@@ -179,7 +179,8 @@ export async function listOwnReviews(userId: string): Promise<SubmissionReviewRo
 		.eq('user_id', userId)
 		.order('updated_at', { ascending: false });
 	if (e) throw new Error(e.message);
-	return (data ?? []) as SubmissionReviewRow[];
+	// this goes to the participant's own pages: reviewer-only notes stay out
+	return ((data ?? []) as SubmissionReviewRow[]).map((r) => ({ ...r, internal_notes: null, reviewer_id: null }));
 }
 
 export type QueueItem = SubmissionReviewRow & {
@@ -430,7 +431,8 @@ export async function listOwnClaims(userId: string): Promise<RewardClaimRow[]> {
 		.eq('user_id', userId)
 		.order('created_at', { ascending: false });
 	if (e) throw new Error(e.message);
-	return (data ?? []) as RewardClaimRow[];
+	// the participant's own view: organiser notes stay out
+	return ((data ?? []) as RewardClaimRow[]).map((c) => ({ ...c, admin_notes: null }));
 }
 
 export type AdminClaim = RewardClaimRow & {
@@ -530,4 +532,36 @@ export async function grantHours(
 		.from('hour_transactions')
 		.insert({ user_id: userId, amount, type, note });
 	if (e) throw new Error(e.message);
+}
+
+/**
+ * Hours already approved for this person on any of these Hackatime
+ * projects, so a reviewer doesn't approve the same tracked time twice when
+ * a project comes back for another round.
+ */
+export async function listPriorApprovals(
+	userId: string,
+	projects: string[],
+	excludeRecordId: string | null = null
+): Promise<{ recordId: string; projects: string[]; hours: number; reviewedAt: string | null }[]> {
+	const wanted = new Set(projects.map((p) => p.toLowerCase()));
+	if (!wanted.size) return [];
+	const { data, error: e } = await db()
+		.from('submission_reviews')
+		.select('airtable_record_id, hackatime_project, hackatime_projects, approved_hours, reviewed_at')
+		.eq('user_id', userId)
+		.eq('status', 'approved');
+	if (e) {
+		console.error('listPriorApprovals', e.message);
+		return [];
+	}
+	return (data ?? [])
+		.filter((r) => r.airtable_record_id !== excludeRecordId)
+		.map((r) => ({
+			recordId: r.airtable_record_id,
+			projects: r.hackatime_projects?.length ? r.hackatime_projects : [r.hackatime_project],
+			hours: Number(r.approved_hours ?? 0),
+			reviewedAt: r.reviewed_at
+		}))
+		.filter((r) => r.projects.some((p) => wanted.has(p.toLowerCase())));
 }

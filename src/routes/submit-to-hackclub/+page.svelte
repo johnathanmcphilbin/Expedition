@@ -325,7 +325,7 @@
 									class="sr-only"
 									type="file"
 									name="screenshot"
-									accept="image/*"
+									accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
 									required
 									onchange={(e) => showPreview(e.currentTarget.files?.[0])} />
 								{#if preview}
@@ -386,6 +386,14 @@
 							</div>
 						</div>
 					</section>
+
+					<label class="library-opt">
+						<input type="checkbox" name="library" value="yes" />
+						<span>
+							Show this project in the Expedition library
+							<span class="hint">Once it's approved, your first name, project, description, links and screenshot go on the public library page.</span>
+						</span>
+					</label>
 
 					<details class="step extra">
 						<summary>Tell Hack Club what you think <span class="optional">optional</span></summary>
@@ -493,6 +501,30 @@
 	}
 	.id-fields[hidden] {
 		display: none;
+	}
+	.library-opt {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.6rem;
+		max-width: 760px;
+		margin-bottom: 2rem;
+		padding: 0.9rem 1rem;
+		background: var(--white);
+		border: 2px solid var(--rule-strong);
+		font-weight: 700;
+		color: var(--navy);
+		cursor: pointer;
+	}
+	.library-opt input {
+		margin-top: 0.2rem;
+		width: 1.1rem;
+		height: 1.1rem;
+		accent-color: var(--green);
+	}
+	.library-opt .hint {
+		display: block;
+		margin-top: 0.2rem;
+		font-weight: 500;
 	}
 	.hw-toggle {
 		display: inline-flex;

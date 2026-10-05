@@ -112,3 +112,20 @@ export function consumeOAuthState(cookies: Cookies, name: string, received: stri
 export function newStateToken(): string {
 	return randomBytes(24).toString('base64url');
 }
+
+/**
+ * A same-site path to send someone to after sign-in, or null. `//evil.com`
+ * and `/\evil.com` are both other sites to a browser (it reads `\` as `/`),
+ * so a leading slash alone isn't enough.
+ */
+export function safeNext(next: string | null | undefined): string | null {
+	if (!next || !next.startsWith('/') || next.startsWith('//')) return null;
+	if (/[\\\x00-\x1f\x7f]/.test(next)) return null;
+	try {
+		const u = new URL(next, 'http://x.invalid');
+		if (u.origin !== 'http://x.invalid') return null;
+	} catch {
+		return null;
+	}
+	return next;
+}

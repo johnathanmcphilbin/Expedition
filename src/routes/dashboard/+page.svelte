@@ -11,7 +11,8 @@
 	const flashText: Record<string, string> = {
 		connected: 'Hackatime connected. Now add the project you’re working on.',
 		denied: 'Hackatime connection was cancelled.',
-		failed: 'Hackatime connection failed. Try again.'
+		failed: 'Hackatime connection failed. Try again.',
+		taken: 'That Hackatime account is already connected to another Expedition account. Each Hackatime account can only be on one. Ask an organiser if that’s wrong.'
 	};
 
 	const firstName = $derived((data.user.display_name ?? '').split(' ')[0]);

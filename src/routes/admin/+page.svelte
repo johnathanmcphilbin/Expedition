@@ -13,6 +13,8 @@
 	const sum = (k: 'approved' | 'rewards' | 'travel' | 'available') =>
 		data.builders.reduce((t: number, b: BuilderRow) => t + Number(b[k]), 0);
 	const round = (n: number) => Math.round(n * 100) / 100;
+	// "3h", "1.5d" — waits run from hours to days
+	const fmtWait = (h: number) => (h < 48 ? `${Math.round(h * 10) / 10}h` : `${Math.round((h / 24) * 10) / 10}d`);
 
 	const totalBanked = $derived(
 		data.users.reduce((sum, u) => sum + Number(u.balance.hours_available), 0)
@@ -92,6 +94,140 @@
 				<div class="s"><span class="s-n">{data.overview.checkpoints ?? '–'}</span><span class="s-k">checkpoints posted</span></div>
 			</div>
 		</section>
+
+		{#await data.analytics}
+			<p class="hint analytics-loading">Loading analytics…</p>
+		{:then an}
+			{#if an}
+				<div class="analytics">
+					<section class="panel an-card">
+						<p class="section-label">Sign-up funnel</p>
+						<ol class="funnel">
+							{#each an.funnel as f, i (f.step)}
+								{@const top = an.funnel[0].n || 1}
+								{@const prev = i ? an.funnel[i - 1].n : f.n}
+								<li title="{f.step}: {f.n} ({Math.round((f.n / top) * 100)}% of sign-ups)">
+									<span class="f-step">{f.step}</span>
+									<span class="f-track"><span class="f-bar" style="width:{Math.max((f.n / top) * 100, f.n ? 1 : 0)}%"></span></span>
+									<span class="f-n">{f.n}</span>
+									<span class="f-pct">
+										{Math.round((f.n / top) * 100)}%{#if i && prev}<em> · {Math.round((f.n / prev) * 100)}% of previous</em>{/if}
+									</span>
+								</li>
+							{/each}
+						</ol>
+					</section>
+
+					{#if an.timeline.length}
+					{@const W = 720}
+						{@const H = 170}
+						{@const pad = { l: 28, r: 8, t: 10, b: 24 }}
+						{@const max = Math.max(1, ...an.timeline.map((d) => Math.max(d.submitted, d.decided)))}
+						{@const ticks = max <= 4 ? Array.from({ length: max + 1 }, (_, i) => i) : [0, Math.round(max / 2), max]}
+						{@const slot = (W - pad.l - pad.r) / an.timeline.length}
+						{@const bw = Math.max(2, (slot - 4) / 2)}
+						{@const y = (n: number) => pad.t + (H - pad.t - pad.b) * (1 - n / max)}
+						{@const totalSub = an.timeline.reduce((t, d) => t + d.submitted, 0)}
+						{@const totalDec = an.timeline.reduce((t, d) => t + d.decided, 0)}
+					<section class="panel an-card wide">
+						<div class="tl-head">
+							<p class="section-label">Submissions over the last 30 days</p>
+							<p class="legend">
+								<span><i class="sw sub"></i>Submitted <strong>{totalSub}</strong></span>
+								<span><i class="sw dec"></i>Decided <strong>{totalDec}</strong></span>
+							</p>
+						</div>
+						<svg class="timeline" viewBox="0 0 {W} {H}" role="img" aria-label="Submitted and decided per day over the last 30 days: {totalSub} submitted, {totalDec} decided">
+							{#each ticks as t (t)}
+								<line class="grid" x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} />
+								<text class="axis" x={pad.l - 6} y={y(t) + 4} text-anchor="end">{t}</text>
+							{/each}
+							{#each an.timeline as d, i (d.day)}
+								{@const x = pad.l + i * slot + 2}
+								{@const label = new Date(d.day + 'T00:00:00Z').toLocaleDateString('en-IE', { day: 'numeric', month: 'short', timeZone: 'UTC' })}
+								<g class="day">
+									<title>{label}: {d.submitted} submitted, {d.decided} decided</title>
+									<rect class="hit" x={pad.l + i * slot} y={pad.t} width={slot} height={H - pad.t - pad.b} />
+									{#if d.submitted}<rect class="bar sub" x={x} y={y(d.submitted)} width={bw} height={y(0) - y(d.submitted)} rx="2" />{/if}
+									{#if d.decided}<rect class="bar dec" x={x + bw + 1} y={y(d.decided)} width={bw} height={y(0) - y(d.decided)} rx="2" />{/if}
+									{#if (an.timeline.length - 1 - i) % 7 === 0}
+										<text class="axis" x={pad.l + i * slot + slot / 2} y={H - 6} text-anchor="middle">{label}</text>
+									{/if}
+								</g>
+							{/each}
+							<line class="base" x1={pad.l} x2={W - pad.r} y1={y(0)} y2={y(0)} />
+						</svg>
+						<details class="tl-table">
+							<summary>Show as a table</summary>
+							<table class="tracks-table">
+								<thead><tr><th>Day</th><th>Submitted</th><th>Decided</th></tr></thead>
+								<tbody>
+									{#each an.timeline.filter((d) => d.submitted || d.decided) as d (d.day)}
+										<tr><th>{d.day}</th><td>{d.submitted}</td><td>{d.decided}</td></tr>
+									{:else}
+										<tr><td colspan="3">Nothing in the last 30 days.</td></tr>
+									{/each}
+								</tbody>
+							</table>
+						</details>
+					</section>
+					{/if}
+
+					<section class="panel an-card">
+						<p class="section-label">Review speed</p>
+						<div class="stat-grid">
+							<div class="s"><span class="s-n">{an.speed.waiting}</span><span class="s-k">waiting now</span></div>
+							<div class="s"><span class="s-n">{an.speed.oldestWaitingHours === null ? '–' : fmtWait(an.speed.oldestWaitingHours)}</span><span class="s-k">oldest has waited</span></div>
+							<div class="s"><span class="s-n">{an.speed.medianHours === null ? '–' : fmtWait(an.speed.medianHours)}</span><span class="s-k">typical wait for a decision<br /><em>median{an.speed.averageHours !== null ? `, average ${fmtWait(an.speed.averageHours)}` : ''}</em></span></div>
+							<div class="s"><span class="s-n">{an.speed.decidedThisWeek}<small> / {an.speed.submittedThisWeek}</small></span><span class="s-k">decided / submitted<br /><em>last 7 days</em></span></div>
+						</div>
+						{#if an.speed.reviewers.length}
+							<p class="an-sub">Decisions by reviewer:
+								{#each an.speed.reviewers as r, i (r.name)}<strong>{r.name}</strong> {r.n}{i < an.speed.reviewers.length - 1 ? ' · ' : ''}{/each}
+							</p>
+						{/if}
+					</section>
+
+					<section class="panel an-card">
+						<p class="section-label">Hours</p>
+						<div class="stat-grid">
+							<div class="s"><span class="s-n">{an.hours.approvedHours}h</span><span class="s-k">approved<br /><em>from {an.hours.trackedOnApproved}h tracked on those projects</em></span></div>
+							<div class="s"><span class="s-n">{an.hours.cutPercent === null ? '–' : `${an.hours.cutPercent}%`}</span><span class="s-k">cut on review<br /><em>tracked hours not approved</em></span></div>
+							<div class="s"><span class="s-n">{an.hours.approved}<small> / {an.hours.approved + an.hours.changes + an.hours.rejected}</small></span><span class="s-k">decisions approved<br /><em>{an.hours.changes} needs changes · {an.hours.rejected} rejected</em></span></div>
+						</div>
+						<table class="tracks-table">
+							<thead><tr><th></th><th>Submissions</th><th>Approved</th><th>Hours approved</th></tr></thead>
+							<tbody>
+								<tr><th>Software</th><td>{an.hours.software.submissions}</td><td>{an.hours.software.approved}</td><td>{an.hours.software.hours}h</td></tr>
+								<tr><th>Hardware</th><td>{an.hours.hardware.submissions}</td><td>{an.hours.hardware.approved}</td><td>{an.hours.hardware.hours}h</td></tr>
+							</tbody>
+						</table>
+					</section>
+					<section class="panel an-card">
+						<p class="section-label">Where people are from</p>
+						{#if an.countries.length}
+							{@const top = an.countries[0].n}
+							<ol class="funnel countries">
+								{#each an.countries.slice(0, 12) as c (c.country)}
+									<li title="{c.country}: {c.n} {c.n === 1 ? 'person' : 'people'} ({Math.round((c.n / an.countriesKnown) * 100)}%)">
+										<span class="f-step">{c.country}</span>
+										<span class="f-track"><span class="f-bar" style="width:{(c.n / top) * 100}%"></span></span>
+										<span class="f-n">{c.n}</span>
+									</li>
+								{/each}
+							</ol>
+							<p class="an-sub">
+								From the country on each person's latest submission · {an.countriesKnown} {an.countriesKnown === 1 ? 'person' : 'people'} known{#if an.countries.length > 12} · {an.countries.length - 12} more countries{/if}
+							</p>
+						{:else}
+							<p class="an-sub">No countries yet. They fill in from new submissions and the next Airtable sync.</p>
+						{/if}
+					</section>
+				</div>
+			{:else}
+				<p class="hint">Couldn't load analytics just now.</p>
+			{/if}
+		{/await}
 
 		<div class="stat-row" style="margin-bottom:2.5rem">
 			<div class="stat-big">
@@ -228,6 +364,190 @@
 <Footer />
 
 <style>
+	.analytics {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+		gap: 1.2rem;
+		margin-bottom: 2.5rem;
+	}
+	.analytics-loading {
+		margin-bottom: 2.5rem;
+	}
+	.an-card {
+		border: 2px solid var(--rule-strong);
+	}
+	.an-card:first-child {
+		grid-column: 1 / -1;
+	}
+	.an-card.wide {
+		grid-column: 1 / -1;
+	}
+	.tl-head {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 0.5rem 1.5rem;
+	}
+	.legend {
+		display: flex;
+		gap: 1.2rem;
+		font-size: 0.85rem;
+		color: var(--slate);
+	}
+	.legend strong {
+		color: var(--navy);
+	}
+	.sw {
+		display: inline-block;
+		width: 12px;
+		height: 12px;
+		margin-right: 0.4rem;
+		border-radius: 2px;
+		vertical-align: -1px;
+	}
+	.sw.sub,
+	.bar.sub {
+		background: #338eda;
+		fill: #338eda;
+	}
+	.sw.dec,
+	.bar.dec {
+		background: #2f9e57;
+		fill: #2f9e57;
+	}
+	.timeline {
+		display: block;
+		width: 100%;
+		height: auto;
+		margin-top: 0.8rem;
+	}
+	.timeline .grid {
+		stroke: var(--rule);
+		stroke-width: 1;
+	}
+	.timeline .base {
+		stroke: var(--rule-strong);
+		stroke-width: 1;
+	}
+	.timeline .axis {
+		font-size: 11px;
+		fill: var(--muted);
+		font-variant-numeric: tabular-nums;
+	}
+	.timeline .hit {
+		fill: transparent;
+	}
+	.timeline .day:hover .hit {
+		fill: var(--paper);
+	}
+	.tl-table {
+		margin-top: 0.6rem;
+		font-size: 0.85rem;
+	}
+	.tl-table summary {
+		cursor: pointer;
+		color: var(--slate);
+		font-weight: 700;
+	}
+	.funnel.countries li {
+		grid-template-columns: 9rem minmax(0, 1fr) 2.5rem;
+	}
+	.funnel {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+	}
+	.funnel li {
+		display: grid;
+		grid-template-columns: 11rem minmax(0, 1fr) 3.5rem 12rem;
+		align-items: center;
+		gap: 0.8rem;
+		font-size: 0.9rem;
+	}
+	.f-step {
+		font-weight: 700;
+		color: var(--navy);
+	}
+	.f-track {
+		height: 14px;
+		background: var(--paper);
+	}
+	.f-bar {
+		display: block;
+		height: 100%;
+		background: var(--navy-soft);
+		border-radius: 0 4px 4px 0;
+	}
+	.funnel li:hover .f-bar {
+		background: var(--navy);
+	}
+	.f-n {
+		text-align: right;
+		font-weight: 800;
+		color: var(--navy);
+		font-variant-numeric: tabular-nums;
+	}
+	.f-pct {
+		font-size: 0.82rem;
+		font-weight: 700;
+		color: var(--slate);
+	}
+	.f-pct em {
+		font-style: normal;
+		font-weight: 500;
+		color: var(--muted);
+	}
+	.s-n small {
+		font-size: 0.55em;
+		color: var(--muted);
+	}
+	.an-sub {
+		margin-top: 1rem;
+		font-size: 0.88rem;
+		color: var(--slate);
+	}
+	.tracks-table {
+		width: 100%;
+		margin-top: 1.1rem;
+		border-collapse: collapse;
+		font-size: 0.88rem;
+	}
+	.tracks-table th,
+	.tracks-table td {
+		padding: 0.4rem 0.5rem;
+		border-top: 1px solid var(--rule);
+		text-align: right;
+	}
+	.tracks-table thead th {
+		border-top: 0;
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--muted);
+	}
+	.tracks-table tbody th {
+		text-align: left;
+		color: var(--navy);
+	}
+	@media (max-width: 700px) {
+		.funnel li {
+			grid-template-columns: 1fr auto;
+		}
+		.f-track {
+			grid-column: 1 / -1;
+			grid-row: 2;
+		}
+		.f-pct {
+			grid-column: 1 / -1;
+		}
+		.funnel.countries li {
+			grid-template-columns: 1fr auto;
+		}
+	}
 	.b-head {
 		display: flex;
 		align-items: baseline;

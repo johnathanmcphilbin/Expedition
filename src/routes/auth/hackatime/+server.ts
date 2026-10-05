@@ -1,6 +1,6 @@
 import { redirect, type RequestHandler } from '@sveltejs/kit';
 import { authorizeUrl } from '$lib/server/hackatime';
-import { newStateToken, setOAuthState } from '$lib/server/session';
+import { newStateToken, setOAuthState, safeNext } from '$lib/server/session';
 import { callbackUrl } from '$lib/server/env';
 import { requireUser } from '$lib/server/guards';
 
@@ -12,8 +12,8 @@ export const GET: RequestHandler = ({ url, cookies, locals }) => {
 
 	// Onboarding sends people back here rather than the dashboard once
 	// connected — same same-site-only guard as the Hack Club Auth login.
-	const next = url.searchParams.get('next');
-	if (next && next.startsWith('/') && !next.startsWith('//')) {
+	const next = safeNext(url.searchParams.get('next'));
+	if (next) {
 		setOAuthState(cookies, 'ht_next', next);
 	}
 

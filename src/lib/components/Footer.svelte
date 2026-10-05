@@ -16,6 +16,7 @@
 			<a href="/rewards">Your hours</a>
 			<a href="/ireland">Dublin</a>
 			<a href="/faq">FAQ</a>
+			<a href="/library">Library</a>
 			<a href="/log">Expedition log</a>
 		</div>
 

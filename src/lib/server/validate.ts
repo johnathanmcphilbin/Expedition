@@ -120,3 +120,13 @@ export function oneOf<T extends string>(
 	}
 	return value as T;
 }
+
+/**
+ * Raster images only. An SVG can carry script, and the type comes from the
+ * browser, so this is a list of what's allowed rather than `image/*`.
+ */
+export const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'] as const;
+
+export function isAllowedImage(file: File): boolean {
+	return (IMAGE_TYPES as readonly string[]).includes(file.type.toLowerCase());
+}

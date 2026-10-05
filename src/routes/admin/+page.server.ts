@@ -13,7 +13,7 @@ import {
 } from '$lib/server/queries';
 import { countAwaitingModeration } from '$lib/server/checkpoints';
 import { countQueuePending } from '$lib/server/queue';
-import { getActivityStats, getOverviewStats } from '$lib/server/stats';
+import { getActivityStats, getOverviewStats, getReviewAnalytics } from '$lib/server/stats';
 import { signedHours, text, oneOf, uuid, ValidationError } from '$lib/server/validate';
 import { db } from '$lib/server/supabase';
 
@@ -76,6 +76,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		travelBuckets,
 		sharedWaiting,
 		overview,
+		analytics: getReviewAnalytics().catch((e) => {
+			console.error('review analytics', e);
+			return null;
+		}),
 		// streamed: the page renders straight away and this fills in when
 		// every builder's Hackatime has answered
 		activity: getActivityStats().catch((e) => {

@@ -62,6 +62,8 @@ export type HackClubSubmissionRow = {
 	description: string | null;
 	project_names_raw: string | null;
 	airtable_status: string | null;
+	/** for where-people-are-from analytics; the rest of the address stays in Airtable */
+	country: string | null;
 	airtable_created_at: string | null;
 	synced_at: string;
 }
@@ -105,6 +107,8 @@ export type QueuedSubmissionRow = {
 	/** reviewer edits to Hack Club's justification fields, by Airtable field name */
 	justifications: Record<string, string | null>;
 	hardware: boolean;
+	/** they ticked "show this in the library" */
+	library_opt_in: boolean;
 	code_url: string;
 	playable_url: string;
 	description: string;
@@ -132,6 +136,8 @@ export type QueuedSubmissionRow = {
 	reviewer_id: string | null;
 	reviewed_at: string | null;
 	airtable_record_id: string | null;
+	/** set while an approve is sending it to Airtable */
+	sending_at: string | null;
 	sent_at: string | null;
 	created_at: string;
 	updated_at: string;
