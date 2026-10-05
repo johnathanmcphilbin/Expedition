@@ -25,7 +25,7 @@
 
 	function queueHref(item: { kind: 'hc' | 'new'; key: string }) {
 		const p = new URLSearchParams();
-		p.set('track', data.track);
+		if (data.track !== 'all') p.set('track', data.track);
 		p.set('status', data.filter);
 		if (data.search) p.set('q', data.search);
 		p.set(item.kind === 'new' ? 'new' : 'submission', item.key);
@@ -35,7 +35,7 @@
 		data.selected?.kind === item.kind && data.selected?.key === item.key;
 	function filterHref(status: string) {
 		const p = new URLSearchParams();
-		p.set('track', data.track);
+		if (data.track !== 'all') p.set('track', data.track);
 		p.set('status', status);
 		if (data.search) p.set('q', data.search);
 		return `/admin/reviews?${p}`;
@@ -87,15 +87,6 @@
 			</p>
 		{/if}
 
-		<nav class="tracks" aria-label="Software or hardware">
-			{#each [{ v: 'software', l: 'Software' }, { v: 'hardware', l: 'Hardware' }, { v: 'all', l: 'All' }] as t (t.v)}
-				<a href="/admin/reviews?track={t.v}&status=pending" class:active={data.track === t.v}>
-					{t.l}
-					<span class="track-count">{data.trackCounts[t.v as 'software' | 'hardware' | 'all']} waiting</span>
-				</a>
-			{/each}
-		</nav>
-
 		<nav class="tabs" aria-label="Filter by status">
 			{#each FILTERS as f (f.value)}
 				<a href={filterHref(f.value)} class:active={data.filter === f.value}>
@@ -115,9 +106,9 @@
 						</span>
 						<span class="qi-project">{item.project ?? 'No project named'}</span>
 						<span class="qi-tags">
+							{#if item.hardware}<span class="tag tag-hw">Hardware</span>{/if}
 							<span class="tag tag-{item.status}">{STATUS_LABEL[item.status]}</span>
 							{#if item.kind === 'new'}<span class="tag tag-new">Not sent yet</span>{/if}
-							{#if item.hardware}<span class="tag tag-warn">Hardware</span>{/if}
 							{#if !item.matched}<span class="tag tag-warn">No account</span>{/if}
 						</span>
 					</a>
@@ -501,35 +492,10 @@
 		font-style: normal;
 		font-size: 0.85rem;
 	}
-	.tracks {
-		display: flex;
-		margin-bottom: 1rem;
-		border: 3px solid var(--navy);
-		width: fit-content;
-		max-width: 100%;
-	}
-	.tracks a {
-		display: flex;
-		flex-direction: column;
-		gap: 0.1rem;
-		padding: 0.55rem 1.3rem;
-		background: var(--white);
-		text-decoration: none;
-		font-weight: 800;
-		font-size: 1rem;
-		color: var(--navy);
-	}
-	.tracks a + a {
-		border-left: 3px solid var(--navy);
-	}
-	.tracks a.active {
-		background: var(--navy);
-		color: var(--white);
-	}
-	.track-count {
-		font-size: 0.75rem;
-		font-weight: 600;
-		opacity: 0.8;
+	.tag.tag-hw {
+		background: #a34a00;
+		border-color: #a34a00;
+		color: #fff;
 	}
 	.justify {
 		margin-top: 1.5rem;

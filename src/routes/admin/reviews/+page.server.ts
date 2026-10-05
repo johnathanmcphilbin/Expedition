@@ -146,9 +146,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	const isPending = (st: SubmissionStatus) => st === 'pending' || st === 'in_review';
 
-	// software and hardware are separate queues; 'all' shows both
 	const trackParam = url.searchParams.get('track');
-	const track = trackParam === 'hardware' || trackParam === 'all' ? trackParam : 'software';
+	// one queue by default; ?track=software|hardware still narrows it for old links
+	const track = trackParam === 'hardware' || trackParam === 'software' ? trackParam : 'all';
 	const inTrack = (i: Item) => track === 'all' || (track === 'hardware') === i.hardware;
 	const trackCounts = {
 		software: items.filter((i) => !i.hardware && isPending(i.status)).length,
