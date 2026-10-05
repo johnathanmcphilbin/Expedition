@@ -172,7 +172,7 @@
 						<span class="qi-tags">
 							{#if item.hardware}<span class="tag tag-hw">Hardware</span>{/if}
 							<span class="tag tag-{item.status}">{STATUS_LABEL[item.status]}</span>
-							{#if item.kind === 'new'}<span class="tag tag-new">Not sent yet</span>{/if}
+							{#if item.kind === 'new' && item.status === 'pending'}<span class="tag tag-new">Not sent yet</span>{/if}
 							{#if !item.matched}<span class="tag tag-warn">No account</span>{/if}
 						</span>
 					</a>
