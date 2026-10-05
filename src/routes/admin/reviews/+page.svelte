@@ -59,6 +59,12 @@
 		selectedProject = data.detail?.suggestedProject ?? '';
 	});
 	let hardware = $state(false);
+	let flagging = $state(false);
+	// close a half-written flag when moving to another submission
+	$effect(() => {
+		void data.selected?.key;
+		flagging = false;
+	});
 	let hardwareNote = $state<string | null>(null);
 
 	// ticking Hardware saves straight away and moves it to the right tab,
@@ -83,6 +89,42 @@
 		hardware = data.queuedDetail?.row.hardware ?? false;
 	});
 </script>
+
+{#snippet flagPanel(kind: 'hc' | 'new', key: string)}
+	<div class="flag-panel" class:on={!!data.selectedFlag}>
+		{#if data.selectedFlag}
+			<p>
+				<strong>⚑ Flagged as possible fraud</strong>
+				{#if data.selectedFlag.reason}<span>{data.selectedFlag.reason}</span>{/if}
+				<span class="hint">{new Date(data.selectedFlag.at).toLocaleDateString()}</span>
+			</p>
+			<form method="POST" action="?/flag" use:enhance={() => async ({ update }) => update({ reset: false })}>
+				<input type="hidden" name="kind" value={kind} />
+				<input type="hidden" name="key" value={key} />
+				<input type="hidden" name="on" value="no" />
+				<button class="text-btn" type="submit">Remove flag</button>
+			</form>
+		{:else if flagging}
+			<form
+				method="POST"
+				action="?/flag"
+				class="flag-form"
+				use:enhance={() => async ({ update }) => {
+					await update({ reset: false });
+					flagging = false;
+				}}>
+				<input type="hidden" name="kind" value={kind} />
+				<input type="hidden" name="key" value={key} />
+				<input type="hidden" name="on" value="yes" />
+				<input name="reason" maxlength="500" placeholder="Why? e.g. hours don't match commits, copied repo" />
+				<button class="btn flag-btn" type="submit">⚑ Flag it</button>
+				<button class="text-btn" type="button" onclick={() => (flagging = false)}>Cancel</button>
+			</form>
+		{:else}
+			<button class="text-btn flag-open" type="button" onclick={() => (flagging = true)}>⚑ Flag as possible fraud</button>
+		{/if}
+	</div>
+{/snippet}
 
 <svelte:head><title>Review queue · Expedition</title></svelte:head>
 
@@ -121,9 +163,9 @@
 			<!-- ---------- queue ---------- -->
 			<aside class="queue" aria-label="Submissions">
 				{#each data.queue as item (item.kind + item.key)}
-					<a class="qi" class:active={isSelected(item)} href={queueHref(item)}>
+					<a class="qi" class:active={isSelected(item)} class:flagged={!!item.flag} href={queueHref(item)} title={item.flag ? `Possible fraud${item.flag.reason ? `: ${item.flag.reason}` : ''}` : undefined}>
 						<span class="qi-top">
-							<span class="qi-name">{item.participant}</span>
+							<span class="qi-name">{#if item.flag}<span class="qi-flag" aria-label="Flagged as possible fraud">⚑</span>{/if}{item.participant}</span>
 							<span class="qi-time">{ago(item.submittedAt)}</span>
 						</span>
 						<span class="qi-project">{item.project ?? 'No project named'}</span>
@@ -163,6 +205,7 @@
 							{/if}
 						</div>
 					</header>
+					{@render flagPanel('new', r.id)}
 
 					{#if data.queuedDetail.screenshot}
 						<a class="shot" href={data.queuedDetail.screenshot} target="_blank" rel="noopener noreferrer">
@@ -354,6 +397,7 @@
 						</div>
 						<span class="tag tag-{status}">{STATUS_LABEL[status]}</span>
 					</header>
+					{@render flagPanel('hc', s.airtable_record_id)}
 
 					<div class="links">
 						{#if s.code_url}<a class="link-btn" href={s.code_url} target="_blank" rel="noopener noreferrer">Code ↗</a>{/if}
@@ -734,6 +778,60 @@
 		border-left-width: 5px;
 		text-decoration: none;
 		color: inherit;
+	}
+	.qi.flagged {
+		border-color: #c81e1e;
+		border-left: 6px solid #c81e1e;
+		background: #fdecec;
+	}
+	.qi.flagged.active {
+		border-color: #9b1c1c;
+		box-shadow: inset 0 0 0 1px #9b1c1c;
+	}
+	.qi-flag {
+		margin-right: 0.35rem;
+		color: #c81e1e;
+	}
+	.flag-panel {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem 1rem;
+		margin: 0.8rem 0 1rem;
+	}
+	.flag-panel.on {
+		padding: 0.7rem 0.9rem;
+		background: #fdecec;
+		border: 2px solid #c81e1e;
+		color: #7f1d1d;
+	}
+	.flag-panel.on p {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.2rem 0.7rem;
+		margin: 0;
+	}
+	.flag-open {
+		color: #9b1c1c;
+	}
+	.flag-form {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		align-items: center;
+		flex: 1;
+	}
+	.flag-form input {
+		flex: 1;
+		min-width: 220px;
+		padding: 0.45rem 0.6rem;
+		border: 2px solid #c81e1e;
+		font: inherit;
+	}
+	.flag-btn {
+		background: #c81e1e;
+		border-color: #c81e1e;
 	}
 	.qi:hover {
 		border-color: var(--rule-strong);

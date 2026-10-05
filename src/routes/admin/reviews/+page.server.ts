@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin } from '$lib/server/guards';
+import { db } from '$lib/server/supabase';
 import {
 	listAllHackClubSubmissions,
 	listAllReviewsWithSubmissions,
@@ -58,11 +59,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	purgeStalePersonalData().catch((e) => console.error('purgeStalePersonalData', e));
 
-	const [submissions, reviews, queued] = await Promise.all([
+	const [submissions, reviews, queued, flagRows] = await Promise.all([
 		listAllHackClubSubmissions(),
 		listAllReviewsWithSubmissions(),
-		listQueue()
+		listQueue(),
+		db().from('review_flags').select('item_kind, item_key, reason, flagged_at')
 	]);
+	// "possible fraud" marks, by kind:key
+	const flags = new Map(
+		(flagRows.data ?? []).map((f) => [`${f.item_kind}:${f.item_key}`, { reason: f.reason, at: f.flagged_at }])
+	);
 
 	const reviewsBySubmission = new Map<string, QueueItem[]>();
 	for (const r of reviews) {
@@ -100,11 +106,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		submittedAt: string | null;
 		matched: boolean;
 		hardware: boolean;
+		flag: { reason: string | null; at: string } | null;
 		searchText: string;
 	};
 	// hardware is ticked on the submission form; a queued submission that's
 	// since been sent keeps its flag via its Airtable record id. Anything
 	// submitted before the checkbox existed counts as software.
+	const queueIdByRecord = new Map(
+		queued.filter((qr) => qr.airtable_record_id).map((qr) => [qr.airtable_record_id as string, qr.id])
+	);
 	const hardwareByRecord = new Map(
 		queued.filter((qr) => qr.airtable_record_id).map((qr) => [qr.airtable_record_id as string, qr.hardware])
 	);
@@ -123,6 +133,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			submittedAt: r.submission.airtable_created_at,
 			matched: !!r.submission.user_id,
 			hardware: hardwareByRecord.get(r.submission.airtable_record_id) ?? false,
+			// a flag set while it was still queued follows it once sent
+			flag:
+				flags.get(`hc:${r.submission.airtable_record_id}`) ??
+				flags.get(`new:${queueIdByRecord.get(r.submission.airtable_record_id)}`) ??
+				null,
 			searchText: [r.submission.first_name, r.submission.last_name, r.submission.email, r.submission.github_username, r.submission.project_names_raw, r.review?.hackatime_project]
 				.filter(Boolean)
 				.join(' ')
@@ -139,6 +154,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				submittedAt: qr.created_at,
 				matched: true,
 				hardware: qr.hardware,
+				flag: flags.get(`new:${qr.id}`) ?? null,
 				searchText: [qr.first_name, qr.last_name, qr.email, qr.github_username, qr.project_name]
 					.join(' ')
 					.toLowerCase()
@@ -304,6 +320,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	return {
 		queue: searched.map(({ searchText: _s, ...i }) => i),
 		selected: selectedItem ? { kind: selectedItem.kind, key: selectedItem.key } : null,
+		selectedFlag: selectedItem ? (flags.get(`${selectedItem.kind}:${selectedItem.key}`) ?? null) : null,
 		track,
 		trackCounts,
 		justificationFields: JUSTIFICATION_FIELDS.map((f, i) => ({ input: `just_${i}`, name: f.name, label: f.label, rows: f.rows })),
@@ -354,6 +371,38 @@ export const actions: Actions = {
 	 * leave it waiting, ask for changes, reject, or approve — which sends it to
 	 * Hack Club's Airtable and credits the hours.
 	 */
+	/** Mark a submission as possible fraud (or clear the mark). */
+	flag: async ({ request, locals }) => {
+		const admin = requireAdmin(locals);
+		const form = await request.formData();
+		try {
+			const kind = oneOf(form.get('kind'), ['hc', 'new'] as const, 'Kind');
+			const key = text(form.get('key'), 'Submission', { max: 64, required: true })!;
+			if (form.get('on') === 'yes') {
+				const { error } = await db()
+					.from('review_flags')
+					.upsert(
+						{
+							item_kind: kind,
+							item_key: key,
+							reason: text(form.get('reason'), 'Reason', { max: 500 }),
+							flagged_by: admin.id,
+							flagged_at: new Date().toISOString()
+						},
+						{ onConflict: 'item_kind,item_key' }
+					);
+				if (error) throw new Error(error.message);
+			} else {
+				const { error } = await db().from('review_flags').delete().eq('item_kind', kind).eq('item_key', key);
+				if (error) throw new Error(error.message);
+			}
+			return { flagged: form.get('on') === 'yes' };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { message: e.message });
+			throw e;
+		}
+	},
+
 	/** Just the Hardware tick, saved on its own as soon as it changes. */
 	setHardware: async ({ request, locals }) => {
 		requireAdmin(locals);

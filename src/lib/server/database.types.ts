@@ -201,6 +201,15 @@ export type TripFlightRow = {
 	updated_at: string;
 }
 
+/** A reviewer's "possible fraud" mark on a submission in the review queue. */
+export type ReviewFlagRow = {
+	item_kind: 'hc' | 'new';
+	item_key: string;
+	reason: string | null;
+	flagged_by: string | null;
+	flagged_at: string;
+}
+
 export type HourTransactionRow = {
 	id: string;
 	user_id: string;
@@ -306,6 +315,7 @@ export interface Database {
 			checkpoints: Table<CheckpointRow>;
 			travel_origins: Table<TravelOriginRow>;
 			trip_flights: Table<TripFlightRow>;
+			review_flags: Table<ReviewFlagRow>;
 		};
 		Views: {
 			user_hour_balances: { Row: HourBalanceRow; Relationships: [] };
