@@ -2,13 +2,15 @@
 	import '$lib/styles/app.css';
 	import { enhance } from '$app/forms';
 	import Footer from '$lib/components/Footer.svelte';
-	import { TRAVEL_RATE } from '$lib/data';
+	import { TRAVEL_RATE, TRAVEL_CAP_HOURS } from '$lib/data';
 	import { skyscannerUrl } from '$lib/travel-estimates';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let grantingFor = $state<string | null>(null);
+	const qualified = $derived(data.builders.filter((b) => b.remaining === 0).length);
+	const close = $derived(data.builders.filter((b) => b.remaining > 0 && b.remaining <= 10).length);
 	let findingAirports = $state(false);
 
 	type BuilderRow = (typeof data.builders)[number];
@@ -349,19 +351,18 @@
 
 		<section class="ledger">
 			<div class="b-head">
-				<p class="section-label">Where approved hours have gone</p>
+				<p class="section-label">Progress to Dublin</p>
 			</div>
 
 			<div class="ledger-totals">
-				<div><span class="lt-n">{data.builders.length}</span><span class="lt-k">people with approved hours</span></div>
-				<div><span class="lt-n">{round(sum('approved'))}h</span><span class="lt-k">approved</span></div>
-				<div><span class="lt-n">{round(sum('travel'))}h</span><span class="lt-k">in travel funds · ${round(sum('travel') * TRAVEL_RATE)}</span></div>
-				<div><span class="lt-n">{round(sum('rewards'))}h</span><span class="lt-k">on rewards</span></div>
-				<div><span class="lt-n">{round(sum('available'))}h</span><span class="lt-k">not spent yet</span></div>
-				<p class="legend ledger-legend">
-					<span><i class="sw travel"></i>Dublin travel fund</span>
-					<span><i class="sw rewards"></i>Rewards</span>
-					<span><i class="sw unspent"></i>Not spent yet</span>
+				<div><span class="lt-n">{data.builders.length}</span><span class="lt-k">people tracked</span></div>
+				<div><span class="lt-n">{qualified}</span><span class="lt-k">qualify for travel now</span></div>
+				<div><span class="lt-n">{close}</span><span class="lt-k">within 10 hours</span></div>
+				<div><span class="lt-n">{round(sum('approved'))}h</span><span class="lt-k">approved in total</span></div>
+				<div><span class="lt-n">${round(sum('travel') * TRAVEL_RATE)}</span><span class="lt-k">banked for travel ({round(sum('travel'))}h)</span></div>
+				<p class="ledger-legend">
+					To qualify they need approved hours worth half their flight at ${TRAVEL_RATE}/h, so a flight over ${TRAVEL_CAP_HOURS * TRAVEL_RATE * 2} needs the full {TRAVEL_CAP_HOURS}h (the most anyone needs).
+					Flights are estimates from their home airport; anyone without one is counted against {TRAVEL_CAP_HOURS}h.
 				</p>
 			</div>
 
@@ -371,91 +372,63 @@
 						<thead>
 							<tr>
 								<th>Builder</th>
-								<th>Approved for</th>
-								<th class="split-col">Where it's gone</th>
-								<th>Travel fund</th>
+								<th>Balance</th>
+								<th>Flight</th>
+								<th class="split-col">Towards qualifying</th>
 								<th></th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each data.builders as u (u.id)}
-								{@const unspent = Math.max(u.available, 0)}
-								{@const whole = u.travel + u.rewards + unspent || 1}
-								<tr>
+								{@const pct = Math.min(100, (u.approved / u.target) * 100)}
+								<tr class:done={u.remaining === 0}>
 									<td>
 										<span class="b-name">{u.name}</span>
 										{#if u.email}<a class="b-email" href="mailto:{u.email}">{u.email}</a>{:else}<span class="b-email muted">no email</span>{/if}
 									</td>
 									<td>
-										<span class="strong">{u.approved}h</span>
-										{#each u.projects as pr, i (i)}
-											<span class="b-sub">{pr.name} · {pr.hours}h</span>
-										{/each}
-										{#if u.adjustments !== 0}
-											<span class="b-sub">{u.adjustments > 0 ? '+' : ''}{u.adjustments}h corrections</span>
-										{/if}
-									</td>
-									<td class="split-col">
-										<span class="split" role="img" aria-label="{u.travel}h travel, {u.rewards}h rewards, {unspent}h not spent">
-											{#if u.travel > 0}<span class="seg travel" style="flex-grow:{u.travel / whole}" title="Dublin travel fund: {u.travel}h (${(u.travel * TRAVEL_RATE).toFixed(2)})"></span>{/if}
-											{#if u.rewards > 0}<span class="seg rewards" style="flex-grow:{u.rewards / whole}" title="Rewards: {u.rewards}h"></span>{/if}
-											{#if unspent > 0}<span class="seg unspent" style="flex-grow:{unspent / whole}" title="Not spent yet: {unspent}h"></span>{/if}
-										</span>
-										<span class="split-text">
-											{#if u.travel > 0}<span>{u.travel}h travel</span>{/if}
-											{#if u.rewards > 0}<span>{u.rewards}h rewards</span>{/if}
-											{#if unspent > 0}<span>{unspent}h unspent</span>{/if}
-										</span>
-										{#if u.rewardItems.length}
-											<span class="b-sub">
-												{#each u.rewardItems as r, i (i)}{r.name}{r.status === 'requested' ? ' (to send)' : ' (sent)'}{i < u.rewardItems.length - 1 ? ', ' : ''}{/each}
-											</span>
+										<span class="strong">{u.approved}h approved</span>
+										<span class="b-sub">{u.available}h unspent{u.rewards ? ` · ${u.rewards}h on rewards` : ''}</span>
+										{#if u.travel > 0}
+											<span class="b-sub">{u.travel}h banked = ${(u.travel * TRAVEL_RATE).toFixed(0)}{u.travelLocked ? ' · locked' : ''}</span>
 										{/if}
 									</td>
 									<td>
-										{#if u.travel > 0}
-											<span class="strong">${(u.travel * TRAVEL_RATE).toFixed(2)}</span>
-											{#if u.buckets}
+										{#if u.trip}
+											{#if u.trip.flight}
+												<span class="strong">${u.trip.flight}</span>
 												<span class="b-sub">
-													{[
-														u.buckets.flights ? `Flights ${u.buckets.flights}h` : '',
-														u.buckets.accommodation ? `Stay ${u.buckets.accommodation}h` : '',
-														u.buckets.visa ? `Visa ${u.buckets.visa}h` : ''
-													]
-														.filter(Boolean)
-														.join(' · ')}
+													from <a href={u.trip.skyscanner} target="_blank" rel="noopener noreferrer" title={u.trip.airportName}>{u.trip.airport} ↗</a>
+													{u.trip.visa === null ? '· visa: check' : u.trip.visa ? `· +$${u.trip.visa} visa` : ''}
 												</span>
+											{:else}
+												<span class="b-sub">No flight needed</span>
 											{/if}
 										{:else}
-											<span class="muted">none</span>
+											<span class="muted">unknown</span>
 										{/if}
-										{#if u.trip}
-											<span class="b-sub trip-line">
-												<span>
-													Flies from <a href={u.trip.skyscanner} target="_blank" rel="noopener noreferrer" title={u.trip.airportName}>{u.trip.airport}</a>
-													{#if u.trip.toAirportKm !== null}({u.trip.toAirportKm} km from home{u.trip.precision !== 'city' ? ', roughly' : ''}){/if}
-												</span>
-												{#if u.trip.flight}
-													<span>
-														${u.trip.flight} flight + {u.trip.visa === null ? 'visa: check' : u.trip.visa ? `$${u.trip.visa} visa` : 'no visa'}
-														= <strong>${u.trip.total}</strong>
-													</span>
-													<span>{u.approved >= u.trip.hoursToQualify ? 'Qualifies now' : `Qualifies at ${u.trip.hoursToQualify}h`}</span>
-												{:else}
-													<span>No flight needed</span>
-												{/if}
-											</span>
-										{/if}
+									</td>
+									<td class="split-col">
+										<span class="q-line">
+											{#if u.remaining === 0}
+												<strong class="q-done">Qualifies ✓</strong>
+											{:else}
+												<strong>{u.remaining}h to go</strong>
+											{/if}
+											<span class="muted">{u.approved} / {u.target}h{u.target === TRAVEL_CAP_HOURS && u.targetKnown ? ' (max)' : ''}{u.targetKnown ? '' : ' (assumed)'}</span>
+										</span>
+										<span class="q-bar" role="img" aria-label="{Math.round(pct)}% of the way">
+											<span class="q-fill" class:full={u.remaining === 0} style="width:{pct}%"></span>
+										</span>
+									</td>
+									<td class="act">
 										{#if u.travel > 0 || u.travelLocked}
 											<form method="POST" action="?/travelLock" use:enhance class="lock">
 												<input type="hidden" name="user_id" value={u.id} />
 												<input type="hidden" name="locked" value={u.travelLocked ? 'no' : 'yes'} />
-												{#if u.travelLocked}<span class="locked">Locked</span>{/if}
-												<button class="text-btn" type="submit">{u.travelLocked ? 'Unlock' : 'Lock fund'}</button>
+												<button class="text-btn" type="submit">{u.travelLocked ? 'Unlock fund' : 'Lock fund'}</button>
 											</form>
 										{/if}
-									</td>
-									<td class="act">
 										{#if grantingFor === u.id}
 											<form
 												method="POST"
@@ -475,7 +448,7 @@
 												<button class="btn btn-outline" type="submit">Save</button>
 												<button type="button" class="link-action" onclick={() => (grantingFor = null)}>Cancel</button>
 											</form>
-											{#if form?.message}<p class="hint error">{form.message}</p>{/if}
+											{#if form && 'message' in form && form.message}<p class="hint error">{form.message}</p>{/if}
 										{:else}
 											<button type="button" class="text-btn" onclick={() => (grantingFor = u.id)}>Adjust</button>
 										{/if}
@@ -761,20 +734,6 @@
 	.table-scroll {
 		overflow-x: auto;
 	}
-	.trip-line {
-		margin-top: 0.3rem;
-	}
-	.trip-line > span {
-		display: block;
-	}
-	.trip-line strong {
-		color: var(--navy);
-	}
-	.trip-line a {
-		white-space: nowrap;
-		color: var(--blue-dark);
-		font-weight: 700;
-	}
 	.trips a {
 		font-weight: 700;
 		color: var(--blue-dark);
@@ -824,6 +783,42 @@
 	.sw.unspent,
 	.seg.unspent {
 		background: #c9d3dc;
+	}
+	.builders tr.done td {
+		background: #eef8f1;
+	}
+	.b-sub a {
+		color: var(--blue-dark);
+		font-weight: 700;
+	}
+	.q-line {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.2rem 0.6rem;
+	}
+	.q-line strong {
+		color: var(--navy);
+	}
+	.q-done {
+		color: #2f7a46 !important;
+	}
+	.q-bar {
+		display: block;
+		height: 10px;
+		margin-top: 0.35rem;
+		background: #e3e9ef;
+		border-radius: 2px;
+		overflow: hidden;
+	}
+	.q-fill {
+		display: block;
+		height: 100%;
+		background: #338eda;
+		border-radius: 2px;
+	}
+	.q-fill.full {
+		background: #2f9e57;
 	}
 	.split-col {
 		min-width: 220px;

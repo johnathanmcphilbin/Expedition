@@ -1,5 +1,6 @@
 import { listOrigins, backfillOrigins } from '$lib/server/origins';
 import { estimateTrip } from '$lib/travel-estimates';
+import { TRAVEL_CAP_HOURS } from '$lib/data';
 import { countryName } from '$lib/server/geo';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -89,9 +90,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const typedEmail = new Map<string, string>();
 	for (const s of subs.data ?? []) if (s.user_id && s.email && !typedEmail.has(s.user_id)) typedEmail.set(s.user_id, s.email);
 
-	// Only people with approved hours, and where those hours have gone.
+	// Everyone with approved hours or a known home airport: their balance and
+	// how far they are from qualifying for the Dublin travel stipend.
 	const builders = users
-		.filter((u) => (approvedBy.get(u.id) ?? 0) > 0)
+		.filter((u) => u.hackclub_id.startsWith('ident!') && ((approvedBy.get(u.id) ?? 0) > 0 || tripBy.has(u.id)))
 		.map((u) => {
 			const approved = approvedBy.get(u.id) ?? 0;
 			const live = claims.filter((c) => c.user_id === u.id && c.status !== 'cancelled');
@@ -106,6 +108,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 				approved,
 				projects: projectsBy.get(u.id) ?? [],
 				trip: tripBy.get(u.id) ?? null,
+				// approved hours needed: half their flight at TRAVEL_RATE, never more than 40;
+				// with no flight estimate yet, assume the 40h maximum
+				target: tripBy.get(u.id)?.hoursToQualify ?? TRAVEL_CAP_HOURS,
+				targetKnown: tripBy.has(u.id),
 				rewards: round(rewards),
 				rewardItems: live.map((c) => ({ name: c.reward_name, status: c.status })),
 				travel,
@@ -116,7 +122,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 				adjustments: round(available - (approved - rewards - travel))
 			};
 		})
-		.sort((a, b) => b.approved - a.approved);
+		.map((b) => ({ ...b, remaining: Math.max(0, Math.round((b.target - b.approved) * 100) / 100) }))
+		// qualified first, then whoever is closest
+		.sort((a, b) => a.remaining - b.remaining || b.approved - a.approved);
 
 	return {
 		users,
