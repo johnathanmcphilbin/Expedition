@@ -202,6 +202,49 @@
 					</section>
 					{/if}
 
+					{#if an.projectsOverTime.length > 1}
+						{@const pts = an.projectsOverTime}
+						{@const PW = 720}
+						{@const PH = 170}
+						{@const pp = { l: 34, r: 40, t: 12, b: 24 }}
+						{@const pmax = Math.max(1, pts[pts.length - 1].total)}
+						{@const px = (i: number) => pp.l + (i / (pts.length - 1)) * (PW - pp.l - pp.r)}
+						{@const py = (n: number) => pp.t + (PH - pp.t - pp.b) * (1 - n / pmax)}
+						{@const line = pts.map((d, i) => `${i ? 'L' : 'M'}${px(i).toFixed(1)},${py(d.total).toFixed(1)}`).join(' ')}
+						{@const last = pts[pts.length - 1]}
+						{@const week = pts.slice(-7).reduce((t, d) => t + d.added, 0)}
+						{@const step = Math.max(1, Math.round(pts.length / 5))}
+						<section class="panel an-card wide">
+							<div class="tl-head">
+								<p class="section-label">Hackatime projects connected</p>
+								<p class="legend"><span><strong>{last.total}</strong> connected now</span><span><strong>+{week}</strong> in the last 7 days</span></p>
+							</div>
+							<svg class="timeline" viewBox="0 0 {PW} {PH}" role="img" aria-label="Hackatime projects connected over time, {last.total} now">
+								{#each [0, Math.round(pmax / 2), pmax] as t (t)}
+									<line class="grid" x1={pp.l} x2={PW - pp.r} y1={py(t)} y2={py(t)} />
+									<text class="axis" x={pp.l - 6} y={py(t) + 4} text-anchor="end">{t}</text>
+								{/each}
+								<path class="area" d="{line} L{px(pts.length - 1).toFixed(1)},{py(0)} L{px(0).toFixed(1)},{py(0)} Z" />
+								<path class="line" d={line} />
+								<circle class="end" cx={px(pts.length - 1)} cy={py(last.total)} r="4" />
+								<text class="end-label" x={px(pts.length - 1) + 8} y={py(last.total) + 4}>{last.total}</text>
+								{#each pts as d, i (d.day)}
+									{@const label = new Date(d.day + 'T00:00:00Z').toLocaleDateString('en-IE', { day: 'numeric', month: 'short', timeZone: 'UTC' })}
+									<g class="day">
+										<title>{label}: {d.total} connected{d.added ? ` (+${d.added} that day)` : ''}</title>
+										<rect class="hit" x={px(i) - (PW - pp.l - pp.r) / pts.length / 2} y={pp.t} width={(PW - pp.l - pp.r) / pts.length} height={PH - pp.t - pp.b} />
+										<circle class="dot" cx={px(i)} cy={py(d.total)} r="4" />
+									</g>
+									{#if (pts.length - 1 - i) % step === 0}
+										<text class="axis" x={px(i)} y={PH - 6} text-anchor="middle">{label}</text>
+									{/if}
+								{/each}
+								<line class="base" x1={pp.l} x2={PW - pp.r} y1={py(0)} y2={py(0)} />
+							</svg>
+							<p class="an-sub">Projects people have added as what they're working on, counted on the day they added them. Ones later removed aren't counted.</p>
+						</section>
+					{/if}
+
 					<section class="panel an-card">
 						<p class="section-label">Review speed</p>
 						<div class="stat-grid">
@@ -521,6 +564,33 @@
 		font-size: 11px;
 		fill: var(--muted);
 		font-variant-numeric: tabular-nums;
+	}
+	.timeline .line {
+		fill: none;
+		stroke: #338eda;
+		stroke-width: 2;
+		stroke-linejoin: round;
+	}
+	.timeline .area {
+		fill: #338eda;
+		opacity: 0.12;
+	}
+	.timeline .end {
+		fill: #338eda;
+		stroke: var(--white);
+		stroke-width: 2;
+	}
+	.timeline .end-label {
+		font-size: 12px;
+		font-weight: 800;
+		fill: var(--navy);
+	}
+	.timeline .dot {
+		fill: #338eda;
+		opacity: 0;
+	}
+	.timeline .day:hover .dot {
+		opacity: 1;
 	}
 	.timeline .hit {
 		fill: transparent;

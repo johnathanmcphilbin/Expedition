@@ -259,7 +259,7 @@ export async function getReviewAnalytics() {
 	const [users, connections, projects, hcSubs, queue, reviews, progress, reviewers, hcCountries, queueCountries] = await Promise.all([
 		db().from('users').select('id, created_at').like('hackclub_id', 'ident!%'),
 		db().from('hackatime_connections').select('user_id'),
-		db().from('expedition_projects').select('user_id'),
+		db().from('expedition_projects').select('user_id, created_at'),
 		db().from('hackclub_submissions').select('airtable_record_id, user_id, airtable_created_at'),
 		db().from('submission_queue').select('id, user_id, hardware, status, created_at, reviewed_at, reviewer_id, airtable_record_id'),
 		db().from('submission_reviews').select('airtable_record_id, status, approved_hours, submitted_hours, reviewed_at, reviewer_id'),
@@ -286,6 +286,26 @@ export async function getReviewAnalytics() {
 	for (let i = 29; i >= 0; i--) {
 		const day = new Date(Date.now() - i * 24 * HOUR_MS).toISOString().slice(0, 10);
 		visitDays.push({ day, visitors: visits?.daily[day] ?? 0, signups: signupsByDay.get(day) ?? 0 });
+	}
+
+	// ---- Hackatime projects connected, running total per day since the first
+	const addedDays = (projects.data ?? [])
+		.filter((p) => real.has(p.user_id))
+		.map((p) => p.created_at.slice(0, 10))
+		.sort();
+	const projectsOverTime: { day: string; added: number; total: number }[] = [];
+	if (addedDays.length) {
+		const perDay = new Map<string, number>();
+		for (const d of addedDays) perDay.set(d, (perDay.get(d) ?? 0) + 1);
+		let total = 0;
+		const today = new Date().toISOString().slice(0, 10);
+		for (let t = new Date(`${addedDays[0]}T00:00:00Z`); ; t = new Date(t.getTime() + 24 * HOUR_MS)) {
+			const day = t.toISOString().slice(0, 10);
+			const added = perDay.get(day) ?? 0;
+			total += added;
+			projectsOverTime.push({ day, added, total });
+			if (day >= today) break;
+		}
 	}
 
 	const funnel = [
@@ -390,6 +410,7 @@ export async function getReviewAnalytics() {
 
 	return {
 		funnel,
+		projectsOverTime,
 		visits: visits
 			? {
 					visitors: visits.visitors,
