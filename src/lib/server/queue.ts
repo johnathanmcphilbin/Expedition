@@ -21,7 +21,9 @@ export async function queueSubmission(
 	hackatimeUserId: string,
 	fields: SubmissionFields,
 	screenshot: File,
-	libraryOptIn = false
+	libraryOptIn = false,
+	/** Hack Club justification fields they filled in themselves (e.g. Lapse links) */
+	justifications: Justifications = {}
 ): Promise<QueuedSubmissionRow> {
 	const ext = (screenshot.name.match(/\.(\w{2,5})$/)?.[1] ?? 'png').toLowerCase();
 	const path = `${userId}/${crypto.randomUUID()}.${ext}`;
@@ -40,7 +42,8 @@ export async function queueSubmission(
 			screenshot_path: path,
 			screenshot_type: screenshot.type,
 			screenshot_name: screenshot.name || `screenshot.${ext}`,
-			library_opt_in: libraryOptIn
+			library_opt_in: libraryOptIn,
+			justifications
 		})
 		.select('*')
 		.single();

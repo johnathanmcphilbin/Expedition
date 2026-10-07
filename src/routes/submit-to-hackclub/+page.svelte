@@ -343,6 +343,16 @@
 							<textarea id="description" name="description" rows="4" required minlength="20" maxlength="4000"
 								placeholder="What it does, what you built it with, and the part you're proudest of."></textarea>
 						</div>
+
+						<div class="field">
+							<label for="lapse_links">Lapse timelapses <span class="optional">optional, but it helps</span></label>
+							<textarea id="lapse_links" name="lapse_links" rows="2" maxlength="2000"
+								placeholder="https://lapse.hackclub.com/timelapse/…  (one per line)"></textarea>
+							<span class="hint">
+								Recorded yourself building with <a href="https://lapse.hackclub.com" target="_blank" rel="noopener noreferrer">Lapse</a>? Paste the links.
+								Reviewers watch them right next to your project, and they go to Hack Club with it.
+							</span>
+						</div>
 					</section>
 
 					<!-- 3 -->

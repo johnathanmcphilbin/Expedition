@@ -12,6 +12,7 @@ import { ValidationError, isAllowedImage } from '$lib/server/validate';
 import { parseSubmissionFields } from '$lib/server/submission-fields';
 import { queueSubmission, listOwnQueued } from '$lib/server/queue';
 import { notifySubmission } from '$lib/server/notify';
+import { normaliseLapseLinks, LAPSE_FIELD } from '$lib/server/lapse';
 
 /**
  * The one place a participant submits a project. It waits in Expedition's
@@ -123,6 +124,13 @@ export const actions: Actions = {
 				throw new ValidationError(`"${dupe}" is already waiting for review. Hang tight until it's decided.`, 'project');
 			}
 
+			let lapse: string | null;
+			try {
+				lapse = normaliseLapseLinks(typeof form.get('lapse_links') === 'string' ? (form.get('lapse_links') as string) : null);
+			} catch (e) {
+				throw new ValidationError((e as Error).message, 'lapse_links');
+			}
+
 			const file = form.get('screenshot');
 			if (!(file instanceof File) || file.size === 0) {
 				throw new ValidationError('Add a screenshot of your project', 'screenshot');
@@ -136,7 +144,7 @@ export const actions: Actions = {
 
 			// Waits for an Expedition reviewer; it only goes to Hack Club once
 			// approved (see src/lib/server/queue.ts).
-			await queueSubmission(user.id, hackatime.hackatimeUserId, fields, file, form.get('library') === 'yes');
+			await queueSubmission(user.id, hackatime.hackatimeUserId, fields, file, form.get('library') === 'yes', lapse ? { [LAPSE_FIELD]: lapse } : {});
 			for (const n of fields.hackatime_projects) await connectProject(user.id, n).catch(() => {});
 
 			await notifySubmission({

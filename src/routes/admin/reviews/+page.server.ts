@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin, requireReviewer, isReviewerOnly, reviewerName } from '$lib/server/guards';
+import { lapsesFor, LAPSE_FIELD, type Lapse } from '$lib/server/lapse';
 import { payForReview, reviewEarnings, REVIEW_PAY_USD } from '$lib/server/payouts';
 import type { UserRow } from '$lib/server/database.types';
 import { db } from '$lib/server/supabase';
@@ -239,9 +240,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			Promise.all(picked.map((n) => listProjectCheckpoints(row.user_id, n))).then((l) => l.flat()),
 			listPriorApprovals(row.user_id, picked, row.airtable_record_id)
 		]);
+		const lapses = withOwnerCheck(await lapsesFor(row.justifications?.[LAPSE_FIELD] ?? null), row.hackatime_user_id);
 		queuedDetail = {
 			row,
 			picked,
+			lapses,
 			priorApprovals,
 			justifications: {
 				'Justification - Hackatime Project Name(s) + Date Range(s)': picked.join(', '),
@@ -261,6 +264,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	let detail: {
+		lapses: ReturnType<typeof withOwnerCheck>;
 		submission: (typeof submissions)[number];
 		gone: boolean;
 		review: QueueItem | null;
@@ -323,7 +327,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			justificationsError = e instanceof Error ? e.message : "Couldn't read it from Airtable.";
 		}
 
+		const lapses = withOwnerCheck(await lapsesFor(justifications?.[LAPSE_FIELD] ?? null), selectedRow.submission.hackatime_user_id);
 		detail = {
+			lapses,
 			submission: selectedRow.submission,
 			gone: selectedRow.submission.airtable_status === AIRTABLE_GONE,
 			review: selectedRow.review,
@@ -357,6 +363,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		syncError
 	};
 };
+
+/** Mark timelapses recorded by a different Hackatime account than the submitter's. */
+function withOwnerCheck(lapses: Lapse[], submitterHackatimeId: string | null) {
+	return lapses.map((l) => ({
+		...l,
+		someoneElse: l.ok && !!l.ownerHackatimeId && !!submitterHackatimeId && l.ownerHackatimeId !== submitterHackatimeId
+	}));
+}
 
 /** "[Reviewed by Shadow]" at the top of private notes, once, for non-admin reviewers. */
 function shadowNotes(reviewer: UserRow, notes: string | null): string | null {

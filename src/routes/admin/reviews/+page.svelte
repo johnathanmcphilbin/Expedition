@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '$lib/styles/app.css';
 	import { enhance, deserialize } from '$app/forms';
+	import LapseVideos from '$lib/components/LapseVideos.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import CheckpointTimeline from '$lib/components/CheckpointTimeline.svelte';
 	import JustificationFields from '$lib/components/JustificationFields.svelte';
@@ -229,6 +230,7 @@
 							<em>Only approve time tracked since then. The Hackatime total above includes it.</em>
 						</div>
 					{/if}
+					<LapseVideos items={data.queuedDetail.lapses} />
 					<CheckpointTimeline items={data.queuedDetail.checkpoints} unlocked={data.queuedDetail.checkpointsUnlocked} />
 
 					{#if data.isAdmin && (r.status === 'rejected' || r.status === 'changes_requested')}
@@ -420,6 +422,7 @@
 					{#if s.description}
 						<p class="description">{s.description}</p>
 					{/if}
+					<LapseVideos items={data.detail.lapses} />
 
 					{#if s.user_id}
 {#if data.detail.priorApprovals.length}
