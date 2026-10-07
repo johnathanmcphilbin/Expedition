@@ -1,6 +1,8 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { requireAdmin } from '$lib/server/guards';
+import { requireAdmin, requireReviewer, isReviewerOnly, reviewerName } from '$lib/server/guards';
+import { payForReview, reviewEarnings, REVIEW_PAY_USD } from '$lib/server/payouts';
+import type { UserRow } from '$lib/server/database.types';
 import { db } from '$lib/server/supabase';
 import {
 	listAllHackClubSubmissions,
@@ -18,7 +20,8 @@ import {
 	writeReviewToAirtable,
 	getJustifications,
 	saveJustifications,
-	JUSTIFICATION_FIELDS
+	JUSTIFICATION_FIELDS,
+	AIRTABLE_GONE
 } from '$lib/server/airtable';
 import { fetchProjectTimes, formatHours } from '$lib/server/hackatime';
 import { submitReview } from '$lib/server/review';
@@ -45,7 +48,7 @@ type Filter = (typeof FILTERS)[number];
 const STATUSES = ['pending', 'in_review', 'changes_requested', 'approved', 'rejected'] as const;
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-	requireAdmin(locals);
+	const viewer = requireReviewer(locals);
 
 	// Pull fresh from Hack Club every time the queue is opened. A failure here
 	// (bad/missing AIRTABLE_API_KEY, Airtable unreachable) is surfaced as a
@@ -105,6 +108,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		project: string | null;
 		submittedAt: string | null;
 		matched: boolean;
+		userId: string | null;
+		/** deleted from Hack Club's Airtable: nothing left to review */
+		gone: boolean;
 		hardware: boolean;
 		flag: { reason: string | null; at: string } | null;
 		searchText: string;
@@ -132,7 +138,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			project: r.review?.hackatime_project ?? r.submission.project_names_raw,
 			submittedAt: r.submission.airtable_created_at,
 			matched: !!r.submission.user_id,
+			userId: r.submission.user_id,
 			hardware: hardwareByRecord.get(r.submission.airtable_record_id) ?? false,
+			gone: r.submission.airtable_status === AIRTABLE_GONE,
 			// a flag set while it was still queued follows it once sent
 			flag:
 				flags.get(`hc:${r.submission.airtable_record_id}`) ??
@@ -153,31 +161,38 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				project: qr.project_name,
 				submittedAt: qr.created_at,
 				matched: true,
+				userId: qr.user_id,
+				gone: false,
 				hardware: qr.hardware,
 				flag: flags.get(`new:${qr.id}`) ?? null,
 				searchText: [qr.first_name, qr.last_name, qr.email, qr.github_username, qr.project_name]
 					.join(' ')
 					.toLowerCase()
 			}))
-	].sort((a, b) => (b.submittedAt ?? '').localeCompare(a.submittedAt ?? ''));
+	]
+		// nobody sees (or can open) their own submissions in the queue
+		.filter((i) => i.userId !== viewer.id)
+		.sort((a, b) => (b.submittedAt ?? '').localeCompare(a.submittedAt ?? ''));
 
 	const isPending = (st: SubmissionStatus) => st === 'pending' || st === 'in_review';
+	// waiting for a decision, and still there to decide on
+	const waiting = (i: Item) => isPending(i.status) && !i.gone;
 
 	const trackParam = url.searchParams.get('track');
 	// one queue by default; ?track=software|hardware still narrows it for old links
 	const track = trackParam === 'hardware' || trackParam === 'software' ? trackParam : 'all';
 	const inTrack = (i: Item) => track === 'all' || (track === 'hardware') === i.hardware;
 	const trackCounts = {
-		software: items.filter((i) => !i.hardware && isPending(i.status)).length,
-		hardware: items.filter((i) => i.hardware && isPending(i.status)).length,
-		all: items.filter((i) => isPending(i.status)).length
+		software: items.filter((i) => !i.hardware && waiting(i)).length,
+		hardware: items.filter((i) => i.hardware && waiting(i)).length,
+		all: items.filter((i) => waiting(i)).length
 	};
 	const trackItems = items.filter(inTrack);
 
 	// hardware waiting for review has its own tab; Pending is software only
 	const counts = {
-		hardware: trackItems.filter((i) => i.hardware && isPending(i.status)).length,
-		pending: trackItems.filter((i) => !i.hardware && isPending(i.status)).length,
+		hardware: trackItems.filter((i) => i.hardware && waiting(i)).length,
+		pending: trackItems.filter((i) => !i.hardware && waiting(i)).length,
 		changes_requested: trackItems.filter((i) => i.status === 'changes_requested').length,
 		approved: trackItems.filter((i) => i.status === 'approved').length,
 		rejected: trackItems.filter((i) => i.status === 'rejected').length,
@@ -190,9 +205,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		validFilter === 'all'
 			? trackItems
 			: validFilter === 'hardware'
-				? trackItems.filter((i) => i.hardware && isPending(i.status))
+				? trackItems.filter((i) => i.hardware && waiting(i))
 				: validFilter === 'pending'
-					? trackItems.filter((i) => !i.hardware && isPending(i.status))
+					? trackItems.filter((i) => !i.hardware && waiting(i))
 					: trackItems.filter((i) => i.status === validFilter);
 
 	const q = (url.searchParams.get('q') ?? '').trim().toLowerCase();
@@ -247,6 +262,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	let detail: {
 		submission: (typeof submissions)[number];
+		gone: boolean;
 		review: QueueItem | null;
 		hackatimeProjects: { name: string; tracked: string }[];
 		suggestedProject: string | null;
@@ -298,13 +314,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		let justifications: Record<string, string | null> | null = null;
 		let justificationsError: string | null = null;
 		try {
-			justifications = await getJustifications(selectedRow.submission.airtable_record_id);
+			if (selectedRow.submission.airtable_status === AIRTABLE_GONE) {
+				justificationsError = "This submission isn't in Hack Club's Airtable any more (it was deleted there).";
+			} else {
+				justifications = await getJustifications(selectedRow.submission.airtable_record_id);
+			}
 		} catch (e) {
 			justificationsError = e instanceof Error ? e.message : "Couldn't read it from Airtable.";
 		}
 
 		detail = {
 			submission: selectedRow.submission,
+			gone: selectedRow.submission.airtable_status === AIRTABLE_GONE,
 			review: selectedRow.review,
 			justifications,
 			justificationsError,
@@ -325,6 +346,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		trackCounts,
 		justificationFields: JUSTIFICATION_FIELDS.map((f, i) => ({ input: `just_${i}`, name: f.name, label: f.label, rows: f.rows })),
 		queuedDetail,
+		isAdmin: viewer.role === 'admin',
+		reviewerName: reviewerName(viewer),
+		earnings: isReviewerOnly(viewer) ? { ...(await reviewEarnings(viewer.id)), per: REVIEW_PAY_USD } : null,
 		filter: validFilter,
 		counts,
 		search: q,
@@ -334,14 +358,29 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	};
 };
 
+/** "[Reviewed by Shadow]" at the top of private notes, once, for non-admin reviewers. */
+function shadowNotes(reviewer: UserRow, notes: string | null): string | null {
+	if (!isReviewerOnly(reviewer)) return notes;
+	const tag = `[Reviewed by ${reviewerName(reviewer)}]`;
+	if (notes?.includes(tag)) return notes;
+	return notes ? `${tag}\n${notes}` : tag;
+}
+
+/** Nobody reviews their own project. */
+async function ownsRecord(userId: string, recordId: string): Promise<boolean> {
+	const { data } = await db().from('hackclub_submissions').select('user_id').eq('airtable_record_id', recordId).maybeSingle();
+	return data?.user_id === userId;
+}
+
 export const actions: Actions = {
 	/** Edit Hack Club's justification fields on a submission that's already in their Airtable. */
 	saveJustification: async ({ request, locals }) => {
-		requireAdmin(locals);
+		const reviewer = requireReviewer(locals);
 		const form = await request.formData();
 		try {
 			const recordId = text(form.get('airtable_record_id'), 'Submission', { max: 200, required: true })!;
 			if (!/^rec[A-Za-z0-9]{10,20}$/.test(recordId)) return fail(400, { justMessage: 'Invalid submission.' });
+			if (await ownsRecord(reviewer.id, recordId)) return fail(403, { justMessage: "You can't review your own project." });
 			await saveJustifications(recordId, parseJustifications(form));
 			return { justSaved: true };
 		} catch (e) {
@@ -373,7 +412,7 @@ export const actions: Actions = {
 	 */
 	/** Mark a submission as possible fraud (or clear the mark). */
 	flag: async ({ request, locals }) => {
-		const admin = requireAdmin(locals);
+		const admin = requireReviewer(locals);
 		const form = await request.formData();
 		try {
 			const kind = oneOf(form.get('kind'), ['hc', 'new'] as const, 'Kind');
@@ -405,10 +444,11 @@ export const actions: Actions = {
 
 	/** Just the Hardware tick, saved on its own as soon as it changes. */
 	setHardware: async ({ request, locals }) => {
-		requireAdmin(locals);
+		const reviewer = requireReviewer(locals);
 		const form = await request.formData();
 		try {
 			const id = uuid(form.get('id')?.toString(), 'submission');
+			if ((await getQueued(id))?.user_id === reviewer.id) return fail(403, { message: "You can't review your own project." });
 			await setQueuedHardware(id, form.get('hardware') === 'yes');
 			return { hardwareSaved: true };
 		} catch (e) {
@@ -418,7 +458,7 @@ export const actions: Actions = {
 	},
 
 	saveNew: async ({ request, locals, url }) => {
-		const reviewer = requireAdmin(locals);
+		const reviewer = requireReviewer(locals);
 		const form = await request.formData();
 
 		let id: string;
@@ -427,6 +467,7 @@ export const actions: Actions = {
 			const row = await getQueued(id);
 			if (!row) return fail(404, { message: 'That submission no longer exists.' });
 			if (row.status === 'sent') return fail(409, { message: 'This one has already been sent to Hack Club.' });
+			if (row.user_id === reviewer.id) return fail(403, { message: "You can't review your own project." });
 
 			const decision = oneOf(
 				form.get('decision'),
@@ -444,7 +485,9 @@ export const actions: Actions = {
 			const approvedRaw = form.get('approved_hours');
 			const approvedHours =
 				typeof approvedRaw === 'string' && approvedRaw.trim() ? hours(approvedRaw, 'Approved hours') : null;
-			const internalNotes = text(form.get('internal_notes'), 'Private notes', { max: 4000 });
+			const typedNotes = text(form.get('internal_notes'), 'Private notes', { max: 4000 });
+			// a shadow reviewer's decision is marked as theirs; drafts stay as typed
+			const internalNotes = decision === 'draft' ? typedNotes : shadowNotes(reviewer, typedNotes);
 			const feedback = text(form.get('participant_feedback'), 'Feedback', { max: 4000 });
 
 			if (decision === 'approve' && approvedHours === null) {
@@ -479,6 +522,8 @@ export const actions: Actions = {
 			}
 
 			if (decision === 'draft') return { saved: true };
+			// non-admin reviewers earn hours for each submission they decide
+			await payForReview(reviewer, 'new', id, fields.project_name).catch((e) => console.error('payForReview', e));
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { message: e.message, field: e.field });
 			throw e;
@@ -546,7 +591,7 @@ export const actions: Actions = {
 	 * is selected automatically.
 	 */
 	save: async ({ request, locals }) => {
-		const reviewer = requireAdmin(locals);
+		const reviewer = requireReviewer(locals);
 		const form = await request.formData();
 
 		try {
@@ -563,11 +608,20 @@ export const actions: Actions = {
 				form.get('approved_hours') && String(form.get('approved_hours')).trim() !== ''
 					? hours(form.get('approved_hours'), 'Approved hours')
 					: null;
-			const internalNotes = text(form.get('internal_notes'), 'Internal notes', { max: 4000 });
+			const typedNotes = text(form.get('internal_notes'), 'Internal notes', { max: 4000 });
+			const internalNotes =
+				status === 'pending' || status === 'in_review' ? typedNotes : shadowNotes(reviewer, typedNotes);
 			const participantFeedback = text(form.get('participant_feedback'), 'Feedback', {
 				max: 4000
 			});
-			const userId = uuid(form.get('user_id')?.toString(), 'participant');
+			// whose hours these are comes from the submission itself, never the form
+			const linked = await getHackClubSubmission(airtableRecordId);
+			if (linked?.airtable_status === AIRTABLE_GONE) {
+				return fail(409, { message: "This submission was deleted from Hack Club's Airtable, so there's nothing to review." });
+			}
+			if (!linked?.user_id) return fail(400, { message: 'Link this submission to an account first.' });
+			const userId = linked.user_id;
+			if (userId === reviewer.id) return fail(403, { message: "You can't review your own project." });
 
 			if (status !== 'pending' && status !== 'in_review' && !participantFeedback) {
 				return fail(400, { message: 'Give the participant some feedback to act on.' });
@@ -596,6 +650,9 @@ export const actions: Actions = {
 			});
 
 			if (!result.ok) return fail(409, { message: result.message });
+			if (status !== 'pending' && status !== 'in_review') {
+				await payForReview(reviewer, 'hc', airtableRecordId, hackatimeProject).catch((e) => console.error('payForReview', e));
+			}
 
 			// Write to Airtable server-side, after the ledger transaction is
 			// committed — never before, and never with the token anywhere near
@@ -623,7 +680,8 @@ export const actions: Actions = {
 						created_at: review.created_at,
 						updated_at: new Date().toISOString()
 					},
-					submission
+					submission,
+					isReviewerOnly(reviewer) && status !== 'pending' && status !== 'in_review' ? reviewerName(reviewer) : null
 				);
 			} catch (e) {
 				// The review is already saved and the hours (if any) already

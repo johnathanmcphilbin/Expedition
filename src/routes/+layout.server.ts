@@ -20,6 +20,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 		currentUser: {
 			displayName: locals.user.display_name,
 			isAdmin: locals.user.role === 'admin',
+			isReviewer: locals.user.role === 'reviewer',
 			hackatimeConnected: hackatime.connected
 		}
 	};

@@ -1,3 +1,4 @@
+import { isReviewerOnly, reviewerName } from './guards';
 import { recordOrigin } from './origins';
 import { db } from './supabase';
 import { createSubmission, writeReviewToAirtable, type Justifications } from './airtable';
@@ -309,7 +310,8 @@ async function sendLocked(
 				reviewer_id: params.reviewer.id,
 				reviewed_at: new Date().toISOString()
 			},
-			{ ...cached, synced_at: cached.synced_at }
+			{ ...cached, synced_at: cached.synced_at },
+			isReviewerOnly(params.reviewer) ? reviewerName(params.reviewer) : null
 		);
 	} catch (e) {
 		// the row and the hours are in; only the override fields are missing

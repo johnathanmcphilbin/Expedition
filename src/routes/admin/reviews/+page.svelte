@@ -151,6 +151,11 @@
 			</p>
 		{/if}
 
+		{#if !data.isAdmin}
+			<p class="shadow-note">Hi {data.reviewerName}! Your decisions are signed "Reviewed by {data.reviewerName}" in the notes and in Hack Club's Additional Justification. Your own projects don't show up here.
+				{#if data.earnings}You earn ${data.earnings.per.toFixed(2)} in hours for each submission you decide: <strong>{data.earnings.reviews} so far (${data.earnings.usd.toFixed(2)})</strong>.{/if}</p>
+		{/if}
+
 		<nav class="tabs" aria-label="Filter by status">
 			{#each FILTERS as f (f.value)}
 				<a href={filterHref(f.value)} class:active={data.filter === f.value}>
@@ -174,6 +179,7 @@
 							<span class="tag tag-{item.status}">{STATUS_LABEL[item.status]}</span>
 							{#if item.kind === 'new' && item.status === 'pending'}<span class="tag tag-new">Not sent yet</span>{/if}
 							{#if !item.matched}<span class="tag tag-warn">No account</span>{/if}
+							{#if item.gone}<span class="tag tag-warn">Gone from Airtable</span>{/if}
 						</span>
 					</a>
 				{:else}
@@ -225,7 +231,7 @@
 					{/if}
 					<CheckpointTimeline items={data.queuedDetail.checkpoints} unlocked={data.queuedDetail.checkpointsUnlocked} />
 
-					{#if r.status === 'rejected' || r.status === 'changes_requested'}
+					{#if data.isAdmin && (r.status === 'rejected' || r.status === 'changes_requested')}
 						<form class="reopen" method="POST" action="?/reopenNew" use:enhance>
 							<input type="hidden" name="id" value={r.id} />
 							<span>{r.status === 'rejected' ? 'Rejected' : 'Waiting on changes'}. Changed your mind?</span>
@@ -398,6 +404,12 @@
 						<span class="tag tag-{status}">{STATUS_LABEL[status]}</span>
 					</header>
 					{@render flagPanel('hc', s.airtable_record_id)}
+					{#if data.detail.gone}
+						<p class="error-box">
+							This submission has been deleted from Hack Club's Airtable, so it can't be approved, rejected or edited here any more.
+							It's kept so its history isn't lost. If they've resubmitted, review the new one instead.
+						</p>
+					{/if}
 
 					<div class="links">
 						{#if s.code_url}<a class="link-btn" href={s.code_url} target="_blank" rel="noopener noreferrer">Code ↗</a>{/if}
@@ -422,7 +434,7 @@
 						<CheckpointTimeline items={data.detail.checkpoints} />
 					{/if}
 
-					{#if data.detail.review?.status === 'rejected'}
+					{#if data.isAdmin && data.detail.review?.status === 'rejected'}
 						<form class="reopen" method="POST" action="?/reopen" use:enhance>
 							<input type="hidden" name="review_id" value={data.detail.review.id} />
 							<input type="hidden" name="airtable_record_id" value={s.airtable_record_id} />
@@ -432,7 +444,9 @@
 					{/if}
 
 					<div class="review">
-						{#if !s.user_id}
+						{#if !s.user_id && !data.isAdmin}
+							<p class="hint">This submission isn't linked to an account yet. An admin needs to link it before it can be reviewed.</p>
+						{:else if !s.user_id}
 							<p class="row-title">Link this submission to an account</p>
 							<p class="hint">
 								It didn't match anyone automatically. Find the participant, link them, then review as normal.
@@ -778,6 +792,14 @@
 		border-left-width: 5px;
 		text-decoration: none;
 		color: inherit;
+	}
+	.shadow-note {
+		margin-bottom: 1rem;
+		padding: 0.6rem 0.9rem;
+		background: #eef5fc;
+		border-left: 4px solid #338eda;
+		font-size: 0.9rem;
+		color: var(--slate);
 	}
 	.qi.flagged {
 		border-color: #c81e1e;

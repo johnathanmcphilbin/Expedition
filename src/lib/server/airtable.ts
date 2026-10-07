@@ -40,10 +40,17 @@ export const JUSTIFICATION_FIELDS = [
 export type Justifications = Record<string, string | null>;
 
 const ADDITIONAL_JUSTIFICATION = 'Justification - Additional Justification';
+
+/** airtable_status on a cached submission whose Airtable record has been deleted. */
+export const AIRTABLE_GONE = 'Removed from Airtable';
 const REVIEW_FEEDBACK_START = '--- Expedition feedback to participant ---';
 const REVIEW_FEEDBACK_END = '--- End Expedition feedback to participant ---';
 
-function withParticipantFeedback(current: string | null, feedback: string | null): string | null {
+function withParticipantFeedback(
+	current: string | null,
+	feedback: string | null,
+	reviewedBy: string | null = null
+): string | null {
 	const value = current ?? '';
 	const start = value.indexOf(REVIEW_FEEDBACK_START);
 	const end = start < 0 ? -1 : value.indexOf(REVIEW_FEEDBACK_END, start);
@@ -51,9 +58,10 @@ function withParticipantFeedback(current: string | null, feedback: string | null
 		start >= 0 && end >= 0
 			? `${value.slice(0, start).trimEnd()}\n${value.slice(end + REVIEW_FEEDBACK_END.length).trimStart()}`.trim()
 			: value.trim();
-	const managed = feedback
-		? `${REVIEW_FEEDBACK_START}\n${feedback}\n${REVIEW_FEEDBACK_END}`
-		: '';
+	const body = [reviewedBy ? `Reviewed by ${reviewedBy} (Expedition).` : '', feedback ?? '']
+		.filter(Boolean)
+		.join('\n\n');
+	const managed = body ? `${REVIEW_FEEDBACK_START}\n${body}\n${REVIEW_FEEDBACK_END}` : '';
 	const result = [preserved, managed].filter(Boolean).join('\n\n');
 	return result || null;
 }
@@ -63,6 +71,9 @@ export async function getJustifications(recordId: string): Promise<Justification
 	const u = new URL(`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${recordId}`);
 	for (const f of JUSTIFICATION_FIELDS) u.searchParams.append('fields[]', f.name);
 	const res = await fetch(u, { headers: headers(), signal: AbortSignal.timeout(15000) });
+	if (res.status === 404 || res.status === 422) {
+		throw new Error("This submission isn't in Hack Club's Airtable any more (it was deleted there).");
+	}
 	if (!res.ok) throw new Error(`Couldn't read the submission from Airtable (${res.status})`);
 	const fields = ((await res.json()) as { fields: Record<string, unknown> }).fields ?? {};
 	return Object.fromEntries(
@@ -266,6 +277,17 @@ export async function syncHackClubSubmissions(
 		.select('*');
 
 	if (error) throw new Error(`Could not cache Hack Club submissions: ${error.message}`);
+
+	// A full sync sees the whole table, so anything cached that wasn't in it
+	// has been deleted from Hack Club's Airtable. Mark it rather than drop it:
+	// its review and any hours already credited still point at it.
+	if (!onlyHackatimeUserId && records.length) {
+		const seen = new Set(records.map((r) => r.id));
+		const gone = [...existingById.keys()].filter((id) => !seen.has(id));
+		if (gone.length) {
+			await db().from('hackclub_submissions').update({ airtable_status: AIRTABLE_GONE }).in('airtable_record_id', gone);
+		}
+	}
 	return (data ?? []) as HackClubSubmissionRow[];
 }
 
@@ -378,12 +400,15 @@ export async function createSubmission(
  */
 export async function writeReviewToAirtable(
 	review: SubmissionReviewRow,
-	submission: HackClubSubmissionRow
+	submission: HackClubSubmissionRow,
+	/** a non-admin reviewer's name, signed into Additional Justification */
+	reviewedBy: string | null = null
 ): Promise<void> {
 	const current = await getJustifications(submission.airtable_record_id);
 	const additionalJustification = withParticipantFeedback(
 		current[ADDITIONAL_JUSTIFICATION],
-		review.participant_feedback
+		review.participant_feedback,
+		reviewedBy
 	);
 
 	const res = await fetch(

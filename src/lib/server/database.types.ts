@@ -210,6 +210,14 @@ export type ReviewFlagRow = {
 	flagged_at: string;
 }
 
+export type ReviewPayoutRow = {
+	item_kind: 'hc' | 'new';
+	item_key: string;
+	reviewer_id: string;
+	amount: number | null;
+	paid_at: string;
+}
+
 export type HourTransactionRow = {
 	id: string;
 	user_id: string;
@@ -316,6 +324,7 @@ export interface Database {
 			travel_origins: Table<TravelOriginRow>;
 			trip_flights: Table<TripFlightRow>;
 			review_flags: Table<ReviewFlagRow>;
+			review_payouts: Table<ReviewPayoutRow>;
 		};
 		Views: {
 			user_hour_balances: { Row: HourBalanceRow; Relationships: [] };

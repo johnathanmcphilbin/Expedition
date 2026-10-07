@@ -10,6 +10,7 @@
 		currentUser?: {
 			displayName: string | null;
 			isAdmin: boolean;
+			isReviewer?: boolean;
 			hackatimeConnected: boolean;
 		} | null;
 		builders?: number | null;
@@ -77,6 +78,8 @@
 					<a href="/admin/reviews">Reviews</a>
 					<a href="/admin/fulfilment">Fulfilment</a>
 					<a href="/admin">Admin</a>
+				{:else if currentUser.isReviewer}
+					<a href="/admin/reviews">Reviews</a>
 				{/if}
 				<a href="/dashboard">Dashboard</a>
 			{/if}
