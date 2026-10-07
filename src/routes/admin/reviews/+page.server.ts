@@ -424,6 +424,97 @@ export const actions: Actions = {
 	 * leave it waiting, ask for changes, reject, or approve — which sends it to
 	 * Hack Club's Airtable and credits the hours.
 	 */
+	/**
+	 * Saves whatever's been typed into a review as you go, without deciding
+	 * anything, so it's there when anyone (you, or another reviewer) opens it
+	 * later. Never changes the status; a half-typed field that doesn't parse
+	 * yet is just left out until it does.
+	 */
+	autosave: async ({ request, locals }) => {
+		const reviewer = requireReviewer(locals);
+		const form = await request.formData();
+		const hoursRaw = String(form.get('approved_hours') ?? '').trim();
+		let approvedHours: number | null = null;
+		if (hoursRaw) {
+			try {
+				approvedHours = hours(hoursRaw, 'Approved hours');
+			} catch {
+				approvedHours = null;
+			}
+		}
+		const notes = text(form.get('internal_notes'), 'Notes', { max: 4000 });
+		const feedback = text(form.get('participant_feedback'), 'Feedback', { max: 4000 });
+		const kind = form.get('kind');
+
+		if (kind === 'new') {
+			let id: string;
+			try {
+				id = uuid(form.get('id')?.toString(), 'submission');
+			} catch {
+				return fail(400, { autosave: 'Invalid submission' });
+			}
+			const row = await getQueued(id);
+			if (!row || row.status === 'sent') return fail(409, { autosave: 'Already sent' });
+			if (row.user_id === reviewer.id) return fail(403, { autosave: "You can't review your own project" });
+			let fields: ReturnType<typeof parseSubmissionFields> | null = null;
+			try {
+				fields = parseSubmissionFields(form);
+			} catch {
+				fields = null; // mid-edit; the review parts still save
+			}
+			const { error } = await db()
+				.from('submission_queue')
+				.update({
+					...(fields ?? {}),
+					approved_hours: approvedHours,
+					internal_notes: notes,
+					participant_feedback: feedback,
+					justifications: parseJustifications(form)
+				})
+				.eq('id', id)
+				.neq('status', 'sent');
+			if (error) return fail(500, { autosave: error.message });
+			return { autosaved: new Date().toISOString() };
+		}
+
+		if (kind === 'hc') {
+			const recordId = String(form.get('airtable_record_id') ?? '');
+			if (!/^rec[A-Za-z0-9]{10,20}$/.test(recordId)) return fail(400, { autosave: 'Invalid submission' });
+			const linked = await getHackClubSubmission(recordId);
+			if (!linked?.user_id) return fail(400, { autosave: 'Link it to an account first' });
+			if (linked.airtable_status === AIRTABLE_GONE) return fail(409, { autosave: 'Gone from Airtable' });
+			if (linked.user_id === reviewer.id) return fail(403, { autosave: "You can't review your own project" });
+			const project = String(form.get('hackatime_project') ?? '').trim();
+			const { data: existing } = await db()
+				.from('submission_reviews')
+				.select('id, status')
+				.eq('airtable_record_id', recordId)
+				.order('created_at', { ascending: false })
+				.limit(1)
+				.maybeSingle();
+			let reviewId = existing?.id;
+			if (!reviewId) {
+				if (!project) return fail(400, { autosave: 'Pick the Hackatime project first' });
+				reviewId = (await getOrCreateReview(recordId, linked.user_id, project, null)).id;
+			} else if (existing && existing.status !== 'pending' && existing.status !== 'in_review') {
+				return fail(409, { autosave: 'Already decided' });
+			}
+			const { error } = await db()
+				.from('submission_reviews')
+				.update({
+					approved_hours: approvedHours,
+					internal_notes: notes,
+					participant_feedback: feedback,
+					...(project ? { hackatime_project: project } : {})
+				})
+				.eq('id', reviewId)
+				.in('status', ['pending', 'in_review']);
+			if (error) return fail(500, { autosave: error.message });
+			return { autosaved: new Date().toISOString() };
+		}
+		return fail(400, { autosave: 'Unknown submission' });
+	},
+
 	/** Mark a submission as possible fraud (or clear the mark). */
 	flag: async ({ request, locals }) => {
 		const admin = requireReviewer(locals);

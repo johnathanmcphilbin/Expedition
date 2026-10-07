@@ -1,4 +1,8 @@
 <script lang="ts">
+	// Review form fields use defaultValue, not value: they start from what's
+	// saved, and nothing re-rendering on this page (status text, the Hardware
+	// tick, the flag box) can put them back to that mid-review. Each submission
+	// gets a fresh form via {#key}, so the defaults are always current.
 	import '$lib/styles/app.css';
 	import { enhance, deserialize } from '$app/forms';
 	import LapseVideos from '$lib/components/LapseVideos.svelte';
@@ -61,6 +65,75 @@
 	});
 	let hardware = $state(false);
 	let flagging = $state(false);
+
+	// ---- autosave: whatever's typed is saved a moment after you stop, so a
+	// review can be picked up later (by you or another reviewer)
+	const clock = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+	function autosave(
+		node: HTMLFormElement,
+		opts: { action: string; kind?: 'new' | 'hc'; delay?: number }
+	) {
+		// The status is written straight into the form's own [data-autosave] span,
+		// not through component state: a state change re-runs the template and
+		// would put the inputs back to their loaded values mid-typing.
+		const label = node.querySelector<HTMLElement>('[data-autosave]');
+		const status = (text: string) => {
+			if (label) label.textContent = text;
+		};
+		let timer: ReturnType<typeof setTimeout> | null = null;
+		let inflight = Promise.resolve();
+		const run = () => {
+			timer = null;
+			const body = new FormData(node);
+			if (opts.kind) body.set('kind', opts.kind);
+			status('Saving…');
+			inflight = inflight.then(async () => {
+				try {
+					// keepalive: a save sent as you leave the page still arrives
+					const res = await fetch(opts.action, { method: 'POST', body, keepalive: true, headers: { 'x-sveltekit-action': 'true' } });
+					const result = deserialize(await res.text());
+					if (result.type === 'success') status(`Saved ${clock()}`);
+					else if (result.type === 'failure') {
+						const d = result.data as { autosave?: string; justMessage?: string } | undefined;
+						status(`Not saved: ${d?.autosave ?? d?.justMessage ?? 'try again'}`);
+					} else status('Not saved: try again');
+				} catch {
+					status('Not saved: offline?');
+				}
+			});
+		};
+		const schedule = () => {
+			if (timer) clearTimeout(timer);
+			status('Unsaved changes…');
+			timer = setTimeout(run, opts.delay ?? 1200);
+		};
+		// a real decision submits everything itself; don't race it
+		const cancel = () => {
+			if (timer) clearTimeout(timer);
+			timer = null;
+		};
+		// leaving the page (or this submission) with a save pending: send it now
+		const flush = () => {
+			if (timer) {
+				clearTimeout(timer);
+				run();
+			}
+		};
+		node.addEventListener('input', schedule);
+		node.addEventListener('change', schedule);
+		node.addEventListener('submit', cancel);
+		window.addEventListener('pagehide', flush);
+		return {
+			destroy() {
+				flush();
+				node.removeEventListener('input', schedule);
+				node.removeEventListener('change', schedule);
+				node.removeEventListener('submit', cancel);
+				window.removeEventListener('pagehide', flush);
+			}
+		};
+	}
 	// close a half-written flag when moving to another submission
 	$effect(() => {
 		void data.selected?.key;
@@ -255,6 +328,7 @@
 						<form
 							method="POST"
 							action="?/saveNew"
+							use:autosave={{ action: '?/autosave', kind: 'new' }}
 							use:enhance={({ submitter }) => {
 								submitting = submitter?.getAttribute('value') ?? 'draft';
 								return async ({ update }) => {
@@ -303,47 +377,47 @@
 									</label>
 									<div class="field">
 										<label for="code_url">Code link</label>
-										<input id="code_url" name="code_url" type="url" required value={r.code_url} />
+										<input id="code_url" name="code_url" type="url" required defaultValue={r.code_url} />
 									</div>
 									<div class="field">
 										<label for="playable_url">Demo link {#if hardware}<span class="optional">optional</span>{/if}</label>
-										<input id="playable_url" name="playable_url" type="url" required={!hardware} value={r.playable_url} />
+										<input id="playable_url" name="playable_url" type="url" required={!hardware} defaultValue={r.playable_url} />
 									</div>
 								</div>
 								<div class="field">
 									<label for="description">Description</label>
-									<textarea id="description" name="description" rows="4" required minlength="20" maxlength="4000">{r.description}</textarea>
+									<textarea id="description" name="description" rows="4" required minlength="20" maxlength="4000" defaultValue={r.description}></textarea>
 								</div>
 							</fieldset>
 
 							<fieldset>
 								<legend>Person</legend>
 								<div class="grid-2 tight">
-									<div class="field"><label for="first_name">First name</label><input id="first_name" name="first_name" type="text" required value={r.first_name} /></div>
-									<div class="field"><label for="last_name">Last name</label><input id="last_name" name="last_name" type="text" required value={r.last_name} /></div>
-									<div class="field"><label for="email">Email</label><input id="email" name="email" type="email" required value={r.email} /></div>
-									<div class="field"><label for="github_username">GitHub</label><input id="github_username" name="github_username" type="text" required value={r.github_username} /></div>
-									<div class="field"><label for="birthday">Birthday</label><input id="birthday" name="birthday" type="date" required value={r.birthday ?? ''} /></div>
+									<div class="field"><label for="first_name">First name</label><input id="first_name" name="first_name" type="text" required defaultValue={r.first_name} /></div>
+									<div class="field"><label for="last_name">Last name</label><input id="last_name" name="last_name" type="text" required defaultValue={r.last_name} /></div>
+									<div class="field"><label for="email">Email</label><input id="email" name="email" type="email" required defaultValue={r.email} /></div>
+									<div class="field"><label for="github_username">GitHub</label><input id="github_username" name="github_username" type="text" required defaultValue={r.github_username} /></div>
+									<div class="field"><label for="birthday">Birthday</label><input id="birthday" name="birthday" type="date" required defaultValue={r.birthday ?? ''} /></div>
 								</div>
 							</fieldset>
 
 							<fieldset>
 								<legend>Address</legend>
-								<div class="field"><label for="address_line1">Address</label><input id="address_line1" name="address_line1" type="text" required value={r.address_line1 ?? ''} /></div>
-								<div class="field"><label for="address_line2">Line 2 <span class="optional">optional</span></label><input id="address_line2" name="address_line2" type="text" value={r.address_line2 ?? ''} /></div>
+								<div class="field"><label for="address_line1">Address</label><input id="address_line1" name="address_line1" type="text" required defaultValue={r.address_line1 ?? ''} /></div>
+								<div class="field"><label for="address_line2">Line 2 <span class="optional">optional</span></label><input id="address_line2" name="address_line2" type="text" defaultValue={r.address_line2 ?? ''} /></div>
 								<div class="grid-2 tight">
-									<div class="field"><label for="city">City</label><input id="city" name="city" type="text" required value={r.city ?? ''} /></div>
-									<div class="field"><label for="state">State / province</label><input id="state" name="state" type="text" required value={r.state ?? ''} /></div>
-									<div class="field"><label for="zip">Postal code</label><input id="zip" name="zip" type="text" required value={r.zip ?? ''} /></div>
-									<div class="field"><label for="country">Country</label><input id="country" name="country" type="text" required value={r.country ?? ''} /></div>
+									<div class="field"><label for="city">City</label><input id="city" name="city" type="text" required defaultValue={r.city ?? ''} /></div>
+									<div class="field"><label for="state">State / province</label><input id="state" name="state" type="text" required defaultValue={r.state ?? ''} /></div>
+									<div class="field"><label for="zip">Postal code</label><input id="zip" name="zip" type="text" required defaultValue={r.zip ?? ''} /></div>
+									<div class="field"><label for="country">Country</label><input id="country" name="country" type="text" required defaultValue={r.country ?? ''} /></div>
 								</div>
 							</fieldset>
 
 							<details class="extra">
 								<summary>Their feedback for Hack Club</summary>
-								<div class="field"><label for="heard_about">How did you hear about this?</label><input id="heard_about" name="heard_about" type="text" value={r.heard_about ?? ''} /></div>
-								<div class="field"><label for="doing_well">What are we doing well?</label><textarea id="doing_well" name="doing_well" rows="2">{r.doing_well ?? ''}</textarea></div>
-								<div class="field"><label for="improve">How can we improve?</label><textarea id="improve" name="improve" rows="2">{r.improve ?? ''}</textarea></div>
+								<div class="field"><label for="heard_about">How did you hear about this?</label><input id="heard_about" name="heard_about" type="text" defaultValue={r.heard_about ?? ''} /></div>
+								<div class="field"><label for="doing_well">What are we doing well?</label><textarea id="doing_well" name="doing_well" rows="2" defaultValue={r.doing_well ?? ''}></textarea></div>
+								<div class="field"><label for="improve">How can we improve?</label><textarea id="improve" name="improve" rows="2" defaultValue={r.improve ?? ''}></textarea></div>
 							</details>
 
 							<details class="justify" open>
@@ -355,18 +429,18 @@
 								<legend>Your review</legend>
 								<div class="field hours">
 									<label for="approved_hours">Hours to approve</label>
-									<input id="approved_hours" name="approved_hours" type="number" step="0.25" min="0" value={r.approved_hours ?? ''} />
+									<input id="approved_hours" name="approved_hours" type="number" step="0.25" min="0" defaultValue={r.approved_hours ?? ''} />
 									{#if data.queuedDetail.trackedHours !== null}
 										<span class="hint">{data.queuedDetail.trackedHours}h tracked on this project in Hackatime.</span>
 									{/if}
 								</div>
 								<div class="field">
 									<label for="participant_feedback">Feedback to them</label>
-									<textarea id="participant_feedback" name="participant_feedback" rows="3" maxlength="4000">{r.participant_feedback ?? ''}</textarea>
+									<textarea id="participant_feedback" name="participant_feedback" rows="3" maxlength="4000" defaultValue={r.participant_feedback ?? ''}></textarea>
 								</div>
 								<div class="field">
 									<label for="internal_notes">Private notes <span class="optional">only organisers see these</span></label>
-									<textarea id="internal_notes" name="internal_notes" rows="2" maxlength="4000">{r.internal_notes ?? ''}</textarea>
+									<textarea id="internal_notes" name="internal_notes" rows="2" maxlength="4000" defaultValue={r.internal_notes ?? ''}></textarea>
 								</div>
 
 								{#if form && 'message' in form && form.message}
@@ -384,6 +458,7 @@
 									<button class="save-draft" type="submit" name="decision" value="draft" disabled={!!submitting}>
 										{submitting === 'draft' ? 'Saving…' : 'Save edits'}
 									</button>
+									<span class="autosave-status" aria-live="polite" data-autosave>Changes save automatically</span>
 								</div>
 							</fieldset>
 						</form>
@@ -484,6 +559,7 @@
 							<form
 								method="POST"
 								action="?/save"
+								use:autosave={{ action: '?/autosave', kind: 'hc' }}
 								use:enhance={({ submitter }) => {
 									submitting = submitter?.getAttribute('value') ?? 'save';
 									return async ({ update }) => {
@@ -506,7 +582,7 @@
 									</div>
 									<div class="field">
 										<label for="approved_hours">Hours to approve</label>
-										<input id="approved_hours" name="approved_hours" type="number" step="0.25" min="0" value={data.detail.review?.approved_hours ?? ''} />
+										<input id="approved_hours" name="approved_hours" type="number" step="0.25" min="0" defaultValue={data.detail.review?.approved_hours ?? ''} />
 										<span class="hint">
 											{#if data.detail.review?.submitted_hours != null}{data.detail.review.submitted_hours}h tracked on this project.{/if}
 											{#if data.detail.balance}They've had {data.detail.balance.hours_earned}h approved so far.{/if}
@@ -516,11 +592,11 @@
 
 								<div class="field">
 									<label for="participant_feedback">Feedback to them</label>
-									<textarea id="participant_feedback" name="participant_feedback" rows="3" maxlength="4000">{data.detail.review?.participant_feedback ?? ''}</textarea>
+									<textarea id="participant_feedback" name="participant_feedback" rows="3" maxlength="4000" defaultValue={data.detail.review?.participant_feedback ?? ''}></textarea>
 								</div>
 								<div class="field">
 									<label for="internal_notes">Private notes <span class="optional">only organisers see these</span></label>
-									<textarea id="internal_notes" name="internal_notes" rows="2" maxlength="4000">{data.detail.review?.internal_notes ?? ''}</textarea>
+									<textarea id="internal_notes" name="internal_notes" rows="2" maxlength="4000" defaultValue={data.detail.review?.internal_notes ?? ''}></textarea>
 								</div>
 
 								{#if form?.message}
@@ -536,6 +612,7 @@
 									<button class="save-draft" type="submit" name="status" value="pending" disabled={!!submitting}>
 										{submitting === 'pending' ? 'Saving…' : 'Save draft'}
 									</button>
+									<span class="autosave-status" aria-live="polite" data-autosave>Changes save automatically</span>
 								</div>
 							</form>
 						{/if}
@@ -544,7 +621,11 @@
 					<details class="justify" open>
 						<summary>Hack Club justification <span class="optional">saved straight to their Airtable</span></summary>
 						{#if data.detail.justifications}
-							<form method="POST" action="?/saveJustification" use:enhance={() => async ({ update }) => update({ reset: false })}>
+							<form
+								method="POST"
+								action="?/saveJustification"
+								use:autosave={{ action: '?/saveJustification', delay: 2500 }}
+								use:enhance={() => async ({ update }) => update({ reset: false })}>
 								<input type="hidden" name="airtable_record_id" value={s.airtable_record_id} />
 								<JustificationFields fields={data.justificationFields} values={data.detail.justifications} />
 								{#if form && 'justMessage' in form && form.justMessage}
@@ -553,6 +634,7 @@
 									<p class="saved">Saved to Hack Club's Airtable.</p>
 								{/if}
 								<button class="btn btn-outline" type="submit">Save to Hack Club</button>
+								<span class="autosave-status" aria-live="polite" data-autosave>Saves to Airtable automatically as you type</span>
 							</form>
 						{:else}
 							<p class="error">Couldn't load it from Airtable: {data.detail.justificationsError}</p>
@@ -795,6 +877,11 @@
 		border-left-width: 5px;
 		text-decoration: none;
 		color: inherit;
+	}
+	.autosave-status {
+		align-self: center;
+		font-size: 0.8rem;
+		color: var(--muted);
 	}
 	.shadow-note {
 		margin-bottom: 1rem;

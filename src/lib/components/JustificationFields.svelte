@@ -1,5 +1,6 @@
 <script lang="ts">
-	// Hack Club's justification fields, edited by a reviewer. Field names and
+	// Hack Club's justification fields, edited by a reviewer. defaultValue so a
+	// re-render never wipes what's being typed. Field names and
 	// labels come from the server (JUSTIFICATION_FIELDS in airtable.ts).
 	let {
 		fields,
@@ -14,9 +15,9 @@
 	<div class="field">
 		<label for={f.input}>{f.label}</label>
 		{#if f.rows === 1}
-			<input id={f.input} name={f.input} type="text" maxlength="5000" value={values[f.name] ?? ''} />
+			<input id={f.input} name={f.input} type="text" maxlength="5000" defaultValue={values[f.name] ?? ''} />
 		{:else}
-			<textarea id={f.input} name={f.input} rows={f.rows} maxlength="5000">{values[f.name] ?? ''}</textarea>
+			<textarea id={f.input} name={f.input} rows={f.rows} maxlength="5000" defaultValue={values[f.name] ?? ''}></textarea>
 		{/if}
 	</div>
 {/each}
