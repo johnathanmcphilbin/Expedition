@@ -28,7 +28,7 @@ function headers() {
 export const JUSTIFICATION_FIELDS = [
 	{ name: 'Justification - Hackatime Project Name(s) + Date Range(s)', label: 'Hackatime project name(s) + date range(s)', rows: 2 },
 	{ name: 'Justification - Submitter Hackatime ID', label: 'Submitter Hackatime ID', rows: 1 },
-	{ name: 'Justification - Lapse Links, comma-separated', label: 'Lapse links, comma-separated', rows: 1 },
+	{ name: 'Justification - Lapse Links, comma-separated', label: 'Lapse links, comma-separated', rows: 4 },
 	{ name: 'Justification - Specific Technical Features', label: 'Specific technical features', rows: 3 },
 	{ name: 'Justification - Deflation Justification', label: 'Deflation justification', rows: 2 },
 	{ name: 'Justification - Alternate Tracking Method', label: 'Alternate tracking method', rows: 2 },
