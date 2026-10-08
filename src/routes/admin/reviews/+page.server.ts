@@ -3,7 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin, requireReviewer, isReviewerOnly, reviewerName } from '$lib/server/guards';
 import { lapsesFor, LAPSE_FIELD, type Lapse } from '$lib/server/lapse';
 import { payForReview, reviewEarnings, REVIEW_PAY_USD } from '$lib/server/payouts';
-import type { UserRow, SubmissionReviewRow } from '$lib/server/database.types';
+import type { UserRow, SubmissionReviewRow, QueuedSubmissionRow } from '$lib/server/database.types';
 import { db } from '$lib/server/supabase';
 import {
 	listAllHackClubSubmissions,
@@ -220,8 +220,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 					? trackItems.filter((i) => !i.hardware && waiting(i))
 					: trackItems.filter((i) => i.status === validFilter);
 
+	// waiting tabs go oldest first, so whoever submitted first is reviewed first
+	const ordered = validFilter === 'pending' || validFilter === 'hardware' ? [...filtered].reverse() : filtered;
+
 	const q = (url.searchParams.get('q') ?? '').trim().toLowerCase();
-	const searched = q ? filtered.filter((i) => i.searchText.includes(q)) : filtered;
+	const searched = q ? ordered.filter((i) => i.searchText.includes(q)) : ordered;
 
 	const newId = url.searchParams.get('new');
 	const hcId = url.searchParams.get('submission');
@@ -245,9 +248,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		const projects = (times ?? []).map((t) => ({ name: t.name, tracked: formatHours(t.totalSeconds), seconds: t.totalSeconds }));
 		const picked = hackatimeNames(row);
 		const matched = projects.filter((p) => picked.includes(p.name));
-		const [checkpoints, priorApprovals] = await Promise.all([
+		const [checkpoints, priorApprovals, history] = await Promise.all([
 			Promise.all(picked.map((n) => listProjectCheckpoints(row.user_id, n))).then((l) => l.flat()),
-			listPriorApprovals(row.user_id, picked, row.airtable_record_id)
+			listPriorApprovals(row.user_id, picked, row.airtable_record_id),
+			reviewHistory(row.user_id, picked.length ? picked : [row.project_name], { queueId: row.id, recordId: row.airtable_record_id })
 		]);
 		const lapses = withOwnerCheck(await lapsesFor(row.justifications?.[LAPSE_FIELD] ?? null), row.hackatime_user_id);
 		queuedDetail = {
@@ -255,6 +259,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			picked,
 			lapses,
 			priorApprovals,
+			history,
 			justifications: {
 				'Justification - Hackatime Project Name(s) + Date Range(s)': picked.length
 					? picked.join(', ')
@@ -287,6 +292,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		linkCandidates: Awaited<ReturnType<typeof searchUsers>>;
 		checkpoints: Awaited<ReturnType<typeof listProjectCheckpoints>>;
 		priorApprovals: Awaited<ReturnType<typeof listPriorApprovals>>;
+		history: Awaited<ReturnType<typeof reviewHistory>>;
 		justifications: Record<string, string | null> | null;
 		justificationsError: string | null;
 	} | null = null;
@@ -327,6 +333,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		const priorApprovals = selectedRow.submission.user_id
 			? await listPriorApprovals(selectedRow.submission.user_id, cpProjects, selectedRow.submission.airtable_record_id)
 			: [];
+		const history = selectedRow.submission.user_id
+			? await reviewHistory(selectedRow.submission.user_id, cpProjects, { recordId: selectedRow.submission.airtable_record_id })
+			: [];
 
 		let justifications: Record<string, string | null> | null = null;
 		let justificationsError: string | null = null;
@@ -350,6 +359,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			justificationsError,
 			checkpoints,
 			priorApprovals,
+			history,
 			hackatimeProjects,
 			suggestedProject,
 			balance,
@@ -380,6 +390,58 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		syncError
 	};
 };
+
+/**
+ * Every earlier decision on this person's same project(s), from both review
+ * paths, newest first: so a reviewer sees what was asked last time and by whom.
+ */
+async function reviewHistory(userId: string, names: string[], exclude: { queueId?: string; recordId?: string | null }) {
+	const wanted = new Set(names.map((n) => n.toLowerCase()));
+	const overlaps = (list: string[]) => list.some((n) => wanted.has(n.toLowerCase()));
+	const [queue, reviews] = await Promise.all([
+		db()
+			.from('submission_queue')
+			.select('id, project_name, hackatime_projects, hardware, status, approved_hours, participant_feedback, reviewer_id, reviewed_at, created_at, airtable_record_id')
+			.eq('user_id', userId),
+		db()
+			.from('submission_reviews')
+			.select('airtable_record_id, hackatime_project, hackatime_projects, status, approved_hours, participant_feedback, reviewer_id, reviewed_at, created_at')
+			.eq('user_id', userId)
+	]);
+	const queueRows = (queue.data ?? []).filter(
+		(r) => r.id !== exclude.queueId && r.status !== 'pending' && overlaps(hackatimeNames(r as QueuedSubmissionRow).length ? hackatimeNames(r as QueuedSubmissionRow) : [r.project_name])
+	);
+	const sentRecords = new Set((queue.data ?? []).map((r) => r.airtable_record_id).filter(Boolean));
+	const reviewRows = (reviews.data ?? []).filter(
+		(r) =>
+			r.airtable_record_id !== exclude.recordId &&
+			!sentRecords.has(r.airtable_record_id) &&
+			r.status !== 'pending' &&
+			r.status !== 'in_review' &&
+			overlaps(r.hackatime_projects?.length ? r.hackatime_projects : [r.hackatime_project])
+	);
+	const reviewerIds = [...new Set([...queueRows, ...reviewRows].map((r) => r.reviewer_id).filter((x): x is string => !!x))];
+	const { data: who } = reviewerIds.length ? await db().from('users').select('*').in('id', reviewerIds) : { data: [] };
+	const nameOf = new Map(((who ?? []) as UserRow[]).map((u) => [u.id, reviewerName(u)]));
+	return [
+		...queueRows.map((r) => ({
+			at: r.reviewed_at ?? r.created_at,
+			project: r.project_name,
+			status: r.status === 'sent' ? 'approved' : r.status,
+			hours: r.approved_hours === null ? null : Number(r.approved_hours),
+			feedback: r.participant_feedback,
+			reviewer: r.reviewer_id ? (nameOf.get(r.reviewer_id) ?? 'Former reviewer') : null
+		})),
+		...reviewRows.map((r) => ({
+			at: r.reviewed_at ?? r.created_at,
+			project: r.hackatime_projects?.length ? r.hackatime_projects.join(' + ') : r.hackatime_project,
+			status: r.status as string,
+			hours: r.approved_hours === null ? null : Number(r.approved_hours),
+			feedback: r.participant_feedback,
+			reviewer: r.reviewer_id ? (nameOf.get(r.reviewer_id) ?? 'Former reviewer') : null
+		}))
+	].sort((a, b) => b.at.localeCompare(a.at));
+}
 
 /** Mark timelapses recorded by a different Hackatime account than the submitter's. */
 function withOwnerCheck(lapses: Lapse[], submitterHackatimeId: string | null) {

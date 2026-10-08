@@ -6,6 +6,7 @@
 	import '$lib/styles/app.css';
 	import { enhance, deserialize } from '$app/forms';
 	import LapseVideos from '$lib/components/LapseVideos.svelte';
+	import ReviewHistory from '$lib/components/ReviewHistory.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import CheckpointTimeline from '$lib/components/CheckpointTimeline.svelte';
 	import JustificationFields from '$lib/components/JustificationFields.svelte';
@@ -304,6 +305,7 @@
 						</div>
 					{/if}
 					<LapseVideos items={data.queuedDetail.lapses} />
+					<ReviewHistory items={data.queuedDetail.history} />
 					<CheckpointTimeline items={data.queuedDetail.checkpoints} unlocked={data.queuedDetail.checkpointsUnlocked} />
 
 					{#if data.isAdmin && (r.status === 'rejected' || r.status === 'changes_requested')}
@@ -521,6 +523,7 @@
 						<p class="description">{s.description}</p>
 					{/if}
 					<LapseVideos items={data.detail.lapses} />
+					<ReviewHistory items={data.detail.history} />
 
 					{#if s.user_id}
 {#if data.detail.priorApprovals.length}

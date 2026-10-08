@@ -17,6 +17,20 @@
 
 	let { items }: { items: LapseItem[] } = $props();
 
+	// timelapses are long; reviewers skim them faster
+	const SPEEDS = [1, 1.5, 2, 4];
+	let players = $state<Record<string, HTMLVideoElement | undefined>>({});
+	let speed = $state<Record<string, number>>({});
+	function setSpeed(id: string, s: number) {
+		speed[id] = s;
+		const v = players[id];
+		if (v) {
+			v.playbackRate = s;
+			// some browsers reset it when the video (re)loads
+			v.onloadedmetadata = () => (v.playbackRate = speed[id] ?? 1);
+		}
+	}
+
 	const mins = (s: number) => (s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${String(Math.round(s % 60)).padStart(2, '0')}s`);
 </script>
 
@@ -28,7 +42,12 @@
 				<figure class="lapse" class:warn={l.someoneElse || !l.ok}>
 					{#if l.ok && l.video}
 						<!-- svelte-ignore a11y_media_has_caption -->
-						<video controls preload="metadata" playsinline poster={l.thumbnail ?? undefined} src={l.video}></video>
+						<video bind:this={players[l.id]} controls preload="metadata" playsinline poster={l.thumbnail ?? undefined} src={l.video}></video>
+						<div class="speeds" role="group" aria-label="Playback speed">
+							{#each SPEEDS as sp (sp)}
+								<button type="button" class:on={(speed[l.id] ?? 1) === sp} onclick={() => setSpeed(l.id, sp)}>{sp}x</button>
+							{/each}
+						</div>
 					{:else}
 						<div class="lapse-empty">
 							{#if !l.ok}{l.error}{:else if l.processing}Still processing on Lapse{:else}No video{/if}
@@ -88,6 +107,26 @@
 		color: #cbd5e1;
 		font-size: 0.85rem;
 		text-align: center;
+	}
+	.speeds {
+		display: flex;
+		gap: 0.3rem;
+		padding: 0.4rem 0.7rem 0;
+	}
+	.speeds button {
+		padding: 0.15rem 0.5rem;
+		font: inherit;
+		font-size: 0.78rem;
+		font-weight: 700;
+		color: var(--navy);
+		background: var(--white);
+		border: 1px solid var(--rule-strong);
+		cursor: pointer;
+	}
+	.speeds button.on {
+		color: var(--white);
+		background: var(--navy);
+		border-color: var(--navy);
 	}
 	figcaption {
 		display: flex;
