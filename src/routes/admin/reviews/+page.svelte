@@ -364,6 +364,13 @@
 										<span class="hint">Couldn't reach their Hackatime to list projects.</span>
 									{/if}
 								</div>
+								{#if !data.queuedDetail.picked.length}
+									<div class="field">
+										<label for="project_title">Project name <span class="optional">hardware, not tracked in Hackatime</span></label>
+										<input id="project_title" name="project_title" type="text" maxlength="200" defaultValue={r.project_name} />
+										<span class="hint">No Hackatime project: check their JOURNAL.md for the hours. If they've linked Lapse timelapses, tick the Hackatime project those were recorded on.</span>
+									</div>
+								{/if}
 								<div class="grid-2 tight">
 									<label class="check">
 										<input

@@ -9,7 +9,10 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	const needsChanges = $derived(data.projects.filter((p) => p.queued?.status === 'changes_requested'));
+	const needsChanges = $derived([
+		...data.projects.filter((p) => p.queued?.status === 'changes_requested').map((p) => ({ name: p.name, id: p.queued!.id })),
+		...data.untracked.filter((u) => u.status === 'changes_requested').map((u) => ({ name: u.name, id: u.id }))
+	]);
 
 	let bookedDifferent = $state(false);
 	const fmtDublin = (iso: string) =>
@@ -108,7 +111,7 @@
 			<div class="changes-banner" role="status">
 				<strong>{needsChanges.length === 1 ? 'A reviewer asked for changes' : `Reviewers asked for changes on ${needsChanges.length} projects`}.</strong>
 				<span>
-					{#each needsChanges as p, i (p.name)}<a href="/submit-to-hackclub?resubmit={p.queued?.id}">{p.name}</a>{i < needsChanges.length - 1 ? ', ' : ''}{/each}:
+					{#each needsChanges as p, i (p.id)}<a href="/submit-to-hackclub?resubmit={p.id}">{p.name}</a>{i < needsChanges.length - 1 ? ', ' : ''}{/each}:
 					read their feedback below, fix it, then resubmit.
 				</span>
 			</div>
@@ -432,6 +435,26 @@
 					</ul>
 				{/if}
 
+				{#if data.untracked.length}
+					<p class="untracked-k">Hardware submissions (no Hackatime project)</p>
+					<ul class="untracked">
+						{#each data.untracked as u (u.id)}
+							<li>
+								<div class="u-top">
+									<strong>{u.name}</strong>
+									<span class="u-status u-{u.status}">
+										{u.status === 'pending' ? 'Waiting for review' : u.status === 'changes_requested' ? 'Needs changes' : u.status === 'rejected' ? 'Not approved' : 'Approved'}
+									</span>
+								</div>
+								{#if u.feedback && u.status !== 'pending'}<p class="p-feedback">“{u.feedback}”</p>{/if}
+								{#if u.status === 'changes_requested'}
+									<a class="btn resubmit-btn" href="/submit-to-hackclub?resubmit={u.id}">Make changes &amp; resubmit</a>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+
 				{#if pickerOpen}
 					<div class="picker panel">
 						<p class="row-title">
@@ -487,6 +510,44 @@
 <Footer />
 
 <style>
+	.untracked-k {
+		margin: 1.2rem 0 0.5rem;
+		font-size: 0.75rem;
+		font-weight: 800;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--muted);
+	}
+	.untracked {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+	}
+	.untracked li {
+		padding: 0.8rem 1rem;
+		background: var(--white);
+		border: 2px solid var(--rule-strong);
+	}
+	.u-top {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+		color: var(--navy);
+	}
+	.u-status {
+		font-size: 0.75rem;
+		font-weight: 800;
+		text-transform: uppercase;
+	}
+	.u-changes_requested {
+		color: #a34a00;
+	}
+	.u-sent {
+		color: #2f7a46;
+	}
 	.changes-banner {
 		display: flex;
 		flex-direction: column;

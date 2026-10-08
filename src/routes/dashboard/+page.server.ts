@@ -16,7 +16,7 @@ import {
 } from '$lib/server/queries';
 import { connectionStatus, fetchProjectTimes, formatHours } from '$lib/server/hackatime';
 import { syncHackClubSubmissions } from '$lib/server/airtable';
-import { listOwnQueued, countQueuePending } from '$lib/server/queue';
+import { listOwnQueued, countQueuePending, hackatimeNames } from '$lib/server/queue';
 import { listOwnCheckpoints, unlockedCount } from '$lib/server/checkpoints';
 import { drops } from '$lib/data';
 import { getOwnFlight, confirmBooking } from '$lib/server/flights';
@@ -168,6 +168,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		unlocks,
 		travelBuckets,
 		pendingReviews,
+		// hardware sent in without a Hackatime project: no project card to hang off
+		untracked: queued
+			.filter((q) => !hackatimeNames(q).length)
+			.map((q) => ({ id: q.id, name: q.project_name, status: q.status, feedback: q.participant_feedback, submittedAt: q.created_at })),
 		flight,
 		flash: url.searchParams.get('hackatime')
 	};

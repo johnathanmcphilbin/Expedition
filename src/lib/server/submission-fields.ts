@@ -18,9 +18,9 @@ export function parseJustifications(form: FormData): Justifications {
  * both sides are held to exactly the same rules.
  */
 export type SubmissionFields = {
-	/** display name: the Hackatime projects joined with " + " */
+	/** display name: the Hackatime projects joined with " + ", or what they called it (untracked hardware) */
 	project_name: string;
-	/** every Hackatime project that makes up this one Expedition project */
+	/** every Hackatime project that makes up this one Expedition project; empty for hardware not tracked in Hackatime */
 	hackatime_projects: string[];
 	hardware: boolean;
 	code_url: string;
@@ -63,18 +63,36 @@ function projects(form: FormData): string[] {
 				.filter(Boolean)
 		)
 	];
-	if (!names.length) throw new ValidationError('Pick at least one Hackatime project', 'project');
 	if (names.length > 10) throw new ValidationError('Pick at most 10 Hackatime projects', 'project');
 	for (const n of names) if (n.length > 200) throw new ValidationError('Project name is too long', 'project');
 	return names;
 }
 
+const LAPSE_INPUT = `just_${JUSTIFICATION_FIELDS.findIndex((f) => f.name === 'Justification - Lapse Links, comma-separated')}`;
+
+/** Lapse links on either form: the participant's box, or the reviewer's justification field. */
+function hasLapse(form: FormData): boolean {
+	return [form.get('lapse_links'), form.get(LAPSE_INPUT)].some((v) => typeof v === 'string' && v.trim() !== '');
+}
+
 export function parseSubmissionFields(form: FormData): SubmissionFields {
 	const hardware = form.get('hardware') === 'yes';
 	const hackatimeProjects = projects(form);
+	// Hardware doesn't have to be tracked in Hackatime (journals, photos and
+	// the build itself are the evidence), unless it comes with Lapse
+	// timelapses: those are recorded against a Hackatime project.
+	if (!hackatimeProjects.length) {
+		if (!hardware) throw new ValidationError('Pick at least one Hackatime project', 'project');
+		if (hasLapse(form)) {
+			throw new ValidationError('Lapse timelapses are recorded against a Hackatime project. Pick the one you used', 'project');
+		}
+	}
+	const projectName = hackatimeProjects.length
+		? hackatimeProjects.join(' + ')
+		: text(form.get('project_title'), 'Project name', { max: 200, required: true })!;
 	const codeUrl = url(form.get('code_url'), 'Code link', { required: true })!;
 	return {
-		project_name: hackatimeProjects.join(' + '),
+		project_name: projectName,
 		hackatime_projects: hackatimeProjects,
 		hardware,
 		code_url: codeUrl,

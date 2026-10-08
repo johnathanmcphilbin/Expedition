@@ -67,6 +67,12 @@
 
 	// Hardware doesn't need a live URL; it follows the repo rules on /hardware.
 	let hardware = $state(false);
+	// hardware can skip Hackatime, unless it comes with Lapse timelapses
+	let lapseText = $state('');
+	$effect(() => {
+		lapseText = data.resubmit?.lapse ?? '';
+	});
+	const untracked = $derived(hardware && !chosen.length);
 	$effect(() => {
 		hardware = data.resubmit?.hardware ?? false;
 	});
@@ -230,6 +236,7 @@
 					<!-- 1 -->
 					<section class="step">
 						<h2 class="step-title"><span class="step-n">1</span> Which project?</h2>
+						<p class="hint step-hint">Building hardware you didn't track in Hackatime? You can skip this: tick <strong>hardware</strong> in step 2 and name your project there.</p>
 						{#each selected as name (name)}
 							<input type="hidden" name="project" value={name} />
 						{/each}
@@ -304,6 +311,17 @@
 							<input type="checkbox" name="hardware" value="yes" bind:checked={hardware} />
 							This is a hardware project
 						</label>
+						{#if untracked}
+							<div class="field">
+								<label for="project_title">Project name</label>
+								<input id="project_title" name="project_title" type="text" required maxlength="200" placeholder="e.g. ESP32 macropad"
+									defaultValue={data.resubmit?.untrackedName ?? ''} />
+								<span class="hint">
+									No Hackatime project picked, so your JOURNAL.md is the record of your hours.
+									{#if lapseText.trim()}<strong class="warn-text">You've added Lapse timelapses, so pick the Hackatime project they were recorded on in step 1.</strong>{/if}
+								</span>
+							</div>
+						{/if}
 						{#if hardware}
 							<div class="hw-note">
 								<p>
@@ -367,7 +385,7 @@
 
 						<div class="field">
 							<label for="lapse_links">Lapse timelapses <span class="optional">optional, but it helps</span></label>
-							<textarea id="lapse_links" name="lapse_links" defaultValue={data.resubmit?.lapse ?? ''} rows="4" maxlength="2000"
+							<textarea oninput={(e) => (lapseText = e.currentTarget.value)} id="lapse_links" name="lapse_links" defaultValue={data.resubmit?.lapse ?? ''} rows="4" maxlength="2000"
 								placeholder="https://lapse.hackclub.com/timelapse/…  (one per line)"></textarea>
 							<span class="hint">
 								Recorded yourself building with <a href="https://lapse.hackclub.com" target="_blank" rel="noopener noreferrer">Lapse</a>? Paste the links.
@@ -450,11 +468,13 @@
 							<p class="submit-summary">
 								{#if chosen.length}
 									Submitting <strong>{chosen.map((c) => c.name).join(' + ')}</strong> · {fmtHours(chosenSeconds)} tracked
+								{:else if untracked}
+									Submitting a hardware project without Hackatime.
 								{:else}
-									Pick a project above to submit.
+									Pick a project above to submit, or tick hardware if it wasn't tracked.
 								{/if}
 							</p>
-							<button class="btn" type="submit" disabled={sending || !chosen.length}>
+							<button class="btn" type="submit" disabled={sending || (!chosen.length && !hardware) || (untracked && !!lapseText.trim())}>
 								{sending ? 'Sending…' : 'Submit to Hack Club'}
 							</button>
 						</div>
@@ -532,6 +552,14 @@
 	}
 	.id-fields[hidden] {
 		display: none;
+	}
+	.step-hint {
+		margin: -0.4rem 0 0.8rem;
+	}
+	.warn-text {
+		display: block;
+		margin-top: 0.3rem;
+		color: #a34a00;
 	}
 	.resubmit-note {
 		max-width: 760px;

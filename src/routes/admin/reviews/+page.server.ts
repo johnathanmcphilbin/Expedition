@@ -37,7 +37,8 @@ import {
 	sendQueued,
 	reopenQueued,
 	purgeStalePersonalData,
-	setQueuedHardware
+	setQueuedHardware,
+	hackatimeNames
 } from '$lib/server/queue';
 import { parseSubmissionFields, parseJustifications } from '$lib/server/submission-fields';
 import { hours, text, uuid, oneOf, ValidationError } from '$lib/server/validate';
@@ -242,7 +243,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			screenshotUrl(row.screenshot_path)
 		]);
 		const projects = (times ?? []).map((t) => ({ name: t.name, tracked: formatHours(t.totalSeconds), seconds: t.totalSeconds }));
-		const picked = row.hackatime_projects?.length ? row.hackatime_projects : [row.project_name];
+		const picked = hackatimeNames(row);
 		const matched = projects.filter((p) => picked.includes(p.name));
 		const [checkpoints, priorApprovals] = await Promise.all([
 			Promise.all(picked.map((n) => listProjectCheckpoints(row.user_id, n))).then((l) => l.flat()),
@@ -255,7 +256,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			lapses,
 			priorApprovals,
 			justifications: {
-				'Justification - Hackatime Project Name(s) + Date Range(s)': picked.join(', '),
+				'Justification - Hackatime Project Name(s) + Date Range(s)': picked.length
+					? picked.join(', ')
+					: `None: hardware project "${row.project_name}", hours from its JOURNAL.md`,
 				'Justification - Submitter Hackatime ID': row.hackatime_user_id,
 				...foldOverrideJustification(
 					Object.fromEntries(Object.entries(row.justifications ?? {}).filter(([, v]) => v !== null))

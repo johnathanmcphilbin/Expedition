@@ -16,6 +16,15 @@ import type { QueuedSubmissionRow, QueuedSubmissionStatus, UserRow } from './dat
 
 const BUCKET = 'submission-screenshots';
 
+/**
+ * The Hackatime projects a submission covers. Rows from before multi-project
+ * support only have project_name; hardware not tracked in Hackatime has none.
+ */
+export function hackatimeNames(q: Pick<QueuedSubmissionRow, 'hackatime_projects' | 'project_name' | 'hardware'>): string[] {
+	if (q.hackatime_projects?.length) return q.hackatime_projects;
+	return q.hardware ? [] : [q.project_name];
+}
+
 export async function queueSubmission(
 	userId: string,
 	hackatimeUserId: string,
@@ -211,9 +220,10 @@ async function sendLocked(
 	params: Parameters<typeof sendQueued>[0]
 ): Promise<{ ok: true; airtableRecordId: string; airtableError: string | null } | { ok: false; message: string }> {
 
-	const projects = q.hackatime_projects?.length ? q.hackatime_projects : [q.project_name];
-	// Hack Club's field takes several names; commas are how their form lists them
-	const projectsForHackClub = projects.join(', ');
+	const projects = hackatimeNames(q);
+	// Hack Club's field takes several names; commas are how their form lists them.
+	// Hardware with no Hackatime project says so rather than inventing one.
+	const projectsForHackClub = projects.length ? projects.join(', ') : `None: hardware project "${q.project_name}", hours from its JOURNAL.md`;
 
 	let recordId = q.airtable_record_id;
 	let createdTime = new Date().toISOString();
@@ -435,7 +445,10 @@ export async function getOwnForResubmit(userId: string, id: string) {
 	if (!row || row.user_id !== userId || row.status !== 'changes_requested') return null;
 	return {
 		id: row.id,
-		projects: row.hackatime_projects?.length ? row.hackatime_projects : [row.project_name],
+		projects: hackatimeNames(row),
+		/** hardware sent in without a Hackatime project: what they called it */
+		untrackedName: hackatimeNames(row).length ? null : row.project_name,
+		name: row.project_name,
 		hardware: row.hardware,
 		code_url: row.code_url,
 		playable_url: row.playable_url,
