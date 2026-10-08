@@ -113,10 +113,10 @@
 		<h2 class="big">Your hours.<br />Your call.</h2>
 		<p class="lede">
 			Every drop is a grant for the thing it names. The cap and stickers we just ship to you. Or
-			keep your hours and bank them toward a travel grant to Dublin.
+			keep your hours and bank them toward a travel grant to Galway.
 		</p>
 		<p class="scrawl">
-			<a href={live ? '/dashboard#travel' : '/ireland'}>bank them for Dublin</a> <span aria-hidden="true">→</span>
+			<a href={live ? '/dashboard#travel' : '/ireland'}>bank them for Galway</a> <span aria-hidden="true">→</span>
 		</p>
 
 		<!-- ---------- banked readout ---------- -->
@@ -131,7 +131,7 @@
 				</div>
 				{#if live && live.travel > 0}
 					<div class="tally">
-						<span class="tally-n">{fmt(live.travel)}h</span><span class="tally-k">for Dublin</span>
+						<span class="tally-n">{fmt(live.travel)}h</span><span class="tally-k">for Galway</span>
 					</div>
 				{/if}
 				<div class="tally hero">

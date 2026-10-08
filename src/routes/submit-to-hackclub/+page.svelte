@@ -136,7 +136,7 @@
 				<ol class="next">
 					<li>An Expedition reviewer looks at it against your Hackatime time.</li>
 					<li>Once it's approved, we send it on to Hack Club for you.</li>
-					<li>Approved hours land in your balance. Spend them on drops or bank them for Dublin.</li>
+					<li>Approved hours land in your balance. Spend them on drops or bank them for Galway.</li>
 					<li>If something needs fixing, you'll see a note on your dashboard.</li>
 				</ol>
 				<div class="done-actions">

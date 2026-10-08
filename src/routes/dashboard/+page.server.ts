@@ -224,7 +224,7 @@ export const actions: Actions = {
 				const flight = text(form.get('booked_flight'), 'Flight you booked', { max: 80, required: true })!;
 				const raw = String(form.get('booked_arrives_at') ?? '').trim();
 				if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) {
-					throw new ValidationError('Add when it lands in Dublin (Irish time)', 'booked_arrives_at');
+					throw new ValidationError('Add when it lands in Ireland (Irish time)', 'booked_arrives_at');
 				}
 				different = { flight, arrivesAt: new Date(`${raw}:00Z`).toISOString() };
 			}

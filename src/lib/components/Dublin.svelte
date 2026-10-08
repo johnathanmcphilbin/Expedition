@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { TRAVEL_RATE, TRAVEL_CAP_HOURS, hoursToQualify, money } from '$lib/data';
+	import { TRAVEL_RATE, TRAVEL_CAP_HOURS, EVENT, hoursToQualify, money } from '$lib/data';
 
 	// Worked examples, computed from the real rule so they can't drift from it.
-	const examples = [320, 800].map((flight) => {
+	const examples = [100, 800].map((flight) => {
 		const half = flight / 2;
 		const uncapped = Math.ceil(half / TRAVEL_RATE);
 		return { flight, half, uncapped, hours: hoursToQualify(flight), capped: uncapped > TRAVEL_CAP_HOURS };
@@ -25,29 +25,37 @@
 				<figcaption>{p.caption}</figcaption>
 			</figure>
 		{/each}
-		<h2 class="headline">Dublin, December 5th</h2>
-		<p class="lede">A free, one-day hackathon with a hundred other people.</p>
+		<h2 class="headline">Galway, 5–6 December</h2>
+		<p class="lede">
+			A free overnight hackathon at <a href={EVENT.mapsUrl} target="_blank" rel="noopener noreferrer">PorterShed, Galway</a>.
+			Starts 8am on 5 December, ends 2pm on 6 December.
+		</p>
 
 		<div class="travel">
-			<h3 class="t-kicker">Travelling to Dublin</h3>
+			<h3 class="t-kicker">Travelling to Galway</h3>
 			<p class="t-lead">
 				Bank your hours at <strong>{money(TRAVEL_RATE)}/hour</strong> towards your trip.
 			</p>
 			<p class="t-body">
-				To qualify, reach enough approved hours to cover <strong>50% of your flight</strong>, or
+				To qualify, reach enough approved hours to cover <strong>50% of your travel cost</strong>, or
 				complete the full <strong>{TRAVEL_CAP_HOURS} hour Expedition</strong>.
 			</p>
 			<p class="t-cap">{TRAVEL_CAP_HOURS} hours is the maximum requirement.</p>
 			<p class="t-body">
-				Once you qualify, your travel stipend can go towards your flight and accommodation. You
-				cover anything left over.
+				The {TRAVEL_CAP_HOURS} hours count towards your travel grant too: that's {money(TRAVEL_CAP_HOURS * TRAVEL_RATE)}.
+				Keep building past {TRAVEL_CAP_HOURS} and every extra approved hour is another {money(TRAVEL_RATE)}.
+			</p>
+			<p class="t-body">
+				<strong>Accommodation</strong> comes out of the same stipend: keep around 7 to 14 hours for it.
+				Group accommodation is being sorted, so don't book flights or hotels yet.
+				Visa info and invitation letters are being worked on too.
 			</p>
 
 			<div class="t-examples">
 				<p class="t-ex-k">Example</p>
 				{#each examples as e (e.flight)}
 					<p class="t-ex">
-						{money(e.flight)} flight <span class="arr">→</span> 50% is {money(e.half)}
+						{money(e.flight)} travel <span class="arr">→</span> 50% is {money(e.half)}
 						<span class="arr">→</span>
 						{#if e.capped}
 							normally {e.uncapped} hours, but the requirement caps at {TRAVEL_CAP_HOURS}
@@ -58,7 +66,7 @@
 				{/each}
 			</div>
 
-			<a class="btn" href="/dashboard#travel">Bank hours for Dublin</a>
+			<a class="btn" href="/dashboard#travel">Bank hours for Galway</a>
 		</div>
 
 		<div class="past-events">

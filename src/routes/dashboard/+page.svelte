@@ -150,7 +150,7 @@
 			</div>
 			<dl class="mini-stats">
 				<div><dt>To spend</dt><dd class="green">{data.balance.hours_available}h</dd></div>
-				<div><dt>For Dublin</dt><dd>{travelHours}h</dd></div>
+				<div><dt>For Galway</dt><dd>{travelHours}h</dd></div>
 				<div><dt>Spent</dt><dd>{data.balance.hours_spent}h</dd></div>
 				<a class="ledger-link" href="/your-hours">See every hour →</a>
 			</dl>
@@ -192,7 +192,7 @@
 			{@const f = data.flight}
 			<section class="block" id="flight">
 				<div class="block-head">
-					<h2>Your flight to Dublin</h2>
+					<h2>Your flight to Ireland</h2>
 					<span class="flight-status fs-{f.status}">
 						{f.status === 'booked' ? 'Booked' : f.status === 'changed' ? 'Booked (different flight)' : 'Please book this'}
 					</span>
@@ -201,7 +201,7 @@
 					<div class="leg">
 						<span class="leg-k">Getting there</span>
 						<strong class="leg-flight">{f.outFlight}</strong>
-						<span>{f.outFrom} → Dublin{f.outTerminal ? ` (${f.outTerminal})` : ''}</span>
+						<span>{f.outFrom} → Ireland{f.outTerminal ? ` (${f.outTerminal})` : ''}</span>
 						{#if f.outDepartsLocal}<span>Departs {f.outDepartsLocal} (local time)</span>{/if}
 						<span>Lands <strong>{fmtDublin(f.outArrivesAt)}</strong> Irish time</span>
 					</div>
@@ -209,7 +209,7 @@
 						<div class="leg">
 							<span class="leg-k">Going home</span>
 							{#if f.retFlight}<strong class="leg-flight">{f.retFlight}</strong>{/if}
-							{#if f.retDepartsAt}<span>Leaves Dublin <strong>{fmtDublin(f.retDepartsAt)}</strong></span>{/if}
+							{#if f.retDepartsAt}<span>Flies home <strong>{fmtDublin(f.retDepartsAt)}</strong></span>{/if}
 						</div>
 					{/if}
 					{#if f.price !== null}<p class="flight-note">About <strong>${f.price}</strong> return when we checked.</p>{/if}
@@ -225,7 +225,7 @@
 							<label class="check"><input type="checkbox" name="different" value="yes" bind:checked={bookedDifferent} /> I booked a different flight</label>
 							{#if bookedDifferent}
 								<label>Flight you booked <input name="booked_flight" required maxlength="80" placeholder="e.g. QR 571 / QR 17" /></label>
-								<label>Lands in Dublin (Irish time) <input name="booked_arrives_at" type="datetime-local" required /></label>
+								<label>Lands in Ireland (Irish time) <input name="booked_arrives_at" type="datetime-local" required /></label>
 							{/if}
 							<button class="btn" type="submit">I've booked it</button>
 						</form>
@@ -243,20 +243,20 @@
 		<!-- ---------------- travel fund ---------------- -->
 		<section class="block" id="travel">
 			<div class="block-head">
-				<h2>Dublin travel fund</h2>
-				<a class="text-link" href="/ireland">About Dublin →</a>
+				<h2>Galway travel fund</h2>
+				<a class="text-link" href="/ireland">About Galway →</a>
 			</div>
 			<p class="hint block-hint">
-				Bank approved hours here at <strong>{money(TRAVEL_RATE)}/hour</strong> towards your trip to Dublin
-				on December 5th. To qualify, you need enough approved hours to cover 50% of your flight, or the
+				Bank approved hours here at <strong>{money(TRAVEL_RATE)}/hour</strong> towards your trip to Galway
+				for 5–6 December. To qualify, you need enough approved hours to cover 50% of your travel cost, or the
 				full {TRAVEL_CAP_HOURS} hour Expedition. <strong>{TRAVEL_CAP_HOURS} hours is the maximum
-				requirement.</strong> Once you qualify, your stipend goes towards your flight and accommodation,
+				requirement.</strong> Once you qualify, your stipend goes towards your travel and accommodation,
 				and you cover anything left over.
 			</p>
 			<div class="panel travel">
 				<div class="travel-total">
 					<span class="t-dollars">{travelHours}h</span>
-					<span class="t-hours">banked for Dublin</span>
+					<span class="t-hours">banked for Galway</span>
 					{#if travelHours > 0}
 						<span class="t-grant">
 							<GrantAmount reveal="{money(travelHours * TRAVEL_RATE)} travel grant so far" />

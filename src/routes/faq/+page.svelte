@@ -2,32 +2,54 @@
 	import '$lib/styles/app.css';
 	import Footer from '$lib/components/Footer.svelte';
 
+	import { EVENT } from '$lib/data';
+
 	// Johnny's words, in his voice.
 	const faq: { q: string; a: string[]; link?: { href: string; text: string } }[] = [
 		{
-			q: 'when is it?',
+			q: 'what is expedition?!',
+			a: ['Expedition Ireland is an overnight hackathon!']
+		},
+		{
+			q: 'is the actual hackathon free?!',
+			a: ['yeahh! the event itself is completely free']
+		},
+		{
+			q: 'where?!',
+			a: ['PorterShed, Galway, Ireland'],
+			link: { href: EVENT.mapsUrl, text: 'PorterShed on Google Maps →' }
+		},
+		{
+			q: 'whenn?!',
+			a: ['5–6 December. it starts at 8am on 5 December and ends at 2pm on 6 December']
+		},
+		{
+			q: 'how do i qualify?!',
 			a: [
-				'december 5th in dublin!! dogpatch labs is confirmed and im talking with them atm about making it a 2 day hackathon. ill have the exact schedule + details up when thats all sorted'
+				'build projects! build whatever you want, software or hardware',
+				'then do the standard 40 hours to qualify, or enough hours to cover half your travel cost. like if your travel costs $100 you need to cover half, which is $50'
 			]
 		},
 		{
-			q: 'wait so how many hours do i actually need to come?',
+			q: 'wait, how do i cover the travel cost?',
 			a: [
-				'you need enough hours to cover 50% of your flight at $8/hr OR finish the full expedition which is 40 hours'
+				'you do hours to get a travel grant. the rate is $8 per hour',
+				"for example, if someone's travel costs $800 they'd need 100 hours to cover all of it at $8/h"
 			]
 		},
 		{
-			q: 'what if my flight is like $1000?',
+			q: 'so the 40h count towards qualifying and the travel grant too?',
+			a: ['YESS, it counts towards your travel grant too, which is $320']
+		},
+		{
+			q: 'what about accommodation?',
 			a: [
-				'you still only need 40 hours to qualify to come. you do NOT need to do 60 or 100 hours just because you live further away'
+				'same as the travel stipend! id recommend keeping around 7 to 14 hours for accommodation. orgs are working on group accommodation for everyone atm so dont go booking random hotels yet, we will sort that closer to the time'
 			]
 		},
 		{
-			q: 'so 40 hours means you pay for my flight?',
-			a: [
-				'NOOO this is where i confused everyone lmao. 40 hours qualifies you to come, it does not mean your whole flight is paid for',
-				'40 hours = $320 of travel stipend. if your flight is $1000 you can put that $320 towards it and pay the rest yourself'
-			]
+			q: 'should i book flights/hotels now?',
+			a: ['pls dont yet. theres still stuff being sorted']
 		},
 		{
 			q: 'can i do more than 40 hours then?',
@@ -36,23 +58,13 @@
 			]
 		},
 		{
-			q: 'what about accommodation?',
-			a: [
-				'same travel stipend! id recommend keeping around 7 to 14 hours for accommodation. im working on group accommodation for everyone atm so dont go booking random hotels yet, we will sort that closer to the time'
-			]
-		},
-		{
-			q: 'is the actual hackathon free?',
-			a: ['YES the event itself is completely free']
-		},
-		{
 			q: 'will there be need based stipends?',
-			a: ["im looking into it!! i dont want to promise anything until i know what budget i have though"]
+			a: ['orgs are looking into it!! we dont want to promise anything until we know what budget we have though']
 		},
 		{
 			q: 'what about visas?',
 			a: [
-				'I KNOWWWW im working on it. im looking into invitation letters + the visa documents people need and ill get proper info out asap because ik some of ye need to apply pretty early'
+				'orgs are working on it rn. we are looking into invitation letters + the visa documents people need and will get proper info out asap because some of you need to apply pretty early'
 			]
 		},
 		{
@@ -66,19 +78,11 @@
 			a: [
 				"YES. keep a JOURNAL.md in your repo with an entry roughly every hour, and make sure your repo has your BOM, schematics/CAD files and firmware. you dont need a live url for hardware"
 			],
-			link: { href: '/hardware', text: 'the full hardware rules →' }
+			link: { href: '/hardware', text: 'the hardware rules →' }
 		},
 		{
-			q: 'do i have to go to ireland?',
-			a: [
-				"no!! you can just do expedition, build cool stuff and get the normal prizes if you dont want to come"
-			]
-		},
-		{
-			q: 'should i book flights/hotels now?',
-			a: [
-				'pls dont yet. theres still stuff being sorted and id rather tell ye i dont know something yet than have someone spend hundreds because of something said in a random slack thread'
-			]
+			q: 'do i really need to come to ireland?',
+			a: ["no!! you can just do expedition, build cool stuff and get the normal prizes if you dont want to come"]
 		},
 		{
 			q: 'i have another question',
@@ -103,7 +107,9 @@
 						<dd>{para}</dd>
 					{/each}
 					{#if item.link}
-						<dd><a class="more" href={item.link.href}>{item.link.text}</a></dd>
+						<dd>
+							<a class="more" href={item.link.href} {...item.link.href.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {}}>{item.link.text}</a>
+						</dd>
 					{/if}
 				</div>
 			{/each}

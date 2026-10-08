@@ -44,13 +44,13 @@
 			{#if Number(data.balance.hours_travel) > 0}
 				<div class="stat-big">
 					<span class="n">{data.balance.hours_travel}h</span>
-					<span class="k">banked for Dublin</span>
+					<span class="k">banked for Galway</span>
 				</div>
 			{/if}
 		</div>
 		{#if Number(data.balance.hours_travel) > 0}
 			<p class="hint" style="margin-bottom:1.5rem">
-				Hours banked for Dublin can't be spent on gear. <a href="/dashboard#travel">Move them back</a> from your dashboard if you change your mind.
+				Hours banked for Galway can't be spent on gear. <a href="/dashboard#travel">Move them back</a> from your dashboard if you change your mind.
 			</p>
 		{/if}
 

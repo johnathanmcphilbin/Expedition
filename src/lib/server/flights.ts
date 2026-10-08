@@ -3,9 +3,9 @@ import type { TripFlightRow, UserRow } from './database.types';
 import { EVENT } from '$lib/data';
 
 /**
- * Flights to the Dublin event. An organiser picks the exact flight; the
- * participant books it and confirms here. Times at Dublin airport are
- * timestamptz; December in Ireland is GMT, so Dublin time is UTC.
+ * Flights to the Galway event. An organiser picks the exact flight; the
+ * participant books it and confirms here. Landing times are timestamptz;
+ * December in Ireland is GMT, so Irish time is UTC.
  */
 
 export type FlightWithOwner = TripFlightRow & { owner: Pick<UserRow, 'display_name' | 'email'> | null };
@@ -128,16 +128,17 @@ export type ArrivalFlag = { level: 'warn' | 'bad'; text: string };
 
 /**
  * Anything about a landing time that makes the pickup or the morning hard.
- * Landing to venue is about 1.5h with passport control, so 08:30 is the
- * latest that comfortably makes a 10:00 start.
+ * The event starts at 8am at PorterShed, Galway: about 3 hours by road from
+ * Dublin or Shannon, plus an hour for passport control and bags. So anyone
+ * landing on the 5th misses the start; the day before is the plan.
  */
 export function arrivalFlags(arrivesAt: string): ArrivalFlag[] {
 	const t = new Date(arrivesAt).getTime();
 	const hour = new Date(arrivesAt).getUTCHours();
 	const flags: ArrivalFlag[] = [];
-	if (t > start - 1 * HOUR) flags.push({ level: 'bad', text: 'Misses the 10:00 start' });
-	else if (t > start - 1.5 * HOUR) flags.push({ level: 'warn', text: 'Tight for the 10:00 start' });
-	if (t < start - 34 * HOUR) flags.push({ level: 'warn', text: 'Arrives early: needs an extra night' });
+	if (t > start - 3.5 * HOUR) flags.push({ level: 'bad', text: 'Misses the 8am start in Galway' });
+	else if (t > start - 6 * HOUR) flags.push({ level: 'warn', text: 'Tight: Galway is ~3h from the airport' });
+	if (t < start - 48 * HOUR) flags.push({ level: 'warn', text: 'Arrives early: needs an extra night' });
 	if (hour >= 22 || hour < 6) flags.push({ level: 'warn', text: 'Night arrival: driver on call' });
 	return flags;
 }

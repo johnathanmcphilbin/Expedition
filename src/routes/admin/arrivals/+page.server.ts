@@ -136,10 +136,10 @@ export const actions: Actions = {
 				out_flight: text(form.get('out_flight'), 'Flight', { max: 80, required: true })!,
 				out_from: from,
 				out_departs_local: text(form.get('out_departs_local'), 'Departs', { max: 60 }),
-				out_arrives_at: dublinTime(form.get('out_arrives_at'), 'Lands in Dublin', true)!,
+				out_arrives_at: dublinTime(form.get('out_arrives_at'), 'Lands in Ireland', true)!,
 				out_terminal: terminal ? oneOf(terminal, ['T1', 'T2'] as const, 'Terminal') : null,
 				ret_flight: text(form.get('ret_flight'), 'Return flight', { max: 80 }),
-				ret_departs_at: dublinTime(form.get('ret_departs_at'), 'Leaves Dublin', false),
+				ret_departs_at: dublinTime(form.get('ret_departs_at'), 'Flies home', false),
 				price_usd: price,
 				organiser_notes: text(form.get('organiser_notes'), 'Notes', { max: 1000 })
 			};

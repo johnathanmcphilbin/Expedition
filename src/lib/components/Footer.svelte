@@ -14,7 +14,7 @@
 		<div class="col links-col">
 			<a href="/#how-it-works">How it works</a>
 			<a href="/rewards">Your hours</a>
-			<a href="/ireland">Dublin</a>
+			<a href="/ireland">Galway</a>
 			<a href="/faq">FAQ</a>
 			<a href="/library">Library</a>
 			<a href="/log">Expedition log</a>

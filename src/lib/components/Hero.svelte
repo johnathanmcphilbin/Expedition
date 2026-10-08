@@ -20,7 +20,7 @@
 				<h1><img src="/title-expedition-v2.png" alt="Expedition" width="520" height="64" /></h1>
 				<p class="sub">
 					Build whatever you want and track the time you spend making it. Your hours unlock grants
-					for real gear, or a travel grant to Dublin. Your call.
+					for real gear, or a travel grant to Galway. Your call.
 				</p>
 			</div>
 		</div>

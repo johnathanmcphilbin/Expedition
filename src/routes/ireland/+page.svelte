@@ -5,7 +5,7 @@
 </script>
 
 <svelte:head>
-	<title>Dublin · Expedition</title>
+	<title>Galway · Expedition</title>
 </svelte:head>
 
 <main>

@@ -8,7 +8,7 @@
 	const label: Record<string, string> = {
 		checkpoint_approved: 'Submission approved',
 		reward_claimed: 'Reward claimed',
-		travel_allocation: 'Dublin travel fund',
+		travel_allocation: 'Galway travel fund',
 		manual_adjustment: 'Adjustment'
 	};
 </script>
@@ -34,7 +34,7 @@
 			</div>
 			{#if Number(data.balance.hours_travel) > 0}
 				<div class="stat-big">
-					<span class="n">{data.balance.hours_travel}h</span><span class="k">for Dublin</span>
+					<span class="n">{data.balance.hours_travel}h</span><span class="k">for Galway</span>
 				</div>
 			{/if}
 		</div>

@@ -24,8 +24,8 @@
 					<span class="onward-desc">Supply drops along the trail. Spend your hours or bank them.</span>
 				</a>
 				<a class="onward-link" href="/ireland">
-					<span class="onward-title">Dublin</span>
-					<span class="onward-desc">A free hackathon on December 5th.</span>
+					<span class="onward-title">Galway</span>
+					<span class="onward-desc">A free overnight hackathon at PorterShed, 5–6 December.</span>
 				</a>
 			</div>
 		</div>

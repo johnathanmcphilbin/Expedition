@@ -303,7 +303,7 @@
 
 		<section class="panel trips-panel">
 			<div class="tl-head">
-				<p class="section-label">Getting people to Dublin</p>
+				<p class="section-label">Getting people to Galway</p>
 				<form method="POST" action="?/findAirports" use:enhance={() => { findingAirports = true; return async ({ update }) => { await update(); findingAirports = false; }; }} class="find-form">
 					<button class="text-btn" type="submit" disabled={findingAirports}>{findingAirports ? 'Finding…' : 'Find missing airports'}</button>
 					<button class="text-btn" type="submit" name="all" value="yes" disabled={findingAirports}>Redo all</button>
@@ -351,7 +351,7 @@
 
 		<section class="ledger">
 			<div class="b-head">
-				<p class="section-label">Progress to Dublin</p>
+				<p class="section-label">Progress to Galway</p>
 			</div>
 
 			<div class="ledger-totals">

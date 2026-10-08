@@ -241,19 +241,22 @@ export const drops: Drop[] = [
 ];
 
 /**
- * The event in Dublin. In December Ireland is on GMT, so Dublin time is UTC.
- * Arriving the night before or that morning is ideal.
+ * The event: an overnight hackathon at PorterShed, Galway. In December
+ * Ireland is on GMT, so Irish time is UTC.
  */
 export const EVENT = {
+	venue: 'PorterShed, Galway',
+	mapsUrl: 'https://www.google.com/maps/search/?api=1&query=PorterShed+Galway',
 	date: '2026-12-05',
-	startsAt: '2026-12-05T10:00:00Z',
-	/** best day to fly in from far away (lands the 4th or early the 5th) */
+	startsAt: '2026-12-05T08:00:00Z',
+	endsAt: '2026-12-06T14:00:00Z',
+	/** fly in the day before: it starts at 8am, a few hours from the airport */
 	flyOutDate: '2026-12-04',
 	/** assumed day to fly home; change once the schedule is final */
 	flyHomeDate: '2026-12-06'
 };
 
-/** Travel grant per approved hour banked toward Dublin. Only ever shown on request. */
+/** Travel grant per approved hour banked toward the trip to Galway. Only ever shown on request. */
 export const TRAVEL_RATE = 8;
 
 /**

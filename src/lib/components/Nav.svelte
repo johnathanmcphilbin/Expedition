@@ -71,7 +71,7 @@
 		<nav class="links" class:open>
 			<a href="/#how-it-works">How it works</a>
 			<a href="/rewards">Your hours</a>
-			<a href="/ireland">Dublin</a>
+			<a href="/ireland">Galway</a>
 			<a href="/faq">FAQ</a>
 			{#if currentUser}
 				{#if currentUser.isAdmin}

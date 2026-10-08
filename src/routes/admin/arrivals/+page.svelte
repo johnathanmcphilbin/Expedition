@@ -41,8 +41,8 @@
 			<div>
 				<h1 class="app-title">Arrivals</h1>
 				<p class="hint lead">
-					The flight each person should take to Dublin for 5 December (starts 10:00), whether they've booked it, and when to be at the airport.
-					All times are Dublin time.
+					The flight each person should take to Ireland for the Galway hackathon (PorterShed, starts 8am on 5 December),
+					whether they've booked it, and when to be at the airport. All times are Irish time.
 				</p>
 			</div>
 		</div>
@@ -166,7 +166,7 @@
 												<label>Flight(s) <input name="out_flight" required maxlength="80" placeholder="EK 511 / EK 161" value={p.flight?.out_flight ?? ''} /></label>
 												<label>From <input name="out_from" required maxlength="3" placeholder="DEL" value={p.flight?.out_from ?? p.home?.airport ?? ''} style="width:5rem;text-transform:uppercase" /></label>
 												<label>Departs (local, as on ticket) <input name="out_departs_local" maxlength="60" placeholder="4 Dec 03:35" value={p.flight?.out_departs_local ?? ''} /></label>
-												<label>Lands in Dublin <input name="out_arrives_at" type="datetime-local" required value={local(p.flight?.out_arrives_at ?? null)} /></label>
+												<label>Lands in Ireland <input name="out_arrives_at" type="datetime-local" required value={local(p.flight?.out_arrives_at ?? null)} /></label>
 												<label>Terminal
 													<select name="out_terminal">
 														<option value="">Unknown</option>
@@ -178,7 +178,7 @@
 											<fieldset>
 												<legend>Going home</legend>
 												<label>Flight(s) <input name="ret_flight" maxlength="80" placeholder="EK 162 / EK 510" value={p.flight?.ret_flight ?? ''} /></label>
-												<label>Leaves Dublin <input name="ret_departs_at" type="datetime-local" value={local(p.flight?.ret_departs_at ?? null)} /></label>
+												<label>Flies home from Ireland <input name="ret_departs_at" type="datetime-local" value={local(p.flight?.ret_departs_at ?? null)} /></label>
 												<label>Price (USD, return) <input name="price_usd" type="number" min="0" step="1" value={p.flight?.price_usd ?? ''} style="width:7rem" /></label>
 											</fieldset>
 											<label class="wide">Notes for them <textarea name="organiser_notes" rows="2" maxlength="1000" placeholder="e.g. book on emirates.com, carry-on only is fine">{p.flight?.organiser_notes ?? ''}</textarea></label>
