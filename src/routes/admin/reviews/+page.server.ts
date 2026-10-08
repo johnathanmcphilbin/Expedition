@@ -126,8 +126,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		queued.filter((qr) => qr.airtable_record_id).map((qr) => [qr.airtable_record_id as string, qr.hardware])
 	);
 
+	// A queued submission whose approval got as far as creating its Airtable
+	// row but didn't finish is still the queued item: hide the half-made
+	// Airtable copy, or it shows up twice with an empty review.
+	const halfSent = new Set(
+		queued.filter((qr) => qr.airtable_record_id && qr.status !== 'sent').map((qr) => qr.airtable_record_id as string)
+	);
+
 	const items: Item[] = [
-		...rows.map((r) => ({
+		...rows.filter((r) => !halfSent.has(r.submission.airtable_record_id)).map((r) => ({
 			kind: 'hc' as const,
 			key: r.submission.airtable_record_id,
 			status: r.status,
