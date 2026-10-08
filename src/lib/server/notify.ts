@@ -22,7 +22,13 @@ function esc(s: string | null | undefined): string {
 		.replace(/"/g, '&quot;');
 }
 
-async function send(subject: string, rows: [string, string | null | undefined][], link: string) {
+async function send(
+	subject: string,
+	rows: [string, string | null | undefined][],
+	link: string,
+	to: string = TO(),
+	linkText = 'Open in Expedition'
+) {
 	const key = env.RESEND_API_KEY?.trim();
 	if (!key) {
 		console.warn('notify: RESEND_API_KEY not set, skipping:', subject);
@@ -41,7 +47,7 @@ async function send(subject: string, rows: [string, string | null | undefined][]
 					)
 					.join('')}
 			</table>
-			<p style="margin:18px 0 0"><a href="${esc(link)}">Open in Expedition</a></p>
+			<p style="margin:18px 0 0"><a href="${esc(link)}">${esc(linkText)}</a></p>
 		</div>`;
 	const text = `${subject}\n\n${present.map(([k, v]) => `${k}: ${v}`).join('\n')}\n\n${link}`;
 
@@ -50,7 +56,7 @@ async function send(subject: string, rows: [string, string | null | undefined][]
 			method: 'POST',
 			headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
 			signal: AbortSignal.timeout(5000),
-			body: JSON.stringify({ from: FROM(), to: [TO()], subject, html, text })
+			body: JSON.stringify({ from: FROM(), to: [to], subject, html, text })
 		});
 		if (!res.ok) console.error('notify: resend rejected', res.status, (await res.text()).slice(0, 300));
 	} catch (e) {
@@ -91,3 +97,4 @@ export function notifyClaim(c: { name: string | null; reward: string; hours: num
 		`${SITE}/admin`
 	);
 }
+

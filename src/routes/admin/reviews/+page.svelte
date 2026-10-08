@@ -481,6 +481,22 @@
 						<span class="tag tag-{status}">{STATUS_LABEL[status]}</span>
 					</header>
 					{@render flagPanel('hc', s.airtable_record_id)}
+					{#if data.detail.review?.status === 'approved' || (form && 'airtableResend' in form)}
+						<div class="airtable-sync" class:bad={!!(data.airtableError || (form && 'airtableResend' in form && form.airtableResend))}>
+							{#if form && 'airtableResent' in form && form.airtableResent}
+								<p>✓ Hours and feedback sent to Hack Club's Airtable.</p>
+							{:else if form && 'airtableResend' in form && form.airtableResend}
+								<p><strong>Airtable didn't take the hours:</strong> {form.airtableResend}</p>
+							{:else if data.airtableError}
+								<p><strong>Approved and hours credited here, but Airtable didn't take the hours:</strong> {data.airtableError}</p>
+							{/if}
+							<form method="POST" action="?/resendAirtable" use:enhance={() => async ({ update }) => update({ reset: false, invalidateAll: false })}>
+								<input type="hidden" name="airtable_record_id" value={s.airtable_record_id} />
+								<button class="text-btn" type="submit">Resend hours to Airtable</button>
+								<span class="hint">Writes {data.detail.review?.approved_hours ?? '?'}h to "Override Hours Spent" and the feedback to Additional Justification.</span>
+							</form>
+						</div>
+					{/if}
 					{#if data.detail.gone}
 						<p class="error-box">
 							This submission has been deleted from Hack Club's Airtable, so it can't be approved, rejected or edited here any more.
@@ -882,6 +898,30 @@
 		align-self: center;
 		font-size: 0.8rem;
 		color: var(--muted);
+	}
+	.airtable-sync {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		margin: 0.8rem 0 1rem;
+		padding: 0.6rem 0.9rem;
+		background: #f4f7fa;
+		border-left: 4px solid #338eda;
+		font-size: 0.9rem;
+	}
+	.airtable-sync.bad {
+		background: #fdecec;
+		border-left-color: #c81e1e;
+		color: #7f1d1d;
+	}
+	.airtable-sync p {
+		margin: 0;
+	}
+	.airtable-sync form {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.3rem 0.8rem;
 	}
 	.shadow-note {
 		margin-bottom: 1rem;

@@ -33,13 +33,31 @@ export const JUSTIFICATION_FIELDS = [
 	{ name: 'Justification - Deflation Justification', label: 'Deflation justification', rows: 2 },
 	{ name: 'Justification - Alternate Tracking Method', label: 'Alternate tracking method', rows: 2 },
 	{ name: 'Justification - Additional Justification', label: 'Additional justification', rows: 3 },
-	{ name: 'Optional - Override Hours Spent Justification', label: 'Override hours spent justification', rows: 4 },
+	// never written by Expedition: anything typed for it goes to Additional Justification (see foldOverrideJustification)
+	{ name: 'Optional - Override Hours Spent Justification', label: 'Override hours spent justification', rows: 4, hidden: true },
 	{ name: 'Optional - Override Duplicate Justification', label: 'Override duplicate justification', rows: 2 },
 	{ name: 'Optional - Override Age Justification', label: 'Override age justification', rows: 2 }
 ] as const;
 export type Justifications = Record<string, string | null>;
 
 const ADDITIONAL_JUSTIFICATION = 'Justification - Additional Justification';
+
+const OVERRIDE_JUSTIFICATION = 'Optional - Override Hours Spent Justification';
+
+/**
+ * Expedition's justifications all live in Additional Justification, never in
+ * Override Hours Spent Justification. Anything found in the override field
+ * (typed before this rule, or already on the Airtable row) is moved over,
+ * once, and the override field is cleared.
+ */
+export function foldOverrideJustification(values: Justifications): Justifications {
+	const override = values[OVERRIDE_JUSTIFICATION]?.trim();
+	const out: Justifications = { ...values, [OVERRIDE_JUSTIFICATION]: null };
+	if (!override) return out;
+	const additional = values[ADDITIONAL_JUSTIFICATION]?.trim() ?? '';
+	out[ADDITIONAL_JUSTIFICATION] = additional.includes(override) ? additional : [additional, override].filter(Boolean).join('\n\n');
+	return out;
+}
 
 /** airtable_status on a cached submission whose Airtable record has been deleted. */
 export const AIRTABLE_GONE = 'Removed from Airtable';
@@ -71,17 +89,19 @@ export async function getJustifications(recordId: string): Promise<Justification
 	const u = new URL(`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${recordId}`);
 	for (const f of JUSTIFICATION_FIELDS) u.searchParams.append('fields[]', f.name);
 	const res = await fetch(u, { headers: headers(), signal: AbortSignal.timeout(15000) });
-	if (res.status === 404 || res.status === 422) {
-		throw new Error("This submission isn't in Hack Club's Airtable any more (it was deleted there).");
+	if (res.status === 404) throw new Error("This submission isn't in Hack Club's Airtable any more (it was deleted there).");
+	if (!res.ok) {
+		// Airtable says why in the body (e.g. a renamed field); pass that on
+		const body = (await res.text()).slice(0, 300);
+		throw new Error(`Couldn't read the submission from Airtable (${res.status}): ${body}`);
 	}
-	if (!res.ok) throw new Error(`Couldn't read the submission from Airtable (${res.status})`);
 	const fields = ((await res.json()) as { fields: Record<string, unknown> }).fields ?? {};
-	return Object.fromEntries(
+	return foldOverrideJustification(Object.fromEntries(
 		JUSTIFICATION_FIELDS.map((f) => {
 			const v = fields[f.name];
 			return [f.name, v === undefined || v === null ? null : String(v)];
 		})
-	);
+	));
 }
 
 /** Write a reviewer's edits to the justification fields. Blank clears the field. */
@@ -92,7 +112,7 @@ export async function saveJustifications(recordId: string, values: Justification
 			method: 'PATCH',
 			headers: headers(),
 			signal: AbortSignal.timeout(15000),
-			body: JSON.stringify({ typecast: true, fields: values })
+			body: JSON.stringify({ typecast: true, fields: foldOverrideJustification(values) })
 		}
 	);
 	if (!res.ok) {
@@ -326,7 +346,9 @@ export async function createSubmission(
 	/** a reviewer's justification edits; blank ones are left out */
 	justifications: Justifications = {}
 ): Promise<{ id: string; createdTime: string }> {
-	const extra = Object.fromEntries(Object.entries(justifications).filter(([, v]) => v !== null && v !== ''));
+	const extra = Object.fromEntries(
+		Object.entries(foldOverrideJustification(justifications)).filter(([, v]) => v !== null && v !== '')
+	);
 	const table = `${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}`;
 
 	const res = await fetch(table, {
@@ -420,7 +442,9 @@ export async function writeReviewToAirtable(
 			body: JSON.stringify({
 				fields: {
 					'Optional - Override Hours Spent': review.approved_hours ?? undefined,
-					[ADDITIONAL_JUSTIFICATION]: additionalJustification
+					[ADDITIONAL_JUSTIFICATION]: additionalJustification,
+					// justifications live in Additional; current already had any override text folded in
+					[OVERRIDE_JUSTIFICATION]: null
 				}
 			})
 		}

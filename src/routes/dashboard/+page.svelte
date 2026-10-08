@@ -9,6 +9,8 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
+	const needsChanges = $derived(data.projects.filter((p) => p.queued?.status === 'changes_requested'));
+
 	let bookedDifferent = $state(false);
 	const fmtDublin = (iso: string) =>
 		new Date(iso).toLocaleString('en-IE', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Dublin' });
@@ -100,6 +102,16 @@
 
 		{#if data.flash && flashText[data.flash]}
 			<p class="notice">{flashText[data.flash]}</p>
+		{/if}
+
+		{#if needsChanges.length}
+			<div class="changes-banner" role="status">
+				<strong>{needsChanges.length === 1 ? 'A reviewer asked for changes' : `Reviewers asked for changes on ${needsChanges.length} projects`}.</strong>
+				<span>
+					{#each needsChanges as p, i (p.name)}<a href="/submit-to-hackclub?resubmit={p.queued?.id}">{p.name}</a>{i < needsChanges.length - 1 ? ', ' : ''}{/each}:
+					read their feedback below, fix it, then resubmit.
+				</span>
+			</div>
 		{/if}
 
 		<!-- ---------------- progress ---------------- -->
@@ -409,6 +421,9 @@
 									{#if p.queued.participant_feedback && p.queued.status !== 'pending'}
 										<p class="p-feedback">“{p.queued.participant_feedback}”</p>
 									{/if}
+									{#if p.queued.status === 'changes_requested'}
+										<a class="btn resubmit-btn" href="/submit-to-hackclub?resubmit={p.queued.id}">Make changes &amp; resubmit</a>
+									{/if}
 								{:else if p.review?.participant_feedback && p.review.status !== 'pending'}
 									<p class="p-feedback">“{p.review.participant_feedback}”</p>
 								{/if}
@@ -472,6 +487,25 @@
 <Footer />
 
 <style>
+	.changes-banner {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		margin-bottom: 1.5rem;
+		padding: 0.9rem 1.1rem;
+		background: #fff8ec;
+		border: 2px solid #e0a040;
+		color: var(--navy);
+	}
+	.changes-banner a {
+		font-weight: 800;
+		color: var(--navy);
+	}
+	.resubmit-btn {
+		display: inline-flex;
+		margin-top: 0.6rem;
+		font-size: 0.85rem;
+	}
 	.flight-status {
 		font-size: 0.75rem;
 		font-weight: 800;

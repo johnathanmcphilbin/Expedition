@@ -18,7 +18,13 @@
 	// (people rename folders, split front/back end, etc.) — their hours add up.
 	let selected = $state<string[]>([]);
 	$effect(() => {
-		selected = data.selected ? [data.selected] : data.projects.length === 1 ? [data.projects[0].name] : [];
+		selected = data.resubmit
+			? data.resubmit.projects
+			: data.selected
+				? [data.selected]
+				: data.projects.length === 1
+					? [data.projects[0].name]
+					: [];
 	});
 	const chosen = $derived(data.projects.filter((p) => selected.includes(p.name)));
 	const chosenSeconds = $derived(chosen.reduce((sum, p) => sum + p.seconds, 0));
@@ -35,7 +41,7 @@
 	let showAll = $state(false);
 	let picking = $state(true);
 	$effect(() => {
-		picking = !data.selected;
+		picking = !data.selected && !data.resubmit;
 	});
 	const matches = $derived.by(() => {
 		const q = query.trim().toLowerCase();
@@ -61,6 +67,9 @@
 
 	// Hardware doesn't need a live URL; it follows the repo rules on /hardware.
 	let hardware = $state(false);
+	$effect(() => {
+		hardware = data.resubmit?.hardware ?? false;
+	});
 
 	let preview = $state<string | null>(null);
 	let dragging = $state(false);
@@ -117,7 +126,7 @@
 		{#if form && 'submitted' in form && form.submitted}
 			<section class="done panel">
 				<p class="section-label">Submitted</p>
-				<h1 class="app-title">{form.submitted} is in.</h1>
+				<h1 class="app-title">{form.submitted} is {'resubmitted' in form && form.resubmitted ? 'back with the reviewers' : 'in'}.</h1>
 				<ol class="next">
 					<li>An Expedition reviewer looks at it against your Hackatime time.</li>
 					<li>Once it's approved, we send it on to Hack Club for you.</li>
@@ -164,6 +173,18 @@
 							}
 						};
 					}}>
+					{#if data.resubmit}
+						<input type="hidden" name="resubmit_id" value={data.resubmit.id} />
+						<section class="resubmit-note">
+							<h2>Making changes to {data.resubmit.projects.join(' + ')}</h2>
+							{#if data.resubmit.feedback}
+								<p class="rs-k">What the reviewer asked for</p>
+								<blockquote>{data.resubmit.feedback}</blockquote>
+							{/if}
+							<p class="hint">Your earlier answers are filled in. Change what they asked for, then send it back. It goes back into the same review (not a new one), with your reviewer's notes still attached.</p>
+						</section>
+					{/if}
+
 					<!-- who -->
 					<section class="identity" class:editing={editingIdentity}>
 						<div class="id-head">
@@ -296,11 +317,11 @@
 						<div class="grid-2 tight">
 							<div class="field">
 								<label for="code_url">Code link</label>
-								<input id="code_url" name="code_url" type="url" required placeholder="https://github.com/you/project" onblur={fixUrl} />
+								<input id="code_url" name="code_url" defaultValue={data.resubmit?.code_url ?? ''} type="url" required placeholder="https://github.com/you/project" onblur={fixUrl} />
 							</div>
 							<div class="field">
 								<label for="playable_url">Demo link {#if hardware}<span class="optional">optional</span>{/if}</label>
-								<input id="playable_url" name="playable_url" type="url" required={!hardware}
+								<input id="playable_url" name="playable_url" defaultValue={data.resubmit?.playable_url ?? ''} type="url" required={!hardware}
 									placeholder={hardware ? 'A build video, if you have one' : 'Where someone can try it'} onblur={fixUrl} />
 								<span class="hint">
 									{hardware ? 'Leave it blank and we’ll use your repo.' : 'A live site, a video, or a release download.'}
@@ -326,13 +347,13 @@
 									type="file"
 									name="screenshot"
 									accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
-									required
+									required={!data.resubmit}
 									onchange={(e) => showPreview(e.currentTarget.files?.[0])} />
 								{#if preview}
 									<img src={preview} alt="Screenshot preview" />
 									<span class="hint">Click to change</span>
 								{:else}
-									<span class="drop-main">Drop an image here, or click to choose</span>
+									<span class="drop-main">{data.resubmit?.hasScreenshot ? 'Keeping your current screenshot. Drop a new one to replace it' : 'Drop an image here, or click to choose'}</span>
 									<span class="hint">PNG or JPG. Big ones get shrunk automatically.</span>
 								{/if}
 							</label>
@@ -340,13 +361,13 @@
 
 						<div class="field">
 							<label for="description">What is it?</label>
-							<textarea id="description" name="description" rows="4" required minlength="20" maxlength="4000"
+							<textarea id="description" name="description" defaultValue={data.resubmit?.description ?? ''} rows="4" required minlength="20" maxlength="4000"
 								placeholder="What it does, what you built it with, and the part you're proudest of."></textarea>
 						</div>
 
 						<div class="field">
 							<label for="lapse_links">Lapse timelapses <span class="optional">optional, but it helps</span></label>
-							<textarea id="lapse_links" name="lapse_links" rows="4" maxlength="2000"
+							<textarea id="lapse_links" name="lapse_links" defaultValue={data.resubmit?.lapse ?? ''} rows="4" maxlength="2000"
 								placeholder="https://lapse.hackclub.com/timelapse/…  (one per line)"></textarea>
 							<span class="hint">
 								Recorded yourself building with <a href="https://lapse.hackclub.com" target="_blank" rel="noopener noreferrer">Lapse</a>? Paste the links.
@@ -361,7 +382,7 @@
 						<p class="hint step-hint">Hack Club checks you're 13 to 18. It isn't shown to anyone else.</p>
 						<div class="field birthday">
 							<label class="sr-only" for="birthday">Birthday</label>
-							<input id="birthday" name="birthday" type="date" required autocomplete="bday" />
+							<input id="birthday" name="birthday" defaultValue={data.resubmit?.birthday ?? ''} type="date" required autocomplete="bday" />
 						</div>
 					</section>
 
@@ -371,34 +392,34 @@
 						<p class="hint step-hint">Only used to ship you what you claim. Your browser can fill this in.</p>
 						<div class="field">
 							<label for="address_line1">Address</label>
-							<input id="address_line1" name="address_line1" type="text" required autocomplete="address-line1" />
+							<input id="address_line1" name="address_line1" defaultValue={data.resubmit?.address_line1 ?? ''} type="text" required autocomplete="address-line1" />
 						</div>
 						<div class="field">
 							<label for="address_line2">Apartment, unit, etc. <span class="optional">optional</span></label>
-							<input id="address_line2" name="address_line2" type="text" autocomplete="address-line2" />
+							<input id="address_line2" name="address_line2" defaultValue={data.resubmit?.address_line2 ?? ''} type="text" autocomplete="address-line2" />
 						</div>
 						<div class="grid-2 tight">
 							<div class="field">
 								<label for="city">City</label>
-								<input id="city" name="city" type="text" required autocomplete="address-level2" />
+								<input id="city" name="city" defaultValue={data.resubmit?.city ?? ''} type="text" required autocomplete="address-level2" />
 							</div>
 							<div class="field">
 								<label for="state">State / province</label>
-								<input id="state" name="state" type="text" required autocomplete="address-level1" />
+								<input id="state" name="state" defaultValue={data.resubmit?.state ?? ''} type="text" required autocomplete="address-level1" />
 							</div>
 							<div class="field">
 								<label for="zip">Postal code</label>
-								<input id="zip" name="zip" type="text" required autocomplete="postal-code" />
+								<input id="zip" name="zip" defaultValue={data.resubmit?.zip ?? ''} type="text" required autocomplete="postal-code" />
 							</div>
 							<div class="field">
 								<label for="country">Country</label>
-								<input id="country" name="country" type="text" required autocomplete="country-name" />
+								<input id="country" name="country" defaultValue={data.resubmit?.country ?? ''} type="text" required autocomplete="country-name" />
 							</div>
 						</div>
 					</section>
 
 					<label class="library-opt">
-						<input type="checkbox" name="library" value="yes" />
+						<input type="checkbox" name="library" value="yes" defaultChecked={data.resubmit?.library ?? false} />
 						<span>
 							Show this project in the Expedition library
 							<span class="hint">Once it's approved, your first name, project, description, links and screenshot go on the public library page.</span>
@@ -409,15 +430,15 @@
 						<summary>Tell Hack Club what you think <span class="optional">optional</span></summary>
 						<div class="field">
 							<label for="heard_about">How did you hear about this?</label>
-							<input id="heard_about" name="heard_about" type="text" />
+							<input id="heard_about" name="heard_about" defaultValue={data.resubmit?.heard_about ?? ''} type="text" />
 						</div>
 						<div class="field">
 							<label for="doing_well">What are we doing well?</label>
-							<textarea id="doing_well" name="doing_well" rows="2"></textarea>
+							<textarea id="doing_well" name="doing_well" defaultValue={data.resubmit?.doing_well ?? ''} rows="2"></textarea>
 						</div>
 						<div class="field">
 							<label for="improve">How can we improve?</label>
-							<textarea id="improve" name="improve" rows="2"></textarea>
+							<textarea id="improve" name="improve" defaultValue={data.resubmit?.improve ?? ''} rows="2"></textarea>
 						</div>
 					</details>
 
@@ -511,6 +532,34 @@
 	}
 	.id-fields[hidden] {
 		display: none;
+	}
+	.resubmit-note {
+		max-width: 760px;
+		margin-bottom: 2rem;
+		padding: 1rem 1.2rem;
+		background: #fff8ec;
+		border: 2px solid #e0a040;
+	}
+	.resubmit-note h2 {
+		font-size: 1.1rem;
+		font-weight: 800;
+		color: var(--navy);
+	}
+	.rs-k {
+		margin-top: 0.6rem;
+		font-size: 0.75rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--muted);
+	}
+	.resubmit-note blockquote {
+		margin: 0.3rem 0 0.6rem;
+		padding: 0.5rem 0.8rem;
+		background: var(--white);
+		border-left: 4px solid #e0a040;
+		white-space: pre-wrap;
+		color: var(--navy);
 	}
 	.library-opt {
 		display: flex;

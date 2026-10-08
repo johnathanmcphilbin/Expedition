@@ -37,6 +37,7 @@ export type DashboardProject = {
 	review: SubmissionReviewRow | null;
 	/** newest submission still waiting in Expedition's own review queue */
 	queued: {
+		id: string;
 		status: 'pending' | 'changes_requested' | 'rejected';
 		participant_feedback: string | null;
 	} | null;
@@ -77,7 +78,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			if (queuedByProject.has(key)) continue;
 			queuedByProject.set(
 				key,
-				q.status === 'sent' ? null : { status: q.status, participant_feedback: q.participant_feedback }
+				q.status === 'sent' ? null : { id: q.id, status: q.status, participant_feedback: q.participant_feedback }
 			);
 		}
 	}

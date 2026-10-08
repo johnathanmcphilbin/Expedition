@@ -10,7 +10,7 @@ import {
 } from '$lib/server/queries';
 import { ValidationError, isAllowedImage } from '$lib/server/validate';
 import { parseSubmissionFields } from '$lib/server/submission-fields';
-import { queueSubmission, listOwnQueued } from '$lib/server/queue';
+import { queueSubmission, listOwnQueued, getOwnForResubmit, resubmitQueued } from '$lib/server/queue';
 import { notifySubmission } from '$lib/server/notify';
 import { normaliseLapseLinks, LAPSE_FIELD } from '$lib/server/lapse';
 
@@ -80,8 +80,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const last = queued[0] ?? submissions[0];
 	const [first, ...rest] = (user.display_name ?? '').split(' ');
 
+	// reopening a submission that came back with "needs changes"
+	const resubmitId = url.searchParams.get('resubmit');
+	const resubmit = resubmitId ? await getOwnForResubmit(user.id, resubmitId) : null;
+
 	return {
 		projects,
+		resubmit,
 		hackatimeUnavailable: times === null,
 		selected: url.searchParams.get('project'),
 		defaults: {
@@ -131,24 +136,33 @@ export const actions: Actions = {
 				throw new ValidationError((e as Error).message, 'lapse_links');
 			}
 
-			const file = form.get('screenshot');
-			if (!(file instanceof File) || file.size === 0) {
+			const resubmitId = typeof form.get('resubmit_id') === 'string' ? (form.get('resubmit_id') as string) : null;
+			const rawFile = form.get('screenshot');
+			const file = rawFile instanceof File && rawFile.size > 0 ? rawFile : null;
+			// a resubmission keeps its old screenshot unless they add a new one
+			if (!file && !resubmitId) {
 				throw new ValidationError('Add a screenshot of your project', 'screenshot');
 			}
-			if (!isAllowedImage(file)) {
+			if (file && !isAllowedImage(file)) {
 				throw new ValidationError('The screenshot needs to be a PNG, JPEG, WebP, GIF or AVIF image', 'screenshot');
 			}
-			if (file.size > MAX_SCREENSHOT) {
+			if (file && file.size > MAX_SCREENSHOT) {
 				throw new ValidationError('That screenshot is over 4 MB. Try a smaller one', 'screenshot');
 			}
 
-			// Waits for an Expedition reviewer; it only goes to Hack Club once
-			// approved (see src/lib/server/queue.ts).
-			await queueSubmission(user.id, hackatime.hackatimeUserId, fields, file, form.get('library') === 'yes', lapse ? { [LAPSE_FIELD]: lapse } : {});
+			if (resubmitId) {
+				// the same submission, updated, back in the review queue
+				const ok = await resubmitQueued(user.id, resubmitId, fields, file, form.get('library') === 'yes', { [LAPSE_FIELD]: lapse });
+				if (!ok) throw new ValidationError("That submission can't be resubmitted any more. Check your dashboard.");
+			} else {
+				// Waits for an Expedition reviewer; it only goes to Hack Club once
+				// approved (see src/lib/server/queue.ts).
+				await queueSubmission(user.id, hackatime.hackatimeUserId, fields, file!, form.get('library') === 'yes', lapse ? { [LAPSE_FIELD]: lapse } : {});
+			}
 			for (const n of fields.hackatime_projects) await connectProject(user.id, n).catch(() => {});
 
 			await notifySubmission({
-				name: `${fields.first_name} ${fields.last_name}`,
+				name: `${fields.first_name} ${fields.last_name}${resubmitId ? ' (resubmitted after changes)' : ''}`,
 				email: fields.email,
 				project: fields.project_name,
 				codeUrl: fields.code_url,
@@ -156,7 +170,7 @@ export const actions: Actions = {
 				description: fields.description
 			});
 
-			return { submitted: fields.project_name };
+			return { submitted: fields.project_name, resubmitted: !!resubmitId };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { message: e.message, field: e.field });
 			console.error('submit-to-hackclub failed', e);

@@ -1,7 +1,7 @@
 import { isReviewerOnly, reviewerName } from './guards';
 import { recordOrigin } from './origins';
 import { db } from './supabase';
-import { createSubmission, writeReviewToAirtable, type Justifications } from './airtable';
+import { createSubmission, writeReviewToAirtable, saveJustifications, type Justifications } from './airtable';
 import { getOrCreateReview } from './queries';
 import { submitReview } from './review';
 import type { SubmissionFields } from './submission-fields';
@@ -180,7 +180,7 @@ export async function sendQueued(params: {
 	internalNotes: string | null;
 	participantFeedback: string | null;
 	submittedHours: number | null;
-}): Promise<{ ok: true; airtableRecordId: string } | { ok: false; message: string }> {
+}): Promise<{ ok: true; airtableRecordId: string; airtableError: string | null } | { ok: false; message: string }> {
 	const q = await getQueued(params.id);
 	if (!q) return { ok: false, message: 'That submission no longer exists.' };
 	if (q.status === 'sent') return { ok: false, message: 'This one has already been sent to Hack Club.' };
@@ -209,7 +209,7 @@ export async function sendQueued(params: {
 async function sendLocked(
 	q: QueuedSubmissionRow,
 	params: Parameters<typeof sendQueued>[0]
-): Promise<{ ok: true; airtableRecordId: string } | { ok: false; message: string }> {
+): Promise<{ ok: true; airtableRecordId: string; airtableError: string | null } | { ok: false; message: string }> {
 
 	const projects = q.hackatime_projects?.length ? q.hackatime_projects : [q.project_name];
 	// Hack Club's field takes several names; commas are how their form lists them
@@ -302,7 +302,13 @@ async function sendLocked(
 	// "already decided" means a previous attempt got this far; carry on
 	if (!result.ok && !/already/i.test(result.message)) return { ok: false, message: result.message };
 
+	let airtableError: string | null = null;
 	try {
+		// a resumed send (its Airtable row made on an earlier try) brings the
+		// row's justifications up to date with what's been edited since
+		if (q.airtable_record_id && Object.keys(q.justifications ?? {}).length) {
+			await saveJustifications(recordId, q.justifications);
+		}
 		await writeReviewToAirtable(
 			{
 				...review,
@@ -317,8 +323,10 @@ async function sendLocked(
 			isReviewerOnly(params.reviewer) ? reviewerName(params.reviewer) : null
 		);
 	} catch (e) {
-		// the row and the hours are in; only the override fields are missing
+		// the row and the hours are in here; only Hack Club's override fields
+		// are missing. Reported back so the reviewer sees it and can resend.
 		console.error('sendQueued: writing review fields', e);
+		airtableError = e instanceof Error ? e.message : 'unknown error';
 	}
 
 	await db()
@@ -344,7 +352,7 @@ async function sendLocked(
 		.eq('id', q.id);
 	if (q.screenshot_path && !q.library_opt_in) await db().storage.from(BUCKET).remove([q.screenshot_path]);
 
-	return { ok: true, airtableRecordId: recordId };
+	return { ok: true, airtableRecordId: recordId, airtableError };
 }
 
 /**
@@ -416,4 +424,88 @@ export async function purgeStalePersonalData(days = 30): Promise<void> {
 		.in('id', ids);
 	const paths = data.map((r) => r.screenshot_path).filter((p): p is string => !!p);
 	if (paths.length) await db().storage.from(BUCKET).remove(paths);
+}
+
+/**
+ * A participant's own submission sent back with "needs changes": what the
+ * submit form needs to reopen it with their answers filled in.
+ */
+export async function getOwnForResubmit(userId: string, id: string) {
+	const row = await getQueued(id);
+	if (!row || row.user_id !== userId || row.status !== 'changes_requested') return null;
+	return {
+		id: row.id,
+		projects: row.hackatime_projects?.length ? row.hackatime_projects : [row.project_name],
+		hardware: row.hardware,
+		code_url: row.code_url,
+		playable_url: row.playable_url,
+		description: row.description,
+		lapse: (row.justifications?.['Justification - Lapse Links, comma-separated'] ?? '').replace(/,\s*/g, '\n'),
+		birthday: row.birthday,
+		address_line1: row.address_line1,
+		address_line2: row.address_line2,
+		city: row.city,
+		state: row.state,
+		zip: row.zip,
+		country: row.country,
+		heard_about: row.heard_about,
+		doing_well: row.doing_well,
+		improve: row.improve,
+		library: row.library_opt_in,
+		feedback: row.participant_feedback,
+		hasScreenshot: !!row.screenshot_path
+	};
+}
+
+/**
+ * Resubmit after "needs changes": the same submission, updated, back in the
+ * queue. A new screenshot replaces the old one; without one the old stays.
+ */
+export async function resubmitQueued(
+	userId: string,
+	id: string,
+	fields: SubmissionFields,
+	screenshot: File | null,
+	libraryOptIn: boolean,
+	justifications: Justifications
+): Promise<boolean> {
+	const row = await getQueued(id);
+	if (!row || row.user_id !== userId || row.status !== 'changes_requested') return false;
+
+	let shot: { screenshot_path: string; screenshot_type: string; screenshot_name: string } | null = null;
+	if (screenshot) {
+		const ext = (screenshot.name.match(/\.(\w{2,5})$/)?.[1] ?? 'png').toLowerCase();
+		const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+		const up = await db()
+			.storage.from(BUCKET)
+			.upload(path, await screenshot.arrayBuffer(), { contentType: screenshot.type, upsert: false });
+		if (up.error) throw new Error(`Couldn't store the screenshot: ${up.error.message}`);
+		shot = { screenshot_path: path, screenshot_type: screenshot.type, screenshot_name: screenshot.name || `screenshot.${ext}` };
+	}
+
+	const stamp = `[Resubmitted after changes ${new Date().toISOString().slice(0, 10)}]`;
+	const { data, error } = await db()
+		.from('submission_queue')
+		.update({
+			...fields,
+			...(shot ?? {}),
+			library_opt_in: libraryOptIn,
+			justifications: { ...(row.justifications ?? {}), ...justifications },
+			status: 'pending',
+			reviewer_id: null,
+			reviewed_at: null,
+			// the feedback they acted on stays visible to the reviewer
+			internal_notes: row.internal_notes ? `${stamp}\n${row.internal_notes}` : stamp
+		})
+		.eq('id', id)
+		.eq('user_id', userId)
+		.eq('status', 'changes_requested')
+		.select('id');
+	if (error) {
+		if (shot) await db().storage.from(BUCKET).remove([shot.screenshot_path]);
+		throw new Error(`Couldn't resubmit: ${error.message}`);
+	}
+	if (!data?.length) return false;
+	if (shot && row.screenshot_path) await db().storage.from(BUCKET).remove([row.screenshot_path]);
+	return true;
 }

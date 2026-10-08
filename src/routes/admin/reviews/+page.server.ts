@@ -3,7 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin, requireReviewer, isReviewerOnly, reviewerName } from '$lib/server/guards';
 import { lapsesFor, LAPSE_FIELD, type Lapse } from '$lib/server/lapse';
 import { payForReview, reviewEarnings, REVIEW_PAY_USD } from '$lib/server/payouts';
-import type { UserRow } from '$lib/server/database.types';
+import type { UserRow, SubmissionReviewRow } from '$lib/server/database.types';
 import { db } from '$lib/server/supabase';
 import {
 	listAllHackClubSubmissions,
@@ -22,7 +22,8 @@ import {
 	getJustifications,
 	saveJustifications,
 	JUSTIFICATION_FIELDS,
-	AIRTABLE_GONE
+	AIRTABLE_GONE,
+	foldOverrideJustification
 } from '$lib/server/airtable';
 import { fetchProjectTimes, formatHours } from '$lib/server/hackatime';
 import { submitReview } from '$lib/server/review';
@@ -256,7 +257,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			justifications: {
 				'Justification - Hackatime Project Name(s) + Date Range(s)': picked.join(', '),
 				'Justification - Submitter Hackatime ID': row.hackatime_user_id,
-				...Object.fromEntries(Object.entries(row.justifications ?? {}).filter(([, v]) => v !== null))
+				...foldOverrideJustification(
+					Object.fromEntries(Object.entries(row.justifications ?? {}).filter(([, v]) => v !== null))
+				)
 			} as Record<string, string | null>,
 			screenshot: shot,
 			projects,
@@ -357,9 +360,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		selectedFlag: selectedItem ? (flags.get(`${selectedItem.kind}:${selectedItem.key}`) ?? null) : null,
 		track,
 		trackCounts,
-		justificationFields: JUSTIFICATION_FIELDS.map((f, i) => ({ input: `just_${i}`, name: f.name, label: f.label, rows: f.rows })),
+		// input names keep their position in the full list; hidden fields just aren't shown
+		justificationFields: JUSTIFICATION_FIELDS.map((f, i) => ({ input: `just_${i}`, name: f.name, label: f.label, rows: f.rows, hidden: 'hidden' in f && f.hidden }))
+			.filter((f) => !f.hidden)
+			.map(({ hidden: _h, ...f }) => f),
 		queuedDetail,
 		isAdmin: viewer.role === 'admin',
+		airtableError: url.searchParams.get('airtable_error'),
 		reviewerName: reviewerName(viewer),
 		earnings: isReviewerOnly(viewer) ? { ...(await reviewEarnings(viewer.id)), per: REVIEW_PAY_USD } : null,
 		filter: validFilter,
@@ -522,6 +529,35 @@ export const actions: Actions = {
 		return fail(400, { autosave: 'Unknown submission' });
 	},
 
+	/** Write an approved review's hours and feedback to Hack Club's Airtable again. */
+	resendAirtable: async ({ request, locals }) => {
+		requireReviewer(locals);
+		const form = await request.formData();
+		const recordId = String(form.get('airtable_record_id') ?? '');
+		if (!/^rec[A-Za-z0-9]{10,20}$/.test(recordId)) return fail(400, { airtableResend: 'Invalid submission.' });
+		const submission = await getHackClubSubmission(recordId);
+		if (!submission) return fail(404, { airtableResend: 'Submission not found.' });
+		const { data: review } = await db()
+			.from('submission_reviews')
+			.select('*')
+			.eq('airtable_record_id', recordId)
+			.order('updated_at', { ascending: false })
+			.limit(1)
+			.maybeSingle();
+		if (!review) return fail(404, { airtableResend: "There's no review to send yet." });
+		let reviewedBy: string | null = null;
+		if (review.reviewer_id) {
+			const { data: who } = await db().from('users').select('*').eq('id', review.reviewer_id).maybeSingle();
+			if (who && isReviewerOnly(who as UserRow)) reviewedBy = reviewerName(who as UserRow);
+		}
+		try {
+			await writeReviewToAirtable(review as SubmissionReviewRow, submission, reviewedBy);
+			return { airtableResent: true };
+		} catch (e) {
+			return fail(502, { airtableResend: e instanceof Error ? e.message : 'unknown error' });
+		}
+	},
+
 	/** Mark a submission as possible fraud (or clear the mark). */
 	flag: async ({ request, locals }) => {
 		const admin = requireReviewer(locals);
@@ -622,6 +658,15 @@ export const actions: Actions = {
 					submittedHours: matched.length ? matched.reduce((sum, t) => sum + t.totalSeconds, 0) / 3600 : null
 				});
 				if (!result.ok) return fail(502, { message: result.message });
+				if (result.airtableError) {
+					// approved and credited, but Hack Club's fields didn't take: open it
+					// so the error and the resend button are right there
+					await payForReview(reviewer, 'new', id, fields.project_name).catch((e) => console.error('payForReview', e));
+					redirect(
+						303,
+						`/admin/reviews?status=approved&submission=${result.airtableRecordId}&airtable_error=${encodeURIComponent(result.airtableError.slice(0, 300))}`
+					);
+				}
 			} else {
 				await decideQueued(
 					id,
