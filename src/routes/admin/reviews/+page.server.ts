@@ -255,7 +255,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		]);
 		const lapses = withOwnerCheck(await lapsesFor(row.justifications?.[LAPSE_FIELD] ?? null), row.hackatime_user_id);
 		queuedDetail = {
-			row,
+			// reviewers never receive addresses; admins see and edit them
+			row: viewer.role === 'admin' ? row : { ...row, ...HIDDEN_ADDRESS },
 			picked,
 			lapses,
 			priorApprovals,
@@ -451,6 +452,19 @@ function withOwnerCheck(lapses: Lapse[], submitterHackatimeId: string | null) {
 	}));
 }
 
+const ADDRESS_FIELDS = ['address_line1', 'address_line2', 'city', 'state', 'zip', 'country'] as const;
+const HIDDEN_ADDRESS = Object.fromEntries(ADDRESS_FIELDS.map((f) => [f, null])) as Record<(typeof ADDRESS_FIELDS)[number], null>;
+
+/**
+ * Reviewers' forms have no address fields (they never see them), so the
+ * stored address is filled back in before parsing: it still reaches Hack
+ * Club, and a reviewer can't change it.
+ */
+function keepStoredAddress(form: FormData, reviewer: UserRow, row: QueuedSubmissionRow) {
+	if (reviewer.role === 'admin') return;
+	for (const f of ADDRESS_FIELDS) form.set(f, row[f] ?? '');
+}
+
 /** "[Reviewed by Shadow]" at the top of private notes, once, for non-admin reviewers. */
 function shadowNotes(reviewer: UserRow, notes: string | null): string | null {
 	if (!isReviewerOnly(reviewer)) return notes;
@@ -535,6 +549,7 @@ export const actions: Actions = {
 			const row = await getQueued(id);
 			if (!row || row.status === 'sent') return fail(409, { autosave: 'Already sent' });
 			if (row.user_id === reviewer.id) return fail(403, { autosave: "You can't review your own project" });
+			keepStoredAddress(form, reviewer, row);
 			let fields: ReturnType<typeof parseSubmissionFields> | null = null;
 			try {
 				fields = parseSubmissionFields(form);
@@ -681,6 +696,7 @@ export const actions: Actions = {
 			if (!row) return fail(404, { message: 'That submission no longer exists.' });
 			if (row.status === 'sent') return fail(409, { message: 'This one has already been sent to Hack Club.' });
 			if (row.user_id === reviewer.id) return fail(403, { message: "You can't review your own project." });
+			keepStoredAddress(form, reviewer, row);
 
 			const decision = oneOf(
 				form.get('decision'),

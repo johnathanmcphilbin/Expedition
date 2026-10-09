@@ -410,6 +410,7 @@
 								</div>
 							</fieldset>
 
+							{#if data.isAdmin}
 							<fieldset>
 								<legend>Address</legend>
 								<div class="field"><label for="address_line1">Address</label><input id="address_line1" name="address_line1" type="text" required defaultValue={r.address_line1 ?? ''} /></div>
@@ -421,6 +422,12 @@
 									<div class="field"><label for="country">Country</label><input id="country" name="country" type="text" required defaultValue={r.country ?? ''} /></div>
 								</div>
 							</fieldset>
+							{:else}
+								<fieldset>
+									<legend>Address</legend>
+									<p class="hint">Hidden for reviewers. It's on file and goes to Hack Club automatically when you approve.</p>
+								</fieldset>
+							{/if}
 
 							<details class="extra">
 								<summary>Their feedback for Hack Club</summary>
