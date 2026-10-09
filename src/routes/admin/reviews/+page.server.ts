@@ -726,7 +726,9 @@ export const actions: Actions = {
 				if (result.airtableError) {
 					// approved and credited, but Hack Club's fields didn't take: open it
 					// so the error and the resend button are right there
-					await payForReview(reviewer, 'new', id, fields.project_name).catch((e) => console.error('payForReview', e));
+					await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at).catch((e) =>
+						console.error('payForReview', e)
+					);
 					redirect(
 						303,
 						`/admin/reviews?status=approved&submission=${result.airtableRecordId}&airtable_error=${encodeURIComponent(result.airtableError.slice(0, 300))}`
@@ -745,7 +747,9 @@ export const actions: Actions = {
 
 			if (decision === 'draft') return { saved: true };
 			// non-admin reviewers earn hours for each submission they decide
-			await payForReview(reviewer, 'new', id, fields.project_name).catch((e) => console.error('payForReview', e));
+			await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at).catch((e) =>
+				console.error('payForReview', e)
+			);
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { message: e.message, field: e.field });
 			throw e;
@@ -873,7 +877,14 @@ export const actions: Actions = {
 
 			if (!result.ok) return fail(409, { message: result.message });
 			if (status !== 'pending' && status !== 'in_review') {
-				await payForReview(reviewer, 'hc', airtableRecordId, hackatimeProject).catch((e) => console.error('payForReview', e));
+				await payForReview(
+					reviewer,
+					'hc',
+					airtableRecordId,
+					hackatimeProject,
+					review.status === 'pending' || review.status === 'in_review',
+					review.updated_at
+				).catch((e) => console.error('payForReview', e));
 			}
 
 			// Write to Airtable server-side, after the ledger transaction is

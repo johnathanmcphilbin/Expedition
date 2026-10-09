@@ -84,24 +84,35 @@ function withParticipantFeedback(
 	return result || null;
 }
 
-/** The current justification values on a Hack Club submission row. */
-export async function getJustifications(recordId: string): Promise<Justifications> {
-	const u = new URL(`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${recordId}`);
-	for (const f of JUSTIFICATION_FIELDS) u.searchParams.append('fields[]', f.name);
-	const res = await fetch(u, { headers: headers(), signal: AbortSignal.timeout(15000) });
+/**
+ * One submission row, all its fields. Airtable's get-one-record endpoint
+ * takes no `fields[]` parameter (only the list endpoint does); sending it
+ * gets a 422 "parameter validation failed". A whole row is small anyway.
+ */
+async function getRecordFields(recordId: string): Promise<Record<string, unknown>> {
+	const res = await fetch(`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${recordId}`, {
+		headers: headers(),
+		signal: AbortSignal.timeout(15000)
+	});
 	if (res.status === 404) throw new Error("This submission isn't in Hack Club's Airtable any more (it was deleted there).");
 	if (!res.ok) {
-		// Airtable says why in the body (e.g. a renamed field); pass that on
 		const body = (await res.text()).slice(0, 300);
 		throw new Error(`Couldn't read the submission from Airtable (${res.status}): ${body}`);
 	}
-	const fields = ((await res.json()) as { fields: Record<string, unknown> }).fields ?? {};
-	return foldOverrideJustification(Object.fromEntries(
-		JUSTIFICATION_FIELDS.map((f) => {
-			const v = fields[f.name];
-			return [f.name, v === undefined || v === null ? null : String(v)];
-		})
-	));
+	return ((await res.json()) as { fields?: Record<string, unknown> }).fields ?? {};
+}
+
+/** The current justification values on a Hack Club submission row. */
+export async function getJustifications(recordId: string): Promise<Justifications> {
+	const fields = await getRecordFields(recordId);
+	return foldOverrideJustification(
+		Object.fromEntries(
+			JUSTIFICATION_FIELDS.map((f) => {
+				const v = fields[f.name];
+				return [f.name, v === undefined || v === null ? null : String(v)];
+			})
+		)
+	);
 }
 
 /** Write a reviewer's edits to the justification fields. Blank clears the field. */
@@ -137,11 +148,9 @@ const ADDRESS_FIELDS = [
  * submission. Expedition never stores addresses itself.
  */
 export async function getShippingAddress(recordId: string): Promise<string[] | null> {
-	const u = new URL(`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${recordId}`);
-	for (const f of ADDRESS_FIELDS) u.searchParams.append('fields[]', f);
-	const res = await fetch(u, { headers: headers(), signal: AbortSignal.timeout(10000) });
-	if (!res.ok) return null;
-	const f = ((await res.json()) as { fields: Record<string, string | undefined> }).fields ?? {};
+	const raw = await getRecordFields(recordId).catch(() => null);
+	if (!raw) return null;
+	const f = Object.fromEntries(ADDRESS_FIELDS.map((k) => [k, typeof raw[k] === 'string' ? (raw[k] as string) : undefined]));
 	if (!f['Address (Line 1)']) return null;
 	return [
 		[f['First Name'], f['Last Name']].filter(Boolean).join(' '),
@@ -159,12 +168,10 @@ export async function getShippingAddress(recordId: string): Promise<string[] | n
 export async function getLocality(
 	recordId: string
 ): Promise<{ city: string | null; state: string | null; country: string | null } | null> {
-	const u = new URL(`${API_BASE}/${config.airtable.baseId}/${config.airtable.submissionTableId}/${recordId}`);
-	for (const f of ['City', 'State / Province', 'Country']) u.searchParams.append('fields[]', f);
-	const res = await fetch(u, { headers: headers(), signal: AbortSignal.timeout(10000) });
-	if (!res.ok) return null;
-	const f = ((await res.json()) as { fields: Record<string, string | undefined> }).fields ?? {};
-	return { city: f['City']?.trim() || null, state: f['State / Province']?.trim() || null, country: f['Country']?.trim() || null };
+	const f = await getRecordFields(recordId).catch(() => null);
+	if (!f) return null;
+	const str = (k: string) => (typeof f[k] === 'string' ? (f[k] as string).trim() || null : null);
+	return { city: str('City'), state: str('State / Province'), country: str('Country') };
 }
 
 interface AirtableRecord<F> {
