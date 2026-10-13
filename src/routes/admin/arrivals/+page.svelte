@@ -58,6 +58,44 @@
 			<p class="error-box">{form.message}</p>
 		{/if}
 
+		<!-- ---------------- grant requests ---------------- -->
+		<section class="block">
+			<h2 class="section-label">Travel grant requests</h2>
+			{#if data.grants.length}
+				<ul class="grants">
+					{#each data.grants as g (g.user_id)}
+						<li class="g-{g.status}">
+							<div class="g-main">
+								<span class="who">{g.owner?.display_name ?? 'Unnamed'}</span>
+								{#if g.owner?.email}<a class="sub" href="mailto:{g.owner.email}">{g.owner.email}</a>{/if}
+								<span class="sub">
+									Asked {new Date(g.requested_at).toLocaleDateString('en-IE')} · {g.approved_hours}h approved (needed {g.hours_needed}h)
+									· trip ~${g.est_travel_usd ?? '?'}{g.home_airport ? ` from ${g.home_airport}` : ''}
+								</span>
+								{#if g.note}<span class="g-note">“{g.note}”</span>{/if}
+							</div>
+							<div class="g-amount"><strong>${g.grantUsd}</strong><span class="sub">{g.hours_banked}h banked</span></div>
+							<div class="g-act">
+								{#if g.status === 'requested'}
+									<form method="POST" action="?/grant" use:enhance class="g-form">
+										<input type="hidden" name="user_id" value={g.user_id} />
+										<input name="admin_note" maxlength="1000" placeholder="Note (needed to decline)" />
+										<button class="btn" type="submit" name="decision" value="approve">Approve</button>
+										<button class="text-btn danger" type="submit" name="decision" value="decline">Decline</button>
+									</form>
+								{:else}
+									<span class="status s-{g.status === 'approved' ? 'booked' : 'cancelled'}">{g.status === 'approved' ? 'Approved · fund locked' : 'Declined'}</span>
+									{#if g.admin_note}<span class="sub">{g.admin_note}</span>{/if}
+								{/if}
+							</div>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="empty">No requests yet. People can ask once they qualify, from their dashboard.</p>
+			{/if}
+		</section>
+
 		<!-- ---------------- pickups ---------------- -->
 		<section class="block">
 			<h2 class="section-label">Airport pickups</h2>
@@ -236,6 +274,68 @@
 		font-size: 0.82rem;
 		font-weight: 600;
 		color: var(--muted);
+	}
+	.grants {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+	}
+	.grants li {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto;
+		gap: 0.6rem 1.2rem;
+		align-items: start;
+		padding: 0.8rem 1rem;
+		background: var(--white);
+		border: 2px solid var(--navy);
+	}
+	.grants li.g-requested {
+		border-left: 6px solid #e0a040;
+	}
+	.g-main {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.g-note {
+		color: var(--slate);
+		font-size: 0.88rem;
+	}
+	.g-amount {
+		text-align: right;
+		color: var(--navy);
+		font-size: 1.2rem;
+	}
+	.g-act {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 0.3rem;
+	}
+	.g-form {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 0.4rem;
+	}
+	.g-form input {
+		padding: 0.35rem 0.5rem;
+		border: 2px solid var(--rule-strong);
+		font: inherit;
+		font-size: 0.85rem;
+	}
+	@media (max-width: 720px) {
+		.grants li {
+			grid-template-columns: 1fr;
+		}
+		.g-amount,
+		.g-act {
+			text-align: left;
+			align-items: flex-start;
+		}
 	}
 	.block {
 		margin-bottom: 2.5rem;

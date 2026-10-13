@@ -66,7 +66,7 @@ export type TripEstimate = {
 	toAirportKm: number | null;
 	flight: number;
 	visa: number | null;
-	/** flight + visa (an unconfirmed visa counts as 0 here) */
+	/** flight + visa (an unconfirmed visa counts as 0 here); 0 within Ireland */
 	total: number;
 	/** approved hours needed to qualify for the travel stipend */
 	hoursToQualify: number;
@@ -88,6 +88,8 @@ export function estimateTrip(origin: {
 }): TripEstimate {
 	const flight = estimateFare(origin.flight_km, origin.hub);
 	const visa = visaFor(origin.country_code);
+	// travelling within Ireland (no flight): nothing to qualify for, they can just come
+	const travel = flight;
 	const hours = flight ? hoursToQualify(flight) : 0;
 	return {
 		airport: origin.airport,
@@ -96,7 +98,7 @@ export function estimateTrip(origin: {
 		toAirportKm: origin.to_airport_km,
 		flight,
 		visa,
-		total: flight + (visa ?? 0),
+		total: travel + (visa ?? 0),
 		hoursToQualify: hours,
 		stipendAtQualify: hours * TRAVEL_RATE,
 		precision: origin.precision,

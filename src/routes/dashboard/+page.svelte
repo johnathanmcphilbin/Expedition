@@ -15,6 +15,8 @@
 	]);
 
 	let bookedDifferent = $state(false);
+	const t = $derived(data.trip);
+	const pct = $derived(Math.min(100, (data.trip.approved / (data.trip.target || 1)) * 100));
 	const fmtDublin = (iso: string) =>
 		new Date(iso).toLocaleString('en-IE', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Dublin' });
 
@@ -253,6 +255,77 @@
 				requirement.</strong> Once you qualify, your stipend goes towards your travel and accommodation,
 				and you cover anything left over.
 			</p>
+			<div class="panel trip-card" class:qualified={t.remaining === 0}>
+				<div class="trip-cols">
+					<div>
+						<p class="trip-k">Your trip</p>
+						{#if t.estimate && t.estimate.flight}
+							<p class="trip-big">~{money(t.estimate.total)}</p>
+							<p class="trip-sub">
+								~{money(t.estimate.flight)} return flight from
+								<a href={t.estimate.skyscanner} target="_blank" rel="noopener noreferrer" title={t.estimate.airportName}>{t.estimate.airport} ↗</a>
+								{#if t.estimate.visa === null}+ a visa (we're checking the cost){:else if t.estimate.visa}+ {money(t.estimate.visa)} visa{/if}
+							</p>
+							<p class="trip-fine">An estimate. Check the real price on Skyscanner. Don't book yet.</p>
+						{:else if t.estimate}
+							<p class="trip-big">No flight needed</p>
+						{:else}
+							<p class="trip-sub">We don't know where you're travelling from yet. Tell us your city below.</p>
+						{/if}
+					</div>
+					{#if !(t.estimate && !t.estimate.flight)}
+					<div>
+						<p class="trip-k">To qualify</p>
+						{#if t.remaining === 0}
+							<p class="trip-big ok">You qualify ✓</p>
+						{:else}
+							<p class="trip-big">{t.remaining}h to go</p>
+						{/if}
+						<p class="trip-sub">
+							{t.approved} / {t.target} approved hours
+							{#if t.estimate && t.target < TRAVEL_CAP_HOURS}(half your travel cost at {money(TRAVEL_RATE)}/h){:else}({TRAVEL_CAP_HOURS}h is the most anyone needs){/if}
+						</p>
+						<span class="trip-bar" role="img" aria-label="{Math.round(pct)}% of the way to qualifying"><span style="width:{pct}%"></span></span>
+					</div>
+					{/if}
+				</div>
+
+				{#if t.remaining === 0 && t.estimate?.flight !== 0}
+					<div class="grant">
+						{#if data.grant?.status === 'requested'}
+							<p><strong>Grant requested ✓</strong> An organiser will get back to you. You asked with {data.grant.hours_banked}h banked ({money(data.grant.hours_banked * TRAVEL_RATE)}).</p>
+							<form method="POST" action="?/withdrawGrant" use:enhance><button class="text-link" type="submit">Withdraw request</button></form>
+						{:else if data.grant?.status === 'approved'}
+							<p><strong>Grant approved 🎉</strong> Your travel fund is locked while we sort your trip. We'll be in touch with next steps.</p>
+						{:else}
+							{#if data.grant?.status === 'declined'}
+								<p class="grant-declined">Your last request wasn't approved{data.grant.admin_note ? `: ${data.grant.admin_note}` : '.'} You can ask again.</p>
+							{/if}
+							<form method="POST" action="?/requestGrant" use:enhance class="grant-form">
+								<p>
+									You qualify! Bank the hours you want for travel above first: your grant is what's in your travel fund
+									(now <strong>{travelHours}h = {money(travelHours * TRAVEL_RATE)}</strong>), and it's locked once approved.
+								</p>
+								<textarea name="note" rows="2" maxlength="1000" placeholder="Anything we should know? (optional)"></textarea>
+								<button class="btn" type="submit">Request my travel grant</button>
+							</form>
+							{#if form && 'grantMessage' in form && form.grantMessage}<p class="hint error">{form.grantMessage}</p>{/if}
+						{/if}
+					</div>
+				{/if}
+
+				<details class="home-set">
+					<summary>{t.estimate ? `Not flying from ${t.estimate.airport}?` : 'Set where you\'re travelling from'}</summary>
+					<form method="POST" action="?/setHome" use:enhance={() => async ({ update }) => update({ reset: false })} class="home-form">
+						<input name="city" required maxlength="100" placeholder="Your city" />
+						<input name="country" required maxlength="100" placeholder="Country" />
+						<button class="btn btn-outline" type="submit">Update</button>
+					</form>
+					<p class="trip-fine">We only keep the nearest airport, not your city.</p>
+					{#if form && 'homeMessage' in form && form.homeMessage}<p class="hint error">{form.homeMessage}</p>{/if}
+				</details>
+			</div>
+
 			<div class="panel travel">
 				<div class="travel-total">
 					<span class="t-dollars">{travelHours}h</span>
@@ -547,6 +620,105 @@
 	}
 	.u-sent {
 		color: #2f7a46;
+	}
+	.trip-card {
+		margin-bottom: 1rem;
+		border-left: 6px solid #338eda;
+	}
+	.trip-card.qualified {
+		border-left-color: #2f9e57;
+	}
+	.trip-cols {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+		gap: 1rem 2rem;
+	}
+	.trip-k {
+		font-size: 0.75rem;
+		font-weight: 800;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--muted);
+	}
+	.trip-big {
+		margin: 0.2rem 0;
+		font-size: 1.6rem;
+		font-weight: 800;
+		color: var(--navy);
+	}
+	.trip-big.ok {
+		color: #2f7a46;
+	}
+	.trip-sub {
+		color: var(--slate);
+		font-size: 0.92rem;
+	}
+	.trip-sub a {
+		font-weight: 700;
+		color: var(--blue-dark);
+	}
+	.trip-fine {
+		margin-top: 0.3rem;
+		font-size: 0.8rem;
+		color: var(--muted);
+	}
+	.trip-bar {
+		display: block;
+		height: 10px;
+		margin-top: 0.5rem;
+		background: #e3e9ef;
+		border-radius: 2px;
+		overflow: hidden;
+	}
+	.trip-bar span {
+		display: block;
+		height: 100%;
+		background: #338eda;
+	}
+	.qualified .trip-bar span {
+		background: #2f9e57;
+	}
+	.grant {
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--rule);
+	}
+	.grant-form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		align-items: flex-start;
+	}
+	.grant-form textarea {
+		width: 100%;
+		max-width: 520px;
+		padding: 0.5rem 0.6rem;
+		border: 2px solid var(--rule-strong);
+		font: inherit;
+	}
+	.grant-declined {
+		color: #a34a00;
+		margin-bottom: 0.5rem;
+	}
+	.home-set {
+		margin-top: 1rem;
+		font-size: 0.9rem;
+	}
+	.home-set summary {
+		cursor: pointer;
+		font-weight: 700;
+		color: var(--slate);
+	}
+	.home-form {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin-top: 0.6rem;
+	}
+	.home-form input {
+		padding: 0.45rem 0.6rem;
+		border: 2px solid var(--rule-strong);
+		font: inherit;
 	}
 	.changes-banner {
 		display: flex;

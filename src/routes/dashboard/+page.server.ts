@@ -18,7 +18,12 @@ import { connectionStatus, fetchProjectTimes, formatHours } from '$lib/server/ha
 import { syncHackClubSubmissions } from '$lib/server/airtable';
 import { listOwnQueued, countQueuePending, hackatimeNames } from '$lib/server/queue';
 import { listOwnCheckpoints, unlockedCount } from '$lib/server/checkpoints';
-import { drops } from '$lib/data';
+import { drops, TRAVEL_CAP_HOURS, TRAVEL_RATE } from '$lib/data';
+import { getOwnGrantRequest, requestGrant, withdrawGrant } from '$lib/server/grants';
+import { notifyGrantRequest } from '$lib/server/notify';
+import { getOwnOrigin, recordOrigin } from '$lib/server/origins';
+import { estimateTrip } from '$lib/travel-estimates';
+import { countryName } from '$lib/server/geo';
 import { getOwnFlight, confirmBooking } from '$lib/server/flights';
 import { text, hours, oneOf, ValidationError } from '$lib/server/validate';
 import type { TravelBucket } from '$lib/server/database.types';
@@ -64,7 +69,23 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			getTravelBuckets(user.id),
 			listOwnQueued(user.id)
 		]);
-	const [ownCheckpoints, flight] = await Promise.all([listOwnCheckpoints(user.id), getOwnFlight(user.id)]);
+	const [ownCheckpoints, flight, origin, grant] = await Promise.all([
+		listOwnCheckpoints(user.id),
+		getOwnFlight(user.id),
+		getOwnOrigin(user.id),
+		getOwnGrantRequest(user.id)
+	]);
+	// their trip: estimated cost from their home airport, and how far they are from qualifying
+	const approvedHours = Number(progress.hours_earned);
+	const tripEstimate = origin ? estimateTrip(origin) : null;
+	const target = tripEstimate ? tripEstimate.hoursToQualify : TRAVEL_CAP_HOURS;
+	const trip = {
+		estimate: tripEstimate,
+		country: origin ? countryName(origin.country_code) : null,
+		approved: approvedHours,
+		target,
+		remaining: Math.max(0, Math.round((target - approvedHours) * 100) / 100)
+	};
 	const checkpointsByProject = new Map<string, number>();
 	for (const c of ownCheckpoints) {
 		checkpointsByProject.set(c.hackatime_project, (checkpointsByProject.get(c.hackatime_project) ?? 0) + 1);
@@ -168,6 +189,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		unlocks,
 		travelBuckets,
 		pendingReviews,
+		trip,
+		grant,
 		// hardware sent in without a Hackatime project: no project card to hang off
 		untracked: queued
 			.filter((q) => !hackatimeNames(q).length)
@@ -234,6 +257,64 @@ export const actions: Actions = {
 			return { flightBooked: true };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { flightMessage: e.message });
+			throw e;
+		}
+	},
+
+	/** Ask for the travel grant: only once they qualify (checked here, not just in the UI). */
+	requestGrant: async ({ request, locals }) => {
+		const user = requireUser(locals, '/dashboard');
+		const form = await request.formData();
+		try {
+			const note = text(form.get('note'), 'Note', { max: 1000 });
+			const [progress, balance, origin] = await Promise.all([getProgress(user.id), getBalance(user.id), getOwnOrigin(user.id)]);
+			const est = origin ? estimateTrip(origin) : null;
+			const needed = est ? est.hoursToQualify : TRAVEL_CAP_HOURS;
+			const approved = Number(progress.hours_earned);
+			if (approved < needed) return fail(400, { grantMessage: `You need ${needed}h approved to qualify. You have ${approved}h.` });
+			const banked = Number(balance.hours_travel);
+			const ok = await requestGrant(user.id, {
+				hoursBanked: banked,
+				approvedHours: approved,
+				hoursNeeded: needed,
+				estTravelUsd: est?.total ?? null,
+				homeAirport: origin?.airport ?? null,
+				note
+			});
+			if (!ok) return fail(409, { grantMessage: "You've already asked. An organiser will get back to you." });
+			await notifyGrantRequest({
+				name: user.display_name,
+				hoursBanked: banked,
+				grantUsd: banked * TRAVEL_RATE,
+				estTravelUsd: est?.total ?? null,
+				airport: origin?.airport ?? null,
+				note
+			}).catch(() => {});
+			return { grantRequested: true };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { grantMessage: e.message });
+			throw e;
+		}
+	},
+
+	withdrawGrant: async ({ locals }) => {
+		const user = requireUser(locals, '/dashboard');
+		await withdrawGrant(user.id);
+		return { grantWithdrawn: true };
+	},
+
+	/** Set their home airport from a city they type (only the airport is kept). */
+	setHome: async ({ request, locals }) => {
+		const user = requireUser(locals, '/dashboard');
+		const form = await request.formData();
+		try {
+			const city = text(form.get('city'), 'City', { max: 100, required: true })!;
+			const country = text(form.get('country'), 'Country', { max: 100, required: true })!;
+			const ok = await recordOrigin(user.id, { city, state: null, country });
+			if (!ok) return fail(400, { homeMessage: `Couldn't find "${country}". Try the full country name.` });
+			return { homeSet: true };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { homeMessage: e.message });
 			throw e;
 		}
 	},

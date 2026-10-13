@@ -4,6 +4,8 @@ import { requireAdmin } from '$lib/server/guards';
 import { db } from '$lib/server/supabase';
 import { listFlights, assignFlight, cancelFlight, arrivalFlags, effectiveArrival, type FlightInput } from '$lib/server/flights';
 import { listOrigins } from '$lib/server/origins';
+import { listGrantRequests, decideGrant } from '$lib/server/grants';
+import { TRAVEL_RATE } from '$lib/data';
 import { estimateTrip } from '$lib/travel-estimates';
 import { text, uuid, oneOf, ValidationError } from '$lib/server/validate';
 
@@ -17,11 +19,12 @@ const RUN_GAP_MS = 90 * 60 * 1000;
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
 
-	const [flights, origins, progress, users] = await Promise.all([
+	const [flights, origins, progress, users, grants] = await Promise.all([
 		listFlights(),
 		listOrigins(),
 		db().from('user_expedition_progress').select('user_id, hours_earned').gt('hours_earned', 0),
-		db().from('users').select('id, display_name, email').like('hackclub_id', 'ident!%')
+		db().from('users').select('id, display_name, email').like('hackclub_id', 'ident!%'),
+		listGrantRequests()
 	]);
 
 	const originBy = new Map(origins.map((o) => [o.user_id, o]));
@@ -93,6 +96,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const active = people.filter((p) => p.flight && p.flight.status !== 'cancelled');
 	return {
+		grants: grants
+			.filter((g) => g.status !== 'withdrawn')
+			.map((g) => ({ ...g, grantUsd: Number(g.hours_banked) * TRAVEL_RATE })),
 		people,
 		runs,
 		departures,
@@ -147,6 +153,24 @@ export const actions: Actions = {
 			return { saved: userId };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { message: e.message, field: e.field });
+			throw e;
+		}
+	},
+
+	/** Approve a travel grant request (locks their fund) or decline it with a note they'll see. */
+	grant: async ({ request, locals }) => {
+		const admin = requireAdmin(locals);
+		const form = await request.formData();
+		try {
+			const userId = uuid(form.get('user_id')?.toString(), 'person');
+			const approve = form.get('decision') === 'approve';
+			const note = text(form.get('admin_note'), 'Note', { max: 1000 });
+			if (!approve && !note) return fail(400, { message: 'Say why, so they know what to do next.' });
+			const ok = await decideGrant(admin.id, userId, approve, note);
+			if (!ok) return fail(409, { message: 'That request has already been decided.' });
+			return { grantDecided: approve ? 'approved' : 'declined' };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { message: e.message });
 			throw e;
 		}
 	},

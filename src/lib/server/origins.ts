@@ -84,3 +84,9 @@ export async function backfillOrigins(opts: { all?: boolean } = {}): Promise<{ f
 	}
 	return { found, missed };
 }
+
+/** Someone's own home airport, if we've worked one out. */
+export async function getOwnOrigin(userId: string): Promise<TravelOrigin | null> {
+	const { data } = await db().from('travel_origins').select('*').eq('user_id', userId).maybeSingle();
+	return (data as TravelOrigin | null) ?? null;
+}

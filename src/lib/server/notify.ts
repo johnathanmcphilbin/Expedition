@@ -98,3 +98,16 @@ export function notifyClaim(c: { name: string | null; reward: string; hours: num
 	);
 }
 
+
+export function notifyGrantRequest(g: { name: string | null; hoursBanked: number; grantUsd: number; estTravelUsd: number | null; airport: string | null; note: string | null }) {
+	return send(
+		`Travel grant request: ${g.name ?? 'a participant'}`,
+		[
+			['From', g.name ?? 'Unnamed participant'],
+			['Banked', `${g.hoursBanked}h = $${g.grantUsd}`],
+			['Estimated trip', g.estTravelUsd ? `$${g.estTravelUsd}${g.airport ? ` from ${g.airport}` : ''}` : 'unknown'],
+			['Note', g.note]
+		],
+		`${SITE}/admin/arrivals`
+	);
+}

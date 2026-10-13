@@ -218,6 +218,21 @@ export type ReviewPayoutRow = {
 	paid_at: string;
 }
 
+export type TravelGrantRequestRow = {
+	user_id: string;
+	status: 'requested' | 'approved' | 'declined' | 'withdrawn';
+	hours_banked: number;
+	approved_hours: number;
+	hours_needed: number;
+	est_travel_usd: number | null;
+	home_airport: string | null;
+	note: string | null;
+	admin_note: string | null;
+	requested_at: string;
+	decided_at: string | null;
+	decided_by: string | null;
+}
+
 export type HourTransactionRow = {
 	id: string;
 	user_id: string;
@@ -325,6 +340,7 @@ export interface Database {
 			trip_flights: Table<TripFlightRow>;
 			review_flags: Table<ReviewFlagRow>;
 			review_payouts: Table<ReviewPayoutRow>;
+			travel_grant_requests: Table<TravelGrantRequestRow>;
 		};
 		Views: {
 			user_hour_balances: { Row: HourBalanceRow; Relationships: [] };
