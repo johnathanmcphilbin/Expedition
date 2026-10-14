@@ -275,7 +275,7 @@
 								<a href={t.estimate.skyscanner} target="_blank" rel="noopener noreferrer" title={t.estimate.airportName}>{t.estimate.airport} ↗</a>
 								{#if t.estimate.visa === null}+ a visa (we're checking the cost){:else if t.estimate.visa}+ {money(t.estimate.visa)} visa{/if}
 							</p>
-							<a class="btn btn-outline sky-btn" href={t.estimate.skyscanner} target="_blank" rel="noopener noreferrer">See flights from {t.estimate.airport} on Skyscanner ↗</a>
+							<a class="btn sky-btn" href={t.estimate.skyscanner} target="_blank" rel="noopener noreferrer">Cheapest flights from {t.estimate.airport} on Skyscanner ↗</a>
 							<p class="trip-fine">An estimate, for the event dates. Don't book yet: we'll tell you which flight to take.</p>
 						{:else if t.estimate}
 							<p class="trip-big">No flight needed</p>
