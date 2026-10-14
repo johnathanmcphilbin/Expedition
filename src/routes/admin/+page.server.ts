@@ -1,6 +1,6 @@
 import { listOrigins, backfillOrigins } from '$lib/server/origins';
 import { estimateTrip } from '$lib/travel-estimates';
-import { TRAVEL_CAP_HOURS } from '$lib/data';
+import { TRAVEL_CAP_HOURS, hoursToQualify } from '$lib/data';
 import { countryName } from '$lib/server/geo';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -45,6 +45,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.order('reviewed_at', { ascending: true }),
 		listOrigins()
 	]);
+
+	const { data: approvedClaims } = await db().from('qualification_claims').select('user_id, trip_cost_usd').eq('status', 'approved');
+	const claimCost = new Map((approvedClaims ?? []).map((c) => [c.user_id, c.trip_cost_usd]));
 
 	// ---- getting people to Dublin: everyone we have an airport for
 	const tripBy = new Map(origins.map((o) => [o.user_id, { ...estimateTrip(o), country: countryName(o.country_code) }]));
@@ -110,7 +113,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 				trip: tripBy.get(u.id) ?? null,
 				// approved hours needed: half their flight at TRAVEL_RATE, never more than 40;
 				// with no flight estimate yet, assume the 40h maximum
-				target: tripBy.get(u.id)?.hoursToQualify ?? TRAVEL_CAP_HOURS,
+				// a confirmed qualification claim (their real trip cost) beats the estimate
+				target: claimCost.has(u.id) ? hoursToQualify(claimCost.get(u.id)!) : (tripBy.get(u.id)?.hoursToQualify ?? TRAVEL_CAP_HOURS),
 				targetKnown: tripBy.has(u.id),
 				rewards: round(rewards),
 				rewardItems: live.map((c) => ({ name: c.reward_name, status: c.status })),

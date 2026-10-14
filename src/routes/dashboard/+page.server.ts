@@ -33,6 +33,7 @@ function targetHours(est: TripEstimate | null, claim: QualificationClaim | null)
 import { getOwnGrantRequest, requestGrant, withdrawGrant } from '$lib/server/grants';
 import { notifyGrantRequest, notifyTravelBanked, notifyQualificationClaim } from '$lib/server/notify';
 import { myReferrals } from '$lib/server/referrals';
+import { getFlightQuote } from '$lib/server/flight-quotes';
 import { getOwnOrigin, recordOrigin } from '$lib/server/origins';
 import { estimateTrip } from '$lib/travel-estimates';
 import { countryName } from '$lib/server/geo';
@@ -96,8 +97,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const approvedHours = Number(progress.hours_earned);
 	const tripEstimate = origin ? estimateTrip(origin) : null;
 	const target = targetHours(tripEstimate, claim);
+	// the cheapest real fare from their airport (Google Flights, cached per
+	// airport); streamed, so the dashboard never waits on Google
+	const quote = tripEstimate?.flight ? getFlightQuote(tripEstimate.airport).catch(() => null) : Promise.resolve(null);
 	const trip = {
 		estimate: tripEstimate,
+		quote,
 		claim,
 		country: origin ? countryName(origin.country_code) : null,
 		approved: approvedHours,

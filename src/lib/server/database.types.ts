@@ -350,6 +350,17 @@ export interface Database {
 			review_payouts: Table<ReviewPayoutRow>;
 			travel_grant_requests: Table<TravelGrantRequestRow>;
 			referral_config: Table<AnyRow>;
+			flight_quotes: Table<{
+				airport: string;
+				destination: string | null;
+				price_usd: number | null;
+				airlines: string | null;
+				stops: number | null;
+				depart_local: string | null;
+				arrive_local: string | null;
+				link: string | null;
+				fetched_at: string;
+			}>;
 			qualification_claims: Table<{
 				user_id: string;
 				status: 'requested' | 'approved' | 'declined';

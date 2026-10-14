@@ -16,6 +16,12 @@
 
 	let bookedDifferent = $state(false);
 	let copied = $state(false);
+	// "2026-12-04 07:50" → "Fri 4 Dec, 07:50"
+	const fmtLocal = (s: string) => {
+		const [d, hm] = s.split(' ');
+		const date = new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IE', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+		return `${date}, ${hm}`;
+	};
 	async function copyLink(link: string) {
 		try {
 			await navigator.clipboard.writeText(link);
@@ -272,14 +278,39 @@
 				<div class="trip-cols">
 					<div>
 						<p class="trip-k">Your trip</p>
-						{#if t.estimate && t.estimate.flight}
+						{#if t.claim?.status === 'approved'}
+							<p class="trip-big">{money(t.claim.trip_cost_usd)}</p>
+							<p class="trip-sub">
+								Your trip, confirmed by an organiser
+								{#if t.claim.flight_link}· <a href={t.claim.flight_link} target="_blank" rel="noopener noreferrer">your flight ↗</a>{/if}
+							</p>
+						{:else if t.estimate && t.estimate.flight}
 							<p class="trip-big">~{money(t.estimate.total)}</p>
 							<p class="trip-sub">
 								~{money(t.estimate.flight)} return flight from
 								<a href={t.estimate.skyscanner} target="_blank" rel="noopener noreferrer" title={t.estimate.airportName}>{t.estimate.airport} ↗</a>
 								{#if t.estimate.visa === null}+ a visa (we're checking the cost){:else if t.estimate.visa}+ {money(t.estimate.visa)} visa{/if}
 							</p>
-							<a class="btn sky-btn" href={t.estimate.skyscanner} target="_blank" rel="noopener noreferrer">Cheapest flights from {t.estimate.airport} on Skyscanner ↗</a>
+							{#await t.quote}
+								<p class="trip-fine">Finding the cheapest flight…</p>
+							{:then q}
+							{#if q}
+								<div class="quote">
+									<p class="trip-k">Cheapest flight right now</p>
+									<p class="quote-price">{money(q.priceUsd)} <span>return</span></p>
+									<p class="trip-sub">
+										{t.estimate.airport} → {q.destination === 'SNN' ? 'Shannon' : 'Dublin'} · {q.airlines} ·
+										{q.stops ? `${q.stops} stop${q.stops > 1 ? 's' : ''}` : 'direct'}
+									</p>
+									{#if q.departLocal && q.arriveLocal}
+										<p class="trip-fine">Leaves {fmtLocal(q.departLocal)}, lands {fmtLocal(q.arriveLocal)} Irish time</p>
+									{/if}
+									<a class="btn sky-btn" href={q.link} target="_blank" rel="noopener noreferrer">See this flight ↗</a>
+									<p class="trip-fine">From Google Flights, checked {new Date(q.fetchedAt).toLocaleDateString('en-IE', { day: 'numeric', month: 'short' })}. Prices change, so don't book yet.</p>
+								</div>
+							{/if}
+							{/await}
+							<a class="btn btn-outline sky-btn" href={t.estimate.skyscanner} target="_blank" rel="noopener noreferrer">Compare on Skyscanner ↗</a>
 							<p class="trip-fine">An estimate, for the event dates. Don't book yet: we'll tell you which flight to take.</p>
 						{:else if t.estimate}
 							<p class="trip-big">No flight needed</p>
@@ -949,6 +980,23 @@
 		font-weight: 800;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
+		color: var(--muted);
+	}
+	.quote {
+		margin-top: 0.8rem;
+		padding: 0.7rem 0.9rem;
+		background: #f4f9f5;
+		border-left: 4px solid #2f9e57;
+	}
+	.quote-price {
+		margin: 0.15rem 0;
+		font-size: 1.4rem;
+		font-weight: 800;
+		color: var(--navy);
+	}
+	.quote-price span {
+		font-size: 0.85rem;
+		font-weight: 600;
 		color: var(--muted);
 	}
 	.sky-btn {

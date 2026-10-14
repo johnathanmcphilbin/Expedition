@@ -6,7 +6,7 @@ import { listFlights, assignFlight, cancelFlight, arrivalFlags, effectiveArrival
 import { listOrigins } from '$lib/server/origins';
 import { listGrantRequests, decideGrant } from '$lib/server/grants';
 import { listClaims, decideClaim } from '$lib/server/qualification';
-import { TRAVEL_RATE } from '$lib/data';
+import { TRAVEL_RATE, hoursToQualify } from '$lib/data';
 import { estimateTrip } from '$lib/travel-estimates';
 import { text, uuid, oneOf, url, ValidationError } from '$lib/server/validate';
 
@@ -42,6 +42,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			const u = userBy.get(id)!;
 			const o = originBy.get(id);
 			const trip = o ? estimateTrip(o) : null;
+			const claimed = claims.find((c) => c.user_id === id && c.status === 'approved');
 			const f = flightBy.get(id) ?? null;
 			const approved = approvedBy.get(id) ?? 0;
 			return {
@@ -50,8 +51,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 				email: u.email,
 				approved,
 				home: o ? { airport: o.airport, name: o.airport_name } : null,
-				qualifiesAt: trip?.hoursToQualify ?? null,
-				qualifies: trip ? approved >= trip.hoursToQualify : false,
+				qualifiesAt: claimed ? hoursToQualify(claimed.trip_cost_usd) : (trip?.hoursToQualify ?? null),
+				qualifies: claimed ? approved >= hoursToQualify(claimed.trip_cost_usd) : trip ? approved >= trip.hoursToQualify : false,
 				flight: f
 					? {
 							...f,
