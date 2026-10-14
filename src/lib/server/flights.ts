@@ -39,6 +39,7 @@ export async function getOwnFlight(userId: string) {
 		retDepartsAt: f.ret_departs_at,
 		price: f.price_usd === null ? null : Number(f.price_usd),
 		notes: f.organiser_notes,
+		bookingUrl: f.booking_url,
 		status: f.status,
 		bookedFlight: f.booked_flight,
 		bookedArrivesAt: f.booked_arrives_at,
@@ -57,6 +58,7 @@ export type FlightInput = {
 	ret_departs_at: string | null;
 	price_usd: number | null;
 	organiser_notes: string | null;
+	booking_url: string | null;
 };
 
 /**

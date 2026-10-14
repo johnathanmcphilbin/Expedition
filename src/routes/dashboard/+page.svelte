@@ -228,10 +228,9 @@
 					{#if f.notes}<p class="flight-note">{f.notes}</p>{/if}
 
 					{#if f.status === 'suggested'}
-						<p class="flight-note">
-							Book exactly this flight so we can pick you up at the airport, then tell us below.
-							<a href={skyscannerUrl(f.outFrom)} target="_blank" rel="noopener noreferrer">Find it on Skyscanner ↗</a>
-						</p>
+						<!-- organisers can paste the exact flight; otherwise it's Skyscanner from that airport for the event dates -->
+						<a class="btn book-btn" href={f.bookingUrl ?? skyscannerUrl(f.outFrom)} target="_blank" rel="noopener noreferrer">Book this flight ↗</a>
+						<p class="flight-note">Book exactly this flight so we can pick you up at the airport, then tell us below.</p>
 						<form method="POST" action="?/bookFlight" use:enhance class="book-form">
 							<label>Booking reference <input name="booking_ref" required maxlength="20" placeholder="e.g. X7KQ2P" autocomplete="off" /></label>
 							<label class="check"><input type="checkbox" name="different" value="yes" bind:checked={bookedDifferent} /> I booked a different flight</label>
@@ -276,7 +275,8 @@
 								<a href={t.estimate.skyscanner} target="_blank" rel="noopener noreferrer" title={t.estimate.airportName}>{t.estimate.airport} ↗</a>
 								{#if t.estimate.visa === null}+ a visa (we're checking the cost){:else if t.estimate.visa}+ {money(t.estimate.visa)} visa{/if}
 							</p>
-							<p class="trip-fine">An estimate. Check the real price on Skyscanner. Don't book yet.</p>
+							<a class="btn btn-outline sky-btn" href={t.estimate.skyscanner} target="_blank" rel="noopener noreferrer">See flights from {t.estimate.airport} on Skyscanner ↗</a>
+							<p class="trip-fine">An estimate, for the event dates. Don't book yet: we'll tell you which flight to take.</p>
 						{:else if t.estimate}
 							<p class="trip-big">No flight needed</p>
 						{:else}
@@ -626,7 +626,7 @@
 						<li>Their first project gets approved{r.minHours > 0 ? ` (${r.minHours}+ hours)` : ''}.</li>
 						<li>You earn {money(r.rewardCents / 100)} in reward credit, once for each friend.</li>
 					</ol>
-					<p class="ref-fine">Credit is added to your hours balance to spend. It doesn't count towards your approved hours or qualifying for Galway.</p>
+					<p class="ref-fine">Credit goes into your hours: spend it, bank it, and it counts towards your 40 hours and qualifying for Galway.</p>
 				</div>
 			</section>
 		{/if}
@@ -872,6 +872,14 @@
 		letter-spacing: 0.05em;
 		color: var(--muted);
 	}
+	.sky-btn {
+		margin-top: 0.7rem;
+		font-size: 0.85rem;
+	}
+	.book-btn {
+		flex-basis: auto;
+		align-self: flex-start;
+	}
 	.leg-flight {
 		font-size: 1.3rem;
 		color: var(--navy);
@@ -880,10 +888,6 @@
 		flex-basis: 100%;
 		margin: 0;
 		color: var(--slate);
-	}
-	.flight-note a {
-		font-weight: 700;
-		color: var(--blue-dark);
 	}
 	.book-form {
 		flex-basis: 100%;

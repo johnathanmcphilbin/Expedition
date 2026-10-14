@@ -248,9 +248,11 @@ d('referrals (database)', () => {
 		expect(data!.status).toBe('reversed');
 	});
 
-	it("referral credit never changes anyone's approved build hours", async () => {
-		const { data: refProgress } = await db().from('user_expedition_progress').select('hours_earned').eq('user_id', referrer.id).maybeSingle();
-		expect(Number(refProgress?.hours_earned ?? 0)).toBe(0);
+	it("referral credit counts towards the referrer's Expedition; the referred builder's hours are just their own", async () => {
+		const plus = (await ledger(referrer.id, 'referral_reward')).reduce((t, r) => t + Number(r.amount), 0);
+		const minus = (await ledger(referrer.id, 'referral_reversal')).reduce((t, r) => t + Number(r.amount), 0);
+		const { data: refProgress } = await db().from('user_expedition_progress').select('hours_earned').eq('user_id', referrer.id).single();
+		expect(Number(refProgress!.hours_earned)).toBeCloseTo(plus + minus, 2);
 		const approvedRows = await ledger(sam.id, 'checkpoint_approved');
 		const { data: samProgress } = await db().from('user_expedition_progress').select('hours_earned').eq('user_id', sam.id).single();
 		expect(Number(samProgress!.hours_earned)).toBe(approvedRows.reduce((t, r) => t + Number(r.amount), 0));

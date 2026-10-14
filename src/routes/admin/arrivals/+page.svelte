@@ -171,6 +171,7 @@
 								<td>
 									{#if p.flight}
 										<strong>{p.flight.out_flight}</strong>
+										{#if p.flight.booking_url}<a class="sub" href={p.flight.booking_url} target="_blank" rel="noopener noreferrer">flight link ↗</a>{/if}
 										<span class="sub">{p.flight.out_from} → DUB · lands {day(p.flight.out_arrives_at)} {time(p.flight.out_arrives_at)}{p.flight.out_terminal ? ` ${p.flight.out_terminal}` : ''}</span>
 										{#if p.flight.status === 'changed'}
 											<span class="sub warn-text">They booked {p.flight.booked_flight}, landing {p.flight.booked_arrives_at ? `${day(p.flight.booked_arrives_at)} ${time(p.flight.booked_arrives_at)}` : '?'}</span>
@@ -220,6 +221,9 @@
 												<label>Flies home from Ireland <input name="ret_departs_at" type="datetime-local" value={local(p.flight?.ret_departs_at ?? null)} /></label>
 												<label>Price (USD, return) <input name="price_usd" type="number" min="0" step="1" value={p.flight?.price_usd ?? ''} style="width:7rem" /></label>
 											</fieldset>
+											<label class="wide">Link to this flight <span class="sub">(optional: leave blank and they get Skyscanner from their airport for the event dates)</span>
+												<input name="booking_url" type="url" maxlength="2000" placeholder="https://www.skyscanner.ie/…" value={p.flight?.booking_url ?? ''} />
+											</label>
 											<label class="wide">Notes for them <textarea name="organiser_notes" rows="2" maxlength="1000" placeholder="e.g. book on emirates.com, carry-on only is fine">{p.flight?.organiser_notes ?? ''}</textarea></label>
 											<div class="form-actions">
 												<button class="btn" type="submit">Save flight</button>

@@ -193,6 +193,8 @@ export type TripFlightRow = {
 	ret_departs_at: string | null;
 	price_usd: number | null;
 	organiser_notes: string | null;
+	/** link to the exact flight they should book */
+	booking_url: string | null;
 	status: TripFlightStatus;
 	booked_flight: string | null;
 	booked_arrives_at: string | null;

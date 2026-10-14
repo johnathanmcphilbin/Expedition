@@ -7,7 +7,7 @@ import { listOrigins } from '$lib/server/origins';
 import { listGrantRequests, decideGrant } from '$lib/server/grants';
 import { TRAVEL_RATE } from '$lib/data';
 import { estimateTrip } from '$lib/travel-estimates';
-import { text, uuid, oneOf, ValidationError } from '$lib/server/validate';
+import { text, uuid, oneOf, url, ValidationError } from '$lib/server/validate';
 
 /** Within this long of each other at the same terminal = one pickup run. */
 const RUN_GAP_MS = 90 * 60 * 1000;
@@ -147,7 +147,8 @@ export const actions: Actions = {
 				ret_flight: text(form.get('ret_flight'), 'Return flight', { max: 80 }),
 				ret_departs_at: dublinTime(form.get('ret_departs_at'), 'Flies home', false),
 				price_usd: price,
-				organiser_notes: text(form.get('organiser_notes'), 'Notes', { max: 1000 })
+				organiser_notes: text(form.get('organiser_notes'), 'Notes', { max: 1000 }),
+				booking_url: url(form.get('booking_url'), 'Flight link')
 			};
 			await assignFlight(admin.id, userId, input);
 			return { saved: userId };
