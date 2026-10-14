@@ -20,7 +20,7 @@ import { listOwnQueued, countQueuePending, hackatimeNames } from '$lib/server/qu
 import { listOwnCheckpoints, unlockedCount } from '$lib/server/checkpoints';
 import { drops, TRAVEL_CAP_HOURS, TRAVEL_RATE } from '$lib/data';
 import { getOwnGrantRequest, requestGrant, withdrawGrant } from '$lib/server/grants';
-import { notifyGrantRequest } from '$lib/server/notify';
+import { notifyGrantRequest, notifyTravelBanked } from '$lib/server/notify';
 import { getOwnOrigin, recordOrigin } from '$lib/server/origins';
 import { estimateTrip } from '$lib/travel-estimates';
 import { countryName } from '$lib/server/geo';
@@ -229,6 +229,17 @@ export const actions: Actions = {
 			const direction = form.get('direction') === 'back' ? -1 : 1;
 			const result = await moveTravelHours(user.id, direction * amount, bucket);
 			if (!result.ok) return fail(409, { travelMessage: result.message });
+			if (direction > 0) {
+				// let the organisers know someone's putting hours towards the trip
+				const after = await getBalance(user.id);
+				await notifyTravelBanked({
+					name: user.display_name,
+					hours: amount,
+					bucket,
+					totalHours: Number(after.hours_travel),
+					locked: !!after.travel_locked_at
+				}).catch(() => {});
+			}
 			return { travelMoved: direction * amount, travelBucket: bucket };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { travelMessage: e.message });
@@ -273,6 +284,7 @@ export const actions: Actions = {
 			const approved = Number(progress.hours_earned);
 			if (approved < needed) return fail(400, { grantMessage: `You need ${needed}h approved to qualify. You have ${approved}h.` });
 			const banked = Number(balance.hours_travel);
+			if (banked <= 0) return fail(400, { grantMessage: 'Bank some hours into your travel fund first: your grant is what you bank.' });
 			const ok = await requestGrant(user.id, {
 				hoursBanked: banked,
 				approvedHours: approved,

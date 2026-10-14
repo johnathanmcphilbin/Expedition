@@ -293,22 +293,29 @@
 				{#if t.remaining === 0 && t.estimate?.flight !== 0}
 					<div class="grant">
 						{#if data.grant?.status === 'requested'}
-							<p><strong>Grant requested ✓</strong> An organiser will get back to you. You asked with {data.grant.hours_banked}h banked ({money(data.grant.hours_banked * TRAVEL_RATE)}).</p>
-							<form method="POST" action="?/withdrawGrant" use:enhance><button class="text-link" type="submit">Withdraw request</button></form>
+							<p>
+								<strong>Grant requested ✓</strong> {data.grant.hours_banked}h = {money(data.grant.hours_banked * TRAVEL_RATE)}.
+								Your travel fund is locked while an organiser looks at it.
+							</p>
+							<form method="POST" action="?/withdrawGrant" use:enhance><button class="text-link" type="submit">Withdraw request (unlocks your fund)</button></form>
 						{:else if data.grant?.status === 'approved'}
 							<p><strong>Grant approved 🎉</strong> Your travel fund is locked while we sort your trip. We'll be in touch with next steps.</p>
 						{:else}
 							{#if data.grant?.status === 'declined'}
-								<p class="grant-declined">Your last request wasn't approved{data.grant.admin_note ? `: ${data.grant.admin_note}` : '.'} You can ask again.</p>
+								<p class="grant-declined">Your last request wasn't approved{data.grant.admin_note ? `: ${data.grant.admin_note}` : '.'} Your fund is unlocked, so you can adjust it and ask again.</p>
 							{/if}
-							<form method="POST" action="?/requestGrant" use:enhance class="grant-form">
-								<p>
-									You qualify! Bank the hours you want for travel above first: your grant is what's in your travel fund
-									(now <strong>{travelHours}h = {money(travelHours * TRAVEL_RATE)}</strong>), and it's locked once approved.
-								</p>
-								<textarea name="note" rows="2" maxlength="1000" placeholder="Anything we should know? (optional)"></textarea>
-								<button class="btn" type="submit">Request my travel grant</button>
-							</form>
+							{#if travelHours > 0}
+								<form method="POST" action="?/requestGrant" use:enhance class="grant-form">
+									<p>
+										You qualify! Your grant is what's in your travel fund: <strong>{travelHours}h = {money(travelHours * TRAVEL_RATE)}</strong>.
+										Requesting it <strong>locks your travel fund</strong>, so bank everything you want for travel first.
+									</p>
+									<textarea name="note" rows="2" maxlength="1000" placeholder="Anything we should know? (optional)"></textarea>
+									<button class="btn" type="submit">Request my travel grant</button>
+								</form>
+							{:else}
+								<p>You qualify! Bank hours into your travel fund below, then request your grant here.</p>
+							{/if}
 							{#if form && 'grantMessage' in form && form.grantMessage}<p class="hint error">{form.grantMessage}</p>{/if}
 						{/if}
 					</div>

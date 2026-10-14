@@ -80,11 +80,12 @@
 									<form method="POST" action="?/grant" use:enhance class="g-form">
 										<input type="hidden" name="user_id" value={g.user_id} />
 										<input name="admin_note" maxlength="1000" placeholder="Note (needed to decline)" />
+										<span class="sub">Fund locked since they asked. Declining unlocks it.</span>
 										<button class="btn" type="submit" name="decision" value="approve">Approve</button>
 										<button class="text-btn danger" type="submit" name="decision" value="decline">Decline</button>
 									</form>
 								{:else}
-									<span class="status s-{g.status === 'approved' ? 'booked' : 'cancelled'}">{g.status === 'approved' ? 'Approved · fund locked' : 'Declined'}</span>
+									<span class="status s-{g.status === 'approved' ? 'booked' : 'cancelled'}">{g.status === 'approved' ? 'Approved · fund locked' : 'Declined · fund unlocked'}</span>
 									{#if g.admin_note}<span class="sub">{g.admin_note}</span>{/if}
 								{/if}
 							</div>

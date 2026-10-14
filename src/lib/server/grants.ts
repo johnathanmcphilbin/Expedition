@@ -1,8 +1,10 @@
 import { db } from './supabase';
 
 /**
- * Travel grant requests. Someone who qualifies asks for their grant; an
- * organiser approves (which locks their travel fund) or declines with a note.
+ * Travel grant requests. Someone who qualifies and has banked hours asks for
+ * their grant, which locks their travel fund on the spot so the amount can't
+ * move. An organiser approves (stays locked) or declines with a note
+ * (unlocked again); withdrawing unlocks it too.
  */
 
 export type GrantStatus = 'requested' | 'approved' | 'declined' | 'withdrawn';
@@ -50,11 +52,19 @@ export async function requestGrant(
 		? await db().from('travel_grant_requests').update(row).eq('user_id', userId).in('status', ['declined', 'withdrawn'])
 		: await db().from('travel_grant_requests').insert(row);
 	if (error) throw new Error(`Couldn't save the request: ${error.message}`);
+	// lock the fund now: the request is for exactly what's banked
+	await db().from('users').update({ travel_locked_at: new Date().toISOString() }).eq('id', userId).is('travel_locked_at', null);
 	return true;
 }
 
 export async function withdrawGrant(userId: string): Promise<void> {
-	await db().from('travel_grant_requests').update({ status: 'withdrawn' }).eq('user_id', userId).eq('status', 'requested');
+	const { data } = await db()
+		.from('travel_grant_requests')
+		.update({ status: 'withdrawn' })
+		.eq('user_id', userId)
+		.eq('status', 'requested')
+		.select('user_id');
+	if (data?.length) await db().from('users').update({ travel_locked_at: null }).eq('id', userId);
 }
 
 export type GrantWithOwner = GrantRequest & { owner: { display_name: string | null; email: string | null } | null };
@@ -82,6 +92,8 @@ export async function decideGrant(adminId: string, userId: string, approve: bool
 		.select('user_id');
 	if (error) throw new Error(error.message);
 	if (!data?.length) return false;
+	// approved: stays locked (it was locked when they asked). Declined: free to adjust and ask again.
 	if (approve) await db().from('users').update({ travel_locked_at: now }).eq('id', userId).is('travel_locked_at', null);
+	else await db().from('users').update({ travel_locked_at: null }).eq('id', userId);
 	return true;
 }

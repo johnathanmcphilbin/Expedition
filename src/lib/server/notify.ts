@@ -111,3 +111,15 @@ export function notifyGrantRequest(g: { name: string | null; hoursBanked: number
 		`${SITE}/admin/arrivals`
 	);
 }
+
+export function notifyTravelBanked(b: { name: string | null; hours: number; bucket: string; totalHours: number; locked: boolean }) {
+	return send(
+		`Hours banked for Galway: ${b.name ?? 'a participant'}`,
+		[
+			['From', b.name ?? 'Unnamed participant'],
+			['Banked', `${b.hours}h towards ${b.bucket}`],
+			['Travel fund now', `${b.totalHours}h = $${(b.totalHours * 8).toFixed(2)}`]
+		],
+		`${SITE}/admin`
+	);
+}
