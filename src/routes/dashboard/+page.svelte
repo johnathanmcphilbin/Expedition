@@ -15,6 +15,16 @@
 	]);
 
 	let bookedDifferent = $state(false);
+	let copied = $state(false);
+	async function copyLink(link: string) {
+		try {
+			await navigator.clipboard.writeText(link);
+			copied = true;
+			setTimeout(() => (copied = false), 1800);
+		} catch {
+			/* clipboard blocked: the link is selectable */
+		}
+	}
 	const t = $derived(data.trip);
 	const pct = $derived(Math.min(100, (data.trip.approved / (data.trip.target || 1)) * 100));
 	const fmtDublin = (iso: string) =>
@@ -585,6 +595,41 @@
 				</p>
 			{/if}
 		</section>
+
+		<!-- ---------------- referrals ---------------- -->
+		{#if data.referrals?.link}
+			{@const r = data.referrals}
+			<section class="block" id="friends">
+				<div class="block-head">
+					<h2>Bring your friends on Expedition</h2>
+				</div>
+				<p class="hint block-hint">
+					Get <strong>{money(r.rewardCents / 100)}</strong> in reward credit for every friend you bring who gets their first project approved!
+					You earn when their project is approved, not when they sign up.
+				</p>
+				<div class="panel ref-panel">
+					<div class="ref-link">
+						<input readonly value={r.link} aria-label="Your referral link" onfocus={(e) => e.currentTarget.select()} />
+						<button type="button" class="btn" onclick={() => copyLink(r.link!)}>{copied ? 'Copied ✓' : 'Copy link'}</button>
+					</div>
+					<dl class="ref-stats">
+						<div><dt>Link clicks</dt><dd>{r.funnel.clicks}</dd></div>
+						<div><dt>People joined</dt><dd>{r.funnel.joined}</dd></div>
+						<div><dt>Active builders</dt><dd>{r.funnel.active}</dd></div>
+						<div><dt>Friends approved</dt><dd>{r.funnel.approvedBuilders}</dd></div>
+						<div><dt>Credit earned</dt><dd>{money(r.funnel.creditCents / 100)}</dd></div>
+					</dl>
+					<ol class="ref-steps">
+						<li>Share your link.</li>
+						<li>Someone new joins Expedition.</li>
+						<li>They build and ship a project.</li>
+						<li>Their first project gets approved{r.minHours > 0 ? ` (${r.minHours}+ hours)` : ''}.</li>
+						<li>You earn {money(r.rewardCents / 100)} in reward credit, once for each friend.</li>
+					</ol>
+					<p class="ref-fine">Credit is added to your hours balance to spend. It doesn't count towards your approved hours or qualifying for Galway.</p>
+				</div>
+			</section>
+		{/if}
 	</div>
 </main>
 <Footer />
@@ -627,6 +672,54 @@
 	}
 	.u-sent {
 		color: #2f7a46;
+	}
+	.ref-link {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.6rem;
+	}
+	.ref-link input {
+		flex: 1;
+		min-width: 240px;
+		padding: 0.6rem 0.7rem;
+		border: 2px solid var(--rule-strong);
+		font: inherit;
+		font-weight: 700;
+		color: var(--navy);
+		background: var(--white);
+	}
+	.ref-stats {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+		gap: 0.8rem 1.2rem;
+		margin: 1.2rem 0 0;
+	}
+	.ref-stats div {
+		display: flex;
+		flex-direction: column-reverse;
+		gap: 0.15rem;
+	}
+	.ref-stats dt {
+		font-size: 0.78rem;
+		font-weight: 700;
+		color: var(--muted);
+	}
+	.ref-stats dd {
+		margin: 0;
+		font-size: 1.5rem;
+		font-weight: 800;
+		color: var(--navy);
+	}
+	.ref-steps {
+		margin: 1.2rem 0 0;
+		padding-left: 1.2rem;
+		color: var(--slate);
+		line-height: 1.6;
+	}
+	.ref-fine {
+		margin-top: 0.8rem;
+		font-size: 0.82rem;
+		color: var(--muted);
 	}
 	.trip-card {
 		margin-bottom: 1rem;

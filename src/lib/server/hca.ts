@@ -80,25 +80,37 @@ export async function fetchClaims(accessToken: string): Promise<HcaClaims> {
  * owned by the database and can only be changed by an operator running SQL.
  * Nothing the identity provider or the browser says can escalate it.
  */
-export async function upsertUser(claims: HcaClaims): Promise<UserRow> {
+export async function upsertUser(claims: HcaClaims): Promise<{ user: UserRow; created: boolean }> {
 	const displayName =
 		claims.name ?? claims.nickname ?? claims.given_name ?? claims.email?.split('@')[0] ?? null;
+	const fields = {
+		email: claims.email ?? null,
+		slack_id: claims.slack_id ?? null,
+		display_name: displayName,
+		avatar_url: claims.picture ?? null
+	};
+
+	// Look up first, so the moment someone joins Expedition (the insert) is
+	// known: that's the only time a referral can be attached.
+	const { data: existing } = await db().from('users').select('id').eq('hackclub_id', claims.sub).maybeSingle();
+	if (existing) {
+		const { data, error } = await db().from('users').update(fields).eq('id', existing.id).select('*').single();
+		if (error) throw new Error(`Could not sync user: ${error.message}`);
+		return { user: data as UserRow, created: false };
+	}
 
 	const { data, error } = await db()
 		.from('users')
-		.upsert(
-			{
-				hackclub_id: claims.sub,
-				email: claims.email ?? null,
-				slack_id: claims.slack_id ?? null,
-				display_name: displayName,
-				avatar_url: claims.picture ?? null
-			},
-			{ onConflict: 'hackclub_id' }
-		)
+		.insert({ hackclub_id: claims.sub, ...fields })
 		.select('*')
 		.single();
-
-	if (error) throw new Error(`Could not sync user: ${error.message}`);
-	return data as UserRow;
+	if (error) {
+		// two sign-ins racing: the other one created it, so this is a returning user
+		if (error.code === '23505') {
+			const { data: again } = await db().from('users').update(fields).eq('hackclub_id', claims.sub).select('*').single();
+			return { user: again as UserRow, created: false };
+		}
+		throw new Error(`Could not sync user: ${error.message}`);
+	}
+	return { user: data as UserRow, created: true };
 }

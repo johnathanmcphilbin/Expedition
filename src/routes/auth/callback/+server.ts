@@ -3,6 +3,7 @@ import { exchangeCode, fetchClaims, upsertUser } from '$lib/server/hca';
 import { consumeOAuthState, createSession, safeNext } from '$lib/server/session';
 import { callbackUrl } from '$lib/server/env';
 import { connectionStatus } from '$lib/server/hackatime';
+import { attachReferralOnSignup } from '$lib/server/referrals';
 
 export const GET: RequestHandler = async ({ url, cookies, request, getClientAddress }) => {
 	const error = url.searchParams.get('error');
@@ -21,7 +22,9 @@ export const GET: RequestHandler = async ({ url, cookies, request, getClientAddr
 
 	const accessToken = await exchangeCode(code, callbackUrl(url.origin, '/auth/callback'));
 	const claims = await fetchClaims(accessToken);
-	const user = await upsertUser(claims);
+	const { user, created } = await upsertUser(claims);
+	// someone new to Expedition: attach the referral link they came through, if any
+	if (created) await attachReferralOnSignup(cookies, user);
 
 	await createSession(cookies, user.id, {
 		userAgent: request.headers.get('user-agent'),

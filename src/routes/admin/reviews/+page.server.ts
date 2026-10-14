@@ -2,6 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin, requireReviewer, isReviewerOnly, reviewerName } from '$lib/server/guards';
 import { lapsesFor, LAPSE_FIELD, type Lapse } from '$lib/server/lapse';
+import { referredBy } from '$lib/server/referrals';
 import { payForReview, reviewEarnings, REVIEW_PAY_USD } from '$lib/server/payouts';
 import type { UserRow, SubmissionReviewRow, QueuedSubmissionRow } from '$lib/server/database.types';
 import { db } from '$lib/server/supabase';
@@ -64,6 +65,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	purgeStalePersonalData().catch((e) => console.error('purgeStalePersonalData', e));
+
+	const { data: myReferred } = await db().from('referral_attributions').select('referred_id').eq('referrer_id', viewer.id);
+	const referredByViewer = new Set((myReferred ?? []).map((r) => r.referred_id));
 
 	const [submissions, reviews, queued, flagRows] = await Promise.all([
 		listAllHackClubSubmissions(),
@@ -180,8 +184,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 					.toLowerCase()
 			}))
 	]
-		// nobody sees (or can open) their own submissions in the queue
-		.filter((i) => i.userId !== viewer.id)
+		// nobody sees (or can open) their own submissions, or those of people they referred
+		.filter((i) => i.userId !== viewer.id && !(i.userId && referredByViewer.has(i.userId)))
 		.sort((a, b) => (b.submittedAt ?? '').localeCompare(a.submittedAt ?? ''));
 
 	const isPending = (st: SubmissionStatus) => st === 'pending' || st === 'in_review';
@@ -696,6 +700,7 @@ export const actions: Actions = {
 			if (!row) return fail(404, { message: 'That submission no longer exists.' });
 			if (row.status === 'sent') return fail(409, { message: 'This one has already been sent to Hack Club.' });
 			if (row.user_id === reviewer.id) return fail(403, { message: "You can't review your own project." });
+			if (await referredBy(reviewer.id, row.user_id)) return fail(403, { message: "You can't review someone you referred." });
 			keepStoredAddress(form, reviewer, row);
 
 			const decision = oneOf(
@@ -864,6 +869,7 @@ export const actions: Actions = {
 			if (!linked?.user_id) return fail(400, { message: 'Link this submission to an account first.' });
 			const userId = linked.user_id;
 			if (userId === reviewer.id) return fail(403, { message: "You can't review your own project." });
+			if (await referredBy(reviewer.id, userId)) return fail(403, { message: "You can't review someone you referred." });
 
 			if (status !== 'pending' && status !== 'in_review' && !participantFeedback) {
 				return fail(400, { message: 'Give the participant some feedback to act on.' });

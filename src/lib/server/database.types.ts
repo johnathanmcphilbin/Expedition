@@ -27,7 +27,9 @@ export type HourTransactionType =
 	| 'checkpoint_approved'
 	| 'reward_claimed'
 	| 'travel_allocation'
-	| 'manual_adjustment';
+	| 'manual_adjustment'
+	| 'referral_reward'
+	| 'referral_reversal';
 
 export type UserRow = {
 	id: string;
@@ -233,6 +235,8 @@ export type TravelGrantRequestRow = {
 	decided_by: string | null;
 }
 
+type AnyRow = Record<string, unknown>;
+
 export type HourTransactionRow = {
 	id: string;
 	user_id: string;
@@ -242,6 +246,8 @@ export type HourTransactionRow = {
 	reference_id: string | null;
 	note: string | null;
 	created_at: string;
+	/** set on referral_reward / referral_reversal rows */
+	referral_reward_id: string | null;
 }
 
 export type HackatimeConnectionRow = {
@@ -341,6 +347,34 @@ export interface Database {
 			review_flags: Table<ReviewFlagRow>;
 			review_payouts: Table<ReviewPayoutRow>;
 			travel_grant_requests: Table<TravelGrantRequestRow>;
+			referral_config: Table<AnyRow>;
+			referral_codes: Table<{ code: string; user_id: string; active: boolean; created_at: string }>;
+			referral_attributions: Table<{
+				referred_id: string;
+				referrer_id: string;
+				code: string;
+				source: string;
+				clicked_at: string | null;
+				attributed_at: string;
+				status: 'active' | 'held' | 'rejected';
+				flag: string | null;
+			}>;
+			referral_events: Table<{ id: number; code: string; type: 'click' | 'signup'; visitor_hash: string | null; created_at: string }>;
+			referral_rewards: Table<{
+				id: string;
+				referrer_id: string;
+				referred_id: string;
+				review_id: string;
+				project_names: string[];
+				approved_hours: number;
+				amount_cents: number;
+				hours: number;
+				status: 'earned' | 'reversed';
+				note: string | null;
+				created_at: string;
+				reversed_at: string | null;
+			}>;
+			admin_actions: Table<{ id: number; admin_id: string | null; action: string; target: string | null; note: string | null; created_at: string }>;
 		};
 		Views: {
 			user_hour_balances: { Row: HourBalanceRow; Relationships: [] };
@@ -374,6 +408,9 @@ export interface Database {
 				};
 				Returns: void;
 			};
+			referral_pay_for_review: { Args: { p_review_id: string }; Returns: string };
+			referral_reconcile: { Args: Record<string, never>; Returns: number };
+			referral_reverse: { Args: { p_reward_id: string; p_admin_id: string; p_note: string | null }; Returns: boolean };
 			review_hackclub_submission: {
 				Args: {
 					p_review_id: string;

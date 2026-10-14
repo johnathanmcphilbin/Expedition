@@ -21,6 +21,7 @@ import { listOwnCheckpoints, unlockedCount } from '$lib/server/checkpoints';
 import { drops, TRAVEL_CAP_HOURS, TRAVEL_RATE } from '$lib/data';
 import { getOwnGrantRequest, requestGrant, withdrawGrant } from '$lib/server/grants';
 import { notifyGrantRequest, notifyTravelBanked } from '$lib/server/notify';
+import { myReferrals } from '$lib/server/referrals';
 import { getOwnOrigin, recordOrigin } from '$lib/server/origins';
 import { estimateTrip } from '$lib/travel-estimates';
 import { countryName } from '$lib/server/geo';
@@ -69,11 +70,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			getTravelBuckets(user.id),
 			listOwnQueued(user.id)
 		]);
-	const [ownCheckpoints, flight, origin, grant] = await Promise.all([
+	const [ownCheckpoints, flight, origin, grant, referrals] = await Promise.all([
 		listOwnCheckpoints(user.id),
 		getOwnFlight(user.id),
 		getOwnOrigin(user.id),
-		getOwnGrantRequest(user.id)
+		getOwnGrantRequest(user.id),
+		myReferrals(user.id).catch((e) => {
+			console.error('myReferrals', e);
+			return null;
+		})
 	]);
 	// their trip: estimated cost from their home airport, and how far they are from qualifying
 	const approvedHours = Number(progress.hours_earned);
@@ -190,6 +195,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		travelBuckets,
 		pendingReviews,
 		trip,
+		referrals: referrals ? { ...referrals, link: referrals.code ? `${url.origin}/join?ref=${referrals.code}` : null } : null,
 		grant,
 		// hardware sent in without a Hackatime project: no project card to hang off
 		untracked: queued

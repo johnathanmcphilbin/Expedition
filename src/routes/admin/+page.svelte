@@ -36,6 +36,7 @@
 					Fulfilment{data.claims.filter((c) => c.status === 'requested').length ? ` (${data.claims.filter((c) => c.status === 'requested').length} to send)` : ''}
 				</a>
 				<a class="btn btn-outline" href="/admin/arrivals">Arrivals</a>
+				<a class="btn btn-outline" href="/admin/referrals">Referrals</a>
 				<a class="btn btn-outline" href="/admin/projects">Projects</a>
 				<a class="btn btn-outline" href="/admin/checkpoints">
 					Shared checkpoints{data.sharedWaiting ? ` (${data.sharedWaiting})` : ''}
