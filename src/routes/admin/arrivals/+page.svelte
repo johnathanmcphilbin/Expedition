@@ -58,6 +58,42 @@
 			<p class="error-box">{form.message}</p>
 		{/if}
 
+		<!-- ---------------- qualification claims ---------------- -->
+		{#if data.claims.length}
+			<section class="block">
+				<h2 class="section-label">Qualification claims</h2>
+				<ul class="grants">
+					{#each data.claims as c (c.user_id)}
+						<li class="g-{c.status}">
+							<div class="g-main">
+								<span class="who">{c.owner?.display_name ?? 'Unnamed'}</span>
+								{#if c.owner?.email}<a class="sub" href="mailto:{c.owner.email}">{c.owner.email}</a>{/if}
+								<span class="sub">
+									Says: {c.approved_hours} approved hours = ${c.coversUsd.toFixed(2)}, half of a ${c.trip_cost_usd} trip · {new Date(c.requested_at).toLocaleDateString('en-IE')}
+								</span>
+								{#if c.flight_link}<a class="sub" href={c.flight_link} target="_blank" rel="noopener noreferrer">their flight ↗</a>{/if}
+								{#if c.note}<span class="g-note">“{c.note}”</span>{/if}
+							</div>
+							<div class="g-amount"><strong>${c.trip_cost_usd}</strong><span class="sub">claimed trip</span></div>
+							<div class="g-act">
+								{#if c.status === 'requested'}
+									<form method="POST" action="?/claim" use:enhance class="g-form">
+										<input type="hidden" name="user_id" value={c.user_id} />
+										<input name="admin_note" maxlength="1000" placeholder="Note (needed to decline)" />
+										<button class="btn" type="submit" name="decision" value="approve">Approve</button>
+										<button class="text-btn danger" type="submit" name="decision" value="decline">Decline</button>
+									</form>
+								{:else}
+									<span class="status s-{c.status === 'approved' ? 'booked' : 'cancelled'}">{c.status === 'approved' ? 'Qualified' : 'Declined'}</span>
+									{#if c.admin_note}<span class="sub">{c.admin_note}</span>{/if}
+								{/if}
+							</div>
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
+
 		<!-- ---------------- grant requests ---------------- -->
 		<section class="block">
 			<h2 class="section-label">Travel grant requests</h2>

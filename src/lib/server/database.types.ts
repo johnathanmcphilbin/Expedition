@@ -350,6 +350,18 @@ export interface Database {
 			review_payouts: Table<ReviewPayoutRow>;
 			travel_grant_requests: Table<TravelGrantRequestRow>;
 			referral_config: Table<AnyRow>;
+			qualification_claims: Table<{
+				user_id: string;
+				status: 'requested' | 'approved' | 'declined';
+				trip_cost_usd: number;
+				flight_link: string | null;
+				approved_hours: number;
+				note: string | null;
+				admin_note: string | null;
+				requested_at: string;
+				decided_at: string | null;
+				decided_by: string | null;
+			}>;
 			referral_codes: Table<{ code: string; user_id: string; active: boolean; created_at: string }>;
 			referral_attributions: Table<{
 				referred_id: string;

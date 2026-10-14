@@ -123,3 +123,16 @@ export function notifyTravelBanked(b: { name: string | null; hours: number; buck
 		`${SITE}/admin`
 	);
 }
+
+export function notifyQualificationClaim(c: { name: string | null; approvedHours: number; tripCostUsd: number; flightLink: string | null; note: string | null }) {
+	return send(
+		`Qualification claim: ${c.name ?? 'a participant'}`,
+		[
+			['From', c.name ?? 'Unnamed participant'],
+			['Says', `${c.approvedHours} approved hours = $${(c.approvedHours * 8).toFixed(2)}, half of a $${c.tripCostUsd} trip`],
+			['Flight', c.flightLink],
+			['Note', c.note]
+		],
+		`${SITE}/admin/arrivals`
+	);
+}

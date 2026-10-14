@@ -5,6 +5,7 @@ import { db } from '$lib/server/supabase';
 import { listFlights, assignFlight, cancelFlight, arrivalFlags, effectiveArrival, type FlightInput } from '$lib/server/flights';
 import { listOrigins } from '$lib/server/origins';
 import { listGrantRequests, decideGrant } from '$lib/server/grants';
+import { listClaims, decideClaim } from '$lib/server/qualification';
 import { TRAVEL_RATE } from '$lib/data';
 import { estimateTrip } from '$lib/travel-estimates';
 import { text, uuid, oneOf, url, ValidationError } from '$lib/server/validate';
@@ -19,12 +20,13 @@ const RUN_GAP_MS = 90 * 60 * 1000;
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
 
-	const [flights, origins, progress, users, grants] = await Promise.all([
+	const [flights, origins, progress, users, grants, claims] = await Promise.all([
 		listFlights(),
 		listOrigins(),
 		db().from('user_expedition_progress').select('user_id, hours_earned').gt('hours_earned', 0),
 		db().from('users').select('id, display_name, email').like('hackclub_id', 'ident!%'),
-		listGrantRequests()
+		listGrantRequests(),
+		listClaims()
 	]);
 
 	const originBy = new Map(origins.map((o) => [o.user_id, o]));
@@ -96,6 +98,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const active = people.filter((p) => p.flight && p.flight.status !== 'cancelled');
 	return {
+		claims: claims.map((c) => ({ ...c, coversUsd: Number(c.approved_hours) * TRAVEL_RATE })),
 		grants: grants
 			.filter((g) => g.status !== 'withdrawn')
 			.map((g) => ({ ...g, grantUsd: Number(g.hours_banked) * TRAVEL_RATE })),
@@ -154,6 +157,23 @@ export const actions: Actions = {
 			return { saved: userId };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { message: e.message, field: e.field });
+			throw e;
+		}
+	},
+
+	/** Confirm (or decline) "my hours cover half my real trip cost". */
+	claim: async ({ request, locals }) => {
+		const admin = requireAdmin(locals);
+		const form = await request.formData();
+		try {
+			const userId = uuid(form.get('user_id')?.toString(), 'person');
+			const approve = form.get('decision') === 'approve';
+			const note = text(form.get('admin_note'), 'Note', { max: 1000 });
+			if (!approve && !note) return fail(400, { message: 'Say why, so they know what to do next.' });
+			if (!(await decideClaim(admin.id, userId, approve, note))) return fail(409, { message: 'That claim has already been decided.' });
+			return { claimDecided: approve ? 'approved' : 'declined' };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { message: e.message });
 			throw e;
 		}
 	},

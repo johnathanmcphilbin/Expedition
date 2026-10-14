@@ -18,15 +18,26 @@ import { connectionStatus, fetchProjectTimes, formatHours } from '$lib/server/ha
 import { syncHackClubSubmissions } from '$lib/server/airtable';
 import { listOwnQueued, countQueuePending, hackatimeNames } from '$lib/server/queue';
 import { listOwnCheckpoints, unlockedCount } from '$lib/server/checkpoints';
-import { drops, TRAVEL_CAP_HOURS, TRAVEL_RATE } from '$lib/data';
+import { drops, TRAVEL_CAP_HOURS, TRAVEL_RATE, hoursToQualify, money } from '$lib/data';
+import { getOwnClaim, submitClaim, type QualificationClaim } from '$lib/server/qualification';
+import type { TripEstimate } from '$lib/travel-estimates';
+
+/**
+ * Approved hours they need: from a confirmed qualification claim (their real
+ * trip cost) if they have one, else the estimate, else the 40h maximum.
+ */
+function targetHours(est: TripEstimate | null, claim: QualificationClaim | null): number {
+	if (claim?.status === 'approved') return hoursToQualify(claim.trip_cost_usd);
+	return est ? est.hoursToQualify : TRAVEL_CAP_HOURS;
+}
 import { getOwnGrantRequest, requestGrant, withdrawGrant } from '$lib/server/grants';
-import { notifyGrantRequest, notifyTravelBanked } from '$lib/server/notify';
+import { notifyGrantRequest, notifyTravelBanked, notifyQualificationClaim } from '$lib/server/notify';
 import { myReferrals } from '$lib/server/referrals';
 import { getOwnOrigin, recordOrigin } from '$lib/server/origins';
 import { estimateTrip } from '$lib/travel-estimates';
 import { countryName } from '$lib/server/geo';
 import { getOwnFlight, confirmBooking } from '$lib/server/flights';
-import { text, hours, oneOf, ValidationError } from '$lib/server/validate';
+import { text, hours, oneOf, url, ValidationError } from '$lib/server/validate';
 import type { TravelBucket } from '$lib/server/database.types';
 
 const BUCKETS = ['visa', 'accommodation', 'flights'] as const satisfies readonly TravelBucket[];
@@ -70,7 +81,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			getTravelBuckets(user.id),
 			listOwnQueued(user.id)
 		]);
-	const [ownCheckpoints, flight, origin, grant, referrals] = await Promise.all([
+	const [ownCheckpoints, flight, origin, grant, referrals, claim] = await Promise.all([
 		listOwnCheckpoints(user.id),
 		getOwnFlight(user.id),
 		getOwnOrigin(user.id),
@@ -78,14 +89,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		myReferrals(user.id).catch((e) => {
 			console.error('myReferrals', e);
 			return null;
-		})
+		}),
+		getOwnClaim(user.id).catch(() => null)
 	]);
 	// their trip: estimated cost from their home airport, and how far they are from qualifying
 	const approvedHours = Number(progress.hours_earned);
 	const tripEstimate = origin ? estimateTrip(origin) : null;
-	const target = tripEstimate ? tripEstimate.hoursToQualify : TRAVEL_CAP_HOURS;
+	const target = targetHours(tripEstimate, claim);
 	const trip = {
 		estimate: tripEstimate,
+		claim,
 		country: origin ? countryName(origin.country_code) : null,
 		approved: approvedHours,
 		target,
@@ -286,7 +299,7 @@ export const actions: Actions = {
 			const note = text(form.get('note'), 'Note', { max: 1000 });
 			const [progress, balance, origin] = await Promise.all([getProgress(user.id), getBalance(user.id), getOwnOrigin(user.id)]);
 			const est = origin ? estimateTrip(origin) : null;
-			const needed = est ? est.hoursToQualify : TRAVEL_CAP_HOURS;
+			const needed = targetHours(est, await getOwnClaim(user.id).catch(() => null));
 			const approved = Number(progress.hours_earned);
 			if (approved < needed) return fail(400, { grantMessage: `You need ${needed}h approved to qualify. You have ${approved}h.` });
 			const banked = Number(balance.hours_travel);
@@ -319,6 +332,35 @@ export const actions: Actions = {
 		const user = requireUser(locals, '/dashboard');
 		await withdrawGrant(user.id);
 		return { grantWithdrawn: true };
+	},
+
+	/** "My approved hours cover half my real trip cost": checked here, then an organiser confirms. */
+	claimQualification: async ({ request, locals }) => {
+		const user = requireUser(locals, '/dashboard');
+		const form = await request.formData();
+		try {
+			const cost = Number(form.get('trip_cost'));
+			if (!Number.isFinite(cost) || cost < 1 || cost > 20000) {
+				return fail(400, { claimMessage: 'Enter what your trip actually costs, in dollars.' });
+			}
+			const tripCost = Math.round(cost);
+			const flightLink = url(form.get('flight_link'), 'Flight link');
+			const note = text(form.get('note'), 'Note', { max: 1000 });
+			const approved = Number((await getProgress(user.id)).hours_earned);
+			const needed = hoursToQualify(tripCost);
+			if (approved < needed) {
+				return fail(400, {
+					claimMessage: `${approved} approved hours is ${money(approved * TRAVEL_RATE)}, but half of ${money(tripCost)} is ${money(tripCost / 2)}. You need ${needed}h.`
+				});
+			}
+			const ok = await submitClaim(user.id, { tripCostUsd: tripCost, flightLink, approvedHours: approved, note });
+			if (!ok) return fail(409, { claimMessage: "You've already claimed. An organiser will check it." });
+			await notifyQualificationClaim({ name: user.display_name, approvedHours: approved, tripCostUsd: tripCost, flightLink, note }).catch(() => {});
+			return { claimSent: true };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { claimMessage: e.message });
+			throw e;
+		}
 	},
 
 	/** Set their home airport from a city they type (only the airport is kept). */

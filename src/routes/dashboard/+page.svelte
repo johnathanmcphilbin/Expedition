@@ -26,6 +26,10 @@
 		}
 	}
 	const t = $derived(data.trip);
+	// qualification claim: their hours against half the trip cost they enter
+	let claimCost = $state<number | string>('');
+	const claimCostNum = $derived(Number(claimCost) || 0);
+	const claimCovers = $derived(claimCostNum > 0 && data.trip.approved * TRAVEL_RATE >= claimCostNum / 2);
 	const pct = $derived(Math.min(100, (data.trip.approved / (data.trip.target || 1)) * 100));
 	const fmtDublin = (iso: string) =>
 		new Date(iso).toLocaleString('en-IE', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Dublin' });
@@ -299,6 +303,38 @@
 					</div>
 					{/if}
 				</div>
+
+				{#if t.estimate?.flight !== 0 && (t.remaining > 0 || t.claim)}
+					<div class="claim">
+						{#if t.claim?.status === 'requested'}
+							<p><strong>Qualification claim sent ✓</strong> You said your trip costs {money(t.claim.trip_cost_usd)}. An organiser will check it.</p>
+						{:else if t.claim?.status === 'approved'}
+							<p><strong>Qualified on your {money(t.claim.trip_cost_usd)} trip ✓</strong></p>
+						{:else}
+							{#if t.claim?.status === 'declined'}
+								<p class="grant-declined">Your claim wasn't approved{t.claim.admin_note ? `: ${t.claim.admin_note}` : '.'} You can claim again.</p>
+							{/if}
+							<details open={!!claimCost}>
+								<summary>Found a cheaper trip? Claim qualification</summary>
+								<form method="POST" action="?/claimQualification" use:enhance={() => async ({ update }) => update({ reset: false })} class="claim-form">
+									<label>What your trip actually costs ($)
+										<input name="trip_cost" type="number" min="1" max="20000" step="1" required bind:value={claimCost} placeholder="e.g. 420" />
+									</label>
+									<label>Link to that flight <input name="flight_link" type="url" maxlength="2000" placeholder="https://www.skyscanner.ie/…" /></label>
+									<textarea name="note" rows="2" maxlength="1000" placeholder="Anything we should know? (optional)"></textarea>
+									{#if claimCostNum > 0}
+										<p class="claim-calc" class:ok={claimCovers}>
+											I've done {t.approved} approved hours = <strong>{money(t.approved * TRAVEL_RATE)}</strong>,
+											{claimCovers ? 'which covers' : "but that's less than"} half of my {money(claimCostNum)} trip ({money(claimCostNum / 2)}).
+										</p>
+									{/if}
+									<button class="btn" type="submit" disabled={!claimCovers}>Claim qualification</button>
+								</form>
+								{#if form && 'claimMessage' in form && form.claimMessage}<p class="hint error">{form.claimMessage}</p>{/if}
+							</details>
+						{/if}
+					</div>
+				{/if}
 
 				{#if t.remaining === 0 && t.estimate?.flight !== 0}
 					<div class="grant">
@@ -777,6 +813,49 @@
 	}
 	.qualified .trip-bar span {
 		background: #2f9e57;
+	}
+	.claim {
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--rule);
+	}
+	.claim summary {
+		cursor: pointer;
+		font-weight: 700;
+		color: var(--slate);
+	}
+	.claim-form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		align-items: flex-start;
+		margin-top: 0.7rem;
+		max-width: 520px;
+	}
+	.claim-form label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		width: 100%;
+		font-size: 0.85rem;
+		font-weight: 700;
+		color: var(--slate);
+	}
+	.claim-form input,
+	.claim-form textarea {
+		width: 100%;
+		padding: 0.5rem 0.6rem;
+		border: 2px solid var(--rule-strong);
+		font: inherit;
+	}
+	.claim-calc {
+		padding: 0.5rem 0.7rem;
+		background: #fff4e5;
+		color: #7a3a00;
+	}
+	.claim-calc.ok {
+		background: #eef8f1;
+		color: #1f5a33;
 	}
 	.grant {
 		margin-top: 1rem;
