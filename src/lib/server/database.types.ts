@@ -354,6 +354,15 @@ export interface Database {
 			review_payouts: Table<ReviewPayoutRow>;
 			travel_grant_requests: Table<TravelGrantRequestRow>;
 			referral_config: Table<AnyRow>;
+			travel_payouts: Table<{
+				id: string;
+				user_id: string;
+				bucket: 'visa' | 'flights' | 'accommodation';
+				amount_usd: number;
+				note: string | null;
+				paid_by: string | null;
+				paid_at: string;
+			}>;
 			flight_quotes: Table<{
 				airport: string;
 				destination: string | null;

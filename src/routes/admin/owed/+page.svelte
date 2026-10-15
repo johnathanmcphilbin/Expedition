@@ -1,8 +1,10 @@
 <script lang="ts">
 	import '$lib/styles/app.css';
-	import type { PageData } from './$types';
+	import { enhance } from '$app/forms';
+	import type { PageData, ActionData } from './$types';
 
-	let { data }: { data: PageData } = $props();
+	let { data, form }: { data: PageData; form: ActionData } = $props();
+	let paying = $state<string | null>(null);
 	const usd = (n: number) => `$${n.toFixed(2)}`;
 	const STAGE: Record<string, string> = { approved: 'Grant approved', requested: 'Grant requested', banked: 'Banked, not requested' };
 </script>
@@ -14,15 +16,22 @@
 		<div class="app-head">
 			<div>
 				<h1 class="app-title">What you owe</h1>
-				<p class="hint lead">Travel stipends are what's banked in each travel fund, at $8 an hour, split by what it's for.</p>
+				<p class="hint lead">Everyone who has banked hours for travel, at $8 an hour, split by what it's for. Plus reviewer cash and shop items to send.</p>
 			</div>
 		</div>
 
+		{#if form && 'message' in form && form.message}<p class="error-box">{form.message}</p>{/if}
+		{#if form && 'done' in form && form.done}<p class="notice">{form.done}</p>{/if}
+
 		<section class="totals">
-			<div><span class="n">{usd(data.committedUsd)}</span><span class="k">owed now: approved grants, reviewer cash, shop to send</span></div>
-			<div><span class="n">{usd(data.stages.requested.total)}</span><span class="k">grants waiting on you ({data.stages.requested.people})</span></div>
-			<div><span class="n">{usd(data.stages.banked.total)}</span><span class="k">banked, not requested yet ({data.stages.banked.people})</span></div>
-			<div><span class="n">{usd(data.worstCaseUsd)}</span><span class="k">if every banked fund is approved</span></div>
+			<div><span class="n">{usd(data.totalUsd)}</span><span class="k">total you still owe</span></div>
+			<div><span class="n">{usd(data.paidTotal)}</span><span class="k">travel already paid</span></div>
+			<div><span class="n">{usd(data.all.total)}</span><span class="k">travel: {data.people.length} {data.people.length === 1 ? 'person has' : 'people have'} banked hours</span></div>
+			<div><span class="n">{usd(data.all.visa)}</span><span class="k">for visas</span></div>
+			<div><span class="n">{usd(data.all.flights)}</span><span class="k">for flights</span></div>
+			<div><span class="n">{usd(data.all.accommodation)}</span><span class="k">for accommodation</span></div>
+			<div><span class="n">{usd(data.reviewersUsd)}</span><span class="k">reviewer cash</span></div>
+			<div><span class="n">{usd(data.shop.usd)}</span><span class="k">shop items to send</span></div>
 		</section>
 
 		<section class="block">
@@ -48,7 +57,7 @@
 			{#if data.people.length}
 				<div class="table-wrap">
 					<table class="grid">
-						<thead><tr><th>Person</th><th>Status</th><th>Visa</th><th>Flights</th><th>Accommodation</th><th>Total</th><th>Their flight</th></tr></thead>
+						<thead><tr><th>Person</th><th>Status</th><th>Visa</th><th>Flights</th><th>Accommodation</th><th>Still owed</th><th>Paid</th><th>Their flight</th><th></th></tr></thead>
 						<tbody>
 							{#each data.people as p (p.id)}
 								<tr>
@@ -58,11 +67,34 @@
 									<td>{usd(p.flights)}</td>
 									<td>{usd(p.accommodation)}</td>
 									<td><strong>{usd(p.total)}</strong></td>
+									<td>{p.paid ? usd(p.paid) : '—'}</td>
 									<td>
 										{#if p.flightPrice !== null}
 											{usd(p.flightPrice)}
 											{#if p.flights < p.flightPrice}<span class="sub short">they cover {usd(p.flightPrice - p.flights)}</span>{/if}
 										{:else}<span class="sub">not set</span>{/if}
+									</td>
+									<td class="act">
+										{#if p.total > 0}
+											{#if paying === p.id}
+												<form method="POST" action="?/payTravel" use:enhance={() => async ({ update }) => { await update(); paying = null; }} class="pay-form">
+													<input type="hidden" name="user_id" value={p.id} />
+													<select name="bucket">
+														<option value="all">Everything ({usd(p.total)})</option>
+														{#if p.visa}<option value="visa">Visa ({usd(p.visa)})</option>{/if}
+														{#if p.flights}<option value="flights">Flights ({usd(p.flights)})</option>{/if}
+														{#if p.accommodation}<option value="accommodation">Accommodation ({usd(p.accommodation)})</option>{/if}
+													</select>
+													<input name="note" maxlength="500" placeholder="Note (e.g. how you paid)" />
+													<button class="btn" type="submit">Mark paid</button>
+													<button class="text-btn" type="button" onclick={() => (paying = null)}>Cancel</button>
+												</form>
+											{:else}
+												<button class="text-btn" type="button" onclick={() => (paying = p.id)}>Mark paid</button>
+											{/if}
+										{:else}
+											<span class="paid-ok">Paid ✓</span>
+										{/if}
 									</td>
 								</tr>
 							{/each}
@@ -78,9 +110,22 @@
 			<div>
 				<h2 class="section-label">Reviewer cash</h2>
 				{#if data.reviewers.length}
-					<ul class="list">{#each data.reviewers as r (r.name)}<li><span>{r.name}</span><strong>{usd(r.owedUsd)}</strong></li>{/each}</ul>
+					<ul class="list">
+						{#each data.reviewers as r (r.id)}
+							<li>
+								<span>{r.name}</span>
+								<span class="rv">
+									<strong>{usd(r.owedUsd)}</strong>
+									<form method="POST" action="?/payReviewer" use:enhance>
+										<input type="hidden" name="user_id" value={r.id} />
+										<button class="text-btn" type="submit">Mark paid</button>
+									</form>
+								</span>
+							</li>
+						{/each}
+					</ul>
 				{:else}<p class="empty">Nothing owed.</p>{/if}
-				<p class="sub"><a href="/admin">Mark it paid on the admin page →</a></p>
+
 			</div>
 			<div>
 				<h2 class="section-label">Shop items to send</h2>
@@ -188,6 +233,36 @@
 	}
 	.st-banked {
 		color: var(--muted);
+	}
+	.act {
+		text-align: left;
+	}
+	.pay-form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		align-items: flex-start;
+		min-width: 220px;
+	}
+	.pay-form select,
+	.pay-form input {
+		width: 100%;
+		padding: 0.35rem 0.45rem;
+		border: 2px solid var(--rule-strong);
+		font: inherit;
+		font-size: 0.85rem;
+	}
+	.paid-ok {
+		color: #2f7a46;
+		font-weight: 700;
+	}
+	.rv {
+		display: inline-flex;
+		gap: 0.6rem;
+		align-items: center;
+	}
+	.notice {
+		margin-bottom: 1rem;
 	}
 	.short {
 		color: #a34a00;
