@@ -1,5 +1,6 @@
 import { listOrigins, backfillOrigins } from '$lib/server/origins';
 import { reviewerPay, markReviewerPaid } from '$lib/server/payouts';
+import { programBudget } from '$lib/server/budget';
 import { logAdminAction } from '$lib/server/referrals';
 import { estimateTrip } from '$lib/travel-estimates';
 import { TRAVEL_CAP_HOURS, hoursToQualify } from '$lib/data';
@@ -134,6 +135,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return {
 		reviewerPay: await reviewerPay(),
+		budget: await programBudget(),
 		users,
 		builders,
 		pendingReviews: pendingOld + pendingNew,

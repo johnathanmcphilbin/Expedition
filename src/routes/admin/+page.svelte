@@ -37,6 +37,7 @@
 				</a>
 				<a class="btn btn-outline" href="/admin/arrivals">Arrivals</a>
 				<a class="btn btn-outline" href="/admin/referrals">Referrals</a>
+				<a class="btn btn-outline" href="/admin/owed">What you owe</a>
 				<a class="btn btn-outline" href="/admin/projects">Projects</a>
 				<a class="btn btn-outline" href="/admin/checkpoints">
 					Shared checkpoints{data.sharedWaiting ? ` (${data.sharedWaiting})` : ''}
@@ -348,6 +349,30 @@
 			{:else}
 				<p class="an-sub">No home airports yet. Press "Find missing airports" to work them out from submissions.</p>
 			{/if}
+		</section>
+
+		<section class="block pay-block">
+			<div class="b-head"><p class="section-label">Budget</p></div>
+			<div class="table-wrap budget-wrap">
+				<table class="builders budget">
+					<thead><tr><th></th><th>Hours</th><th>Given out</th><th>Kept</th></tr></thead>
+					<tbody>
+						<tr><td>Approved build hours × $8.50</td><td>{data.budget.approvedHours}h</td><td></td><td><strong>${data.budget.grossUsd.toFixed(2)}</strong> budget</td></tr>
+						<tr><td>Spent in the shop <span class="b-sub">(item value, ~$5/h)</span></td><td>{data.budget.shop.hours}h</td><td>${data.budget.shop.usd.toFixed(2)}</td><td>${data.budget.shop.keptUsd.toFixed(2)}</td></tr>
+						<tr><td>Everything else, for travel <span class="b-sub">($8/h)</span></td><td>{data.budget.travel.hours}h</td><td>${data.budget.travel.usd.toFixed(2)}</td><td>${data.budget.travel.keptUsd.toFixed(2)}</td></tr>
+						<tr><td>Reviewer pay</td><td></td><td>${data.budget.reviewerUsd.toFixed(2)}</td><td>−${data.budget.reviewerUsd.toFixed(2)}</td></tr>
+						<tr><td>Referral rewards</td><td></td><td>${data.budget.referralUsd.toFixed(2)}</td><td>−${data.budget.referralUsd.toFixed(2)}</td></tr>
+					</tbody>
+					<tfoot>
+						<tr class="pay-total">
+							<td>Total</td><td></td>
+							<td>${data.budget.givenUsd.toFixed(2)} <span class="b-sub">{data.budget.givenPct}% given out</span></td>
+							<td class:neg={data.budget.keptUsd < 0}><strong>${data.budget.keptUsd.toFixed(2)}</strong> <span class="b-sub">{data.budget.keptPct}% kept</span></td>
+						</tr>
+					</tfoot>
+				</table>
+			</div>
+
 		</section>
 
 		<section class="block pay-block">
@@ -761,6 +786,17 @@
 	}
 	.pay-note {
 		margin-top: 0.6rem;
+	}
+	.budget-wrap {
+		max-width: 820px;
+	}
+	.budget td:nth-child(n + 2),
+	.budget th:nth-child(n + 2) {
+		text-align: right;
+		white-space: nowrap;
+	}
+	.budget td.neg strong {
+		color: #9b1c1c;
 	}
 	.pay-total td {
 		border-top: 2px solid var(--navy);

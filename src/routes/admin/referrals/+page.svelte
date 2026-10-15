@@ -46,7 +46,7 @@
 				<tbody>
 					<tr><th>Approved build hours</th><td>{data.budget.approvedHours}h</td></tr>
 					<tr><th>Gross program budget ({usd(data.config.budget_cents_per_hour)}/h)</th><td>{usd(data.budget.grossCents)}</td></tr>
-					<tr><th>Participant rewards ({usd(data.config.hour_value_cents)}/h)</th><td>−{usd(data.budget.participantCents)}</td></tr>
+					<tr><th>Participant rewards <span class="muted">(shop at item value, the rest as travel at {usd(data.config.hour_value_cents)}/h)</span></th><td>−{usd(data.budget.participantCents)}</td></tr>
 					<tr><th>Reviewer pay</th><td>−{usd(data.budget.reviewerCents)}</td></tr>
 					<tr><th>Referral rewards <span class="muted">({data.budget.referralPctOfBudget}% of budget)</span></th><td>−{usd(data.budget.referralCents)}</td></tr>
 					<tr class="total" class:neg={data.budget.remainingCents < 0}><th>Remaining</th><td>{usd(data.budget.remainingCents)}</td></tr>

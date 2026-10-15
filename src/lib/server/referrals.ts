@@ -5,6 +5,7 @@ import { config } from './env';
 import { env } from '$env/dynamic/private';
 import type { UserRow } from './database.types';
 import { isCode, readRef, signRef, chooseRef, samePerson } from '$lib/referrals/core';
+import { programBudget } from './budget';
 
 /**
  * Referrals: /join?ref=CODE remembers the click (first touch, 30 days), the
@@ -252,21 +253,16 @@ export async function referralAdmin() {
 		allRewards
 	);
 
-	// ---- budget: $8.50 per approved hour, against what's been promised out of it
-	const hours = (approvedHours.data ?? []).filter((r) => real.has(r.user_id)).reduce((t, r) => t + Number(r.amount), 0);
-	const reviewPayHours = (reviewPay.data ?? []).filter((r) => real.has(r.reviewer_id)).reduce((t, r) => t + Number(r.amount ?? 0), 0);
-	const gross = Math.round(hours * cfg.budget_cents_per_hour);
-	const participants = Math.round(hours * cfg.hour_value_cents);
-	const reviewers = Math.round(reviewPayHours * cfg.hour_value_cents);
-	const referrals = totals.creditCents;
+	// ---- budget: same calculation as the admin page (shop at item value, the rest as travel)
+	const b = await programBudget();
 	const budget = {
-		approvedHours: Math.round(hours * 100) / 100,
-		grossCents: gross,
-		participantCents: participants,
-		reviewerCents: reviewers,
-		referralCents: referrals,
-		remainingCents: gross - participants - reviewers - referrals,
-		referralPctOfBudget: gross ? Math.round((referrals / gross) * 1000) / 10 : 0
+		approvedHours: b.approvedHours,
+		grossCents: Math.round(b.grossUsd * 100),
+		participantCents: Math.round((b.shop.usd + b.travel.usd) * 100),
+		reviewerCents: Math.round(b.reviewerUsd * 100),
+		referralCents: Math.round(b.referralUsd * 100),
+		remainingCents: Math.round(b.keptUsd * 100),
+		referralPctOfBudget: b.grossUsd ? Math.round((b.referralUsd / b.grossUsd) * 1000) / 10 : 0
 	};
 
 	// ---- per referrer
