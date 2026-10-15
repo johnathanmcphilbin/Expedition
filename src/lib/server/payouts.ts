@@ -82,18 +82,21 @@ export async function reviewEarnings(reviewerId: string): Promise<{ reviews: num
 
 /** What each reviewer has earned, how it was paid, and the cash still owed. */
 export async function reviewerPay() {
-	const [{ data: staff }, { data: rows }, { data: approvals }] = await Promise.all([
+	const [{ data: staff }, { data: rows }, { data: approvals }, { data: testAccounts }] = await Promise.all([
 		db().from('users').select('id, display_name, role, review_pay').in('role', ['reviewer', 'admin']),
 		db().from('review_payouts').select('reviewer_id, amount, paid_as, cash_paid_at'),
 		// every approval (both review paths) lands here with who approved it
-		db().from('submission_reviews').select('reviewer_id, approved_hours').eq('status', 'approved').not('reviewer_id', 'is', null)
+		db().from('submission_reviews').select('reviewer_id, approved_hours').eq('status', 'approved').not('reviewer_id', 'is', null),
+		db().from('users').select('id').not('hackclub_id', 'like', 'ident!%')
 	]);
+	const test = new Set((testAccounts ?? []).map((u) => u.id));
 	const ids = new Set([
 		...(staff ?? []).map((s) => s.id),
 		...(rows ?? []).map((r) => r.reviewer_id),
 		...(approvals ?? []).map((a) => a.reviewer_id as string)
 	]);
 	return [...ids]
+		.filter((id) => !test.has(id))
 		.map((id) => {
 			const who = (staff ?? []).find((s) => s.id === id);
 			const mine = (rows ?? []).filter((r) => r.reviewer_id === id);

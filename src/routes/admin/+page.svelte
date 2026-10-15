@@ -259,7 +259,7 @@
 						</div>
 						{#if an.speed.reviewers.length}
 							<p class="an-sub">Decisions by reviewer:
-								{#each an.speed.reviewers as r, i (r.name)}<strong>{r.name}</strong> {r.n}{i < an.speed.reviewers.length - 1 ? ' · ' : ''}{/each}
+								{#each an.speed.reviewers as r, i (r.id)}<strong>{r.name}</strong> {r.n}{i < an.speed.reviewers.length - 1 ? ' · ' : ''}{/each}
 							</p>
 						{/if}
 					</section>

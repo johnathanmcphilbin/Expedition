@@ -1,4 +1,6 @@
 import { db } from './supabase';
+import { reviewerName } from './guards';
+import type { UserRow } from './database.types';
 import { getVisits } from './plausible';
 import { fetchProjectTimes, fetchHackatimeProfile } from './hackatime';
 
@@ -256,7 +258,7 @@ function normaliseCountry(raw: string | null): string | null {
  * counting a sent queued submission twice.
  */
 export async function getReviewAnalytics() {
-	const [users, connections, projects, hcSubs, queue, reviews, progress, reviewers, hcCountries, queueCountries] = await Promise.all([
+	const [users, connections, projects, hcSubs, queue, reviews, progress, hcCountries, queueCountries] = await Promise.all([
 		db().from('users').select('id, created_at').like('hackclub_id', 'ident!%'),
 		db().from('hackatime_connections').select('user_id'),
 		db().from('expedition_projects').select('user_id, created_at'),
@@ -264,7 +266,6 @@ export async function getReviewAnalytics() {
 		db().from('submission_queue').select('id, user_id, hardware, status, created_at, reviewed_at, reviewer_id, airtable_record_id'),
 		db().from('submission_reviews').select('airtable_record_id, status, approved_hours, submitted_hours, reviewed_at, reviewer_id'),
 		db().from('user_expedition_progress').select('user_id, hours_earned').gt('hours_earned', 0),
-		db().from('users').select('id, display_name').eq('role', 'admin'),
 		// separate queries so a missing country column can't take the rest down
 		db().from('hackclub_submissions').select('user_id, country, airtable_created_at').not('country', 'is', null),
 		db().from('submission_queue').select('user_id, country, created_at').not('country', 'is', null)
@@ -357,7 +358,9 @@ export async function getReviewAnalytics() {
 	const turnaround = decided.map((s) => (new Date(s.decidedAt!).getTime() - new Date(s.submittedAt).getTime()) / HOUR_MS).filter((h) => h >= 0);
 	const oldest = waiting.reduce<string | null>((o, s) => (!o || s.submittedAt < o ? s.submittedAt : o), null);
 	const week = now - 7 * 24 * HOUR_MS;
-	const names = new Map((reviewers.data ?? []).map((u) => [u.id, u.display_name ?? 'Admin']));
+	const deciders = [...new Set(decided.map((d) => d.reviewer).filter((x): x is string => !!x))];
+	const { data: deciderRows } = deciders.length ? await db().from('users').select('*').in('id', deciders) : { data: [] };
+	const names = new Map(((deciderRows ?? []) as UserRow[]).map((u) => [u.id, reviewerName(u)]));
 	const perReviewer = new Map<string, number>();
 	for (const s of decided) if (s.reviewer) perReviewer.set(s.reviewer, (perReviewer.get(s.reviewer) ?? 0) + 1);
 
@@ -433,7 +436,7 @@ export async function getReviewAnalytics() {
 			averageHours: turnaround.length ? round1(turnaround.reduce((a, b) => a + b, 0) / turnaround.length) : null,
 			submittedThisWeek: subs.filter((s) => new Date(s.submittedAt).getTime() >= week).length,
 			decidedThisWeek: decided.filter((s) => new Date(s.decidedAt!).getTime() >= week).length,
-			reviewers: [...perReviewer.entries()].map(([id, n]) => ({ name: names.get(id) ?? 'Former admin', n })).sort((a, b) => b.n - a.n)
+			reviewers: [...perReviewer.entries()].map(([id, n]) => ({ id, name: names.get(id) ?? 'Former reviewer', n })).sort((a, b) => b.n - a.n)
 		},
 		hours: {
 			total: subs.length,
