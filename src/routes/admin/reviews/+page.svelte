@@ -231,7 +231,7 @@
 
 		{#if !data.isAdmin}
 			<p class="shadow-note">Hi {data.reviewerName}! Your decisions are signed "Reviewed by {data.reviewerName}" in the notes and in Hack Club's Additional Justification. Your own projects don't show up here.
-				{#if data.earnings}You earn ${data.earnings.per.toFixed(2)} in hours for each submission you decide: <strong>{data.earnings.reviews} so far (${data.earnings.usd.toFixed(2)})</strong>.{/if}</p>
+				{#if data.earnings}You earn ${data.earnings.per.toFixed(2)}{data.earnings.cash ? ', paid by an organiser,' : ' in hours'} for each submission you decide: <strong>{data.earnings.reviews} so far (${data.earnings.usd.toFixed(2)})</strong>.{/if}</p>
 		{/if}
 
 		<nav class="tabs" aria-label="Filter by status">

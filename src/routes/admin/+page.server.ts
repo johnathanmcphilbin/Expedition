@@ -1,4 +1,6 @@
 import { listOrigins, backfillOrigins } from '$lib/server/origins';
+import { reviewerPay, markReviewerPaid } from '$lib/server/payouts';
+import { logAdminAction } from '$lib/server/referrals';
 import { estimateTrip } from '$lib/travel-estimates';
 import { TRAVEL_CAP_HOURS, hoursToQualify } from '$lib/data';
 import { countryName } from '$lib/server/geo';
@@ -131,6 +133,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.sort((a, b) => a.remaining - b.remaining || b.approved - a.approved);
 
 	return {
+		reviewerPay: await reviewerPay(),
 		users,
 		builders,
 		pendingReviews: pendingOld + pendingNew,
@@ -153,6 +156,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
+	/** Record that a cash-paid reviewer has been paid everything they're owed. */
+	payReviewer: async ({ request, locals }) => {
+		const admin = requireAdmin(locals);
+		const form = await request.formData();
+		const id = String(form.get('user_id') ?? '');
+		if (!/^[0-9a-f-]{36}$/.test(id)) return fail(400, { message: 'Invalid reviewer.' });
+		const n = await markReviewerPaid(id);
+		await logAdminAction(admin.id, 'reviewer_paid_cash', id, `${n} review${n === 1 ? '' : 's'}`);
+		return { paidReviews: n };
+	},
+
 	/** Work out nearest airports for anyone who's submitted and doesn't have one. */
 	findAirports: async ({ request, locals }) => {
 		requireAdmin(locals);

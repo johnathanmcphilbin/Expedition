@@ -41,6 +41,8 @@ export type UserRow = {
 	role: UserRole;
 	/** set once an organiser starts arranging this person's travel — freezes their fund */
 	travel_locked_at: string | null;
+	/** how review pay reaches them: hours on their account, or cash from an organiser */
+	review_pay?: 'hours' | 'cash';
 	created_at: string;
 	updated_at: string;
 }
@@ -220,6 +222,8 @@ export type ReviewPayoutRow = {
 	reviewer_id: string;
 	amount: number | null;
 	paid_at: string;
+	paid_as: 'hours' | 'cash';
+	cash_paid_at: string | null;
 }
 
 export type TravelGrantRequestRow = {

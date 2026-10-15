@@ -386,7 +386,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		isAdmin: viewer.role === 'admin',
 		airtableError: url.searchParams.get('airtable_error'),
 		reviewerName: reviewerName(viewer),
-		earnings: isReviewerOnly(viewer) ? { ...(await reviewEarnings(viewer.id)), per: REVIEW_PAY_USD } : null,
+		earnings: isReviewerOnly(viewer) ? { ...(await reviewEarnings(viewer.id)), per: REVIEW_PAY_USD, cash: viewer.review_pay === 'cash' } : null,
 		filter: validFilter,
 		counts,
 		search: q,

@@ -350,6 +350,58 @@
 			{/if}
 		</section>
 
+		<section class="block pay-block">
+			<div class="b-head"><p class="section-label">Reviewer pay</p></div>
+			{#if data.reviewerPay.length}
+				<div class="table-wrap">
+					<table class="builders">
+						<thead><tr><th>Reviewer</th><th>Hours approved</th><th>Budget generated</th><th>Paid in</th><th>Reviews paid</th><th>Credited as hours</th><th>Cash earned</th><th>You owe</th><th></th></tr></thead>
+						<tbody>
+							{#each data.reviewerPay as r (r.id)}
+								<tr>
+									<td><span class="b-name">{r.name}</span></td>
+									<td>{r.approvedHours}h</td>
+									<td>${r.budgetUsd.toFixed(2)}</td>
+									<td>{r.pay === 'cash' ? 'Cash' : 'Hours'}</td>
+									<td>{r.reviews}</td>
+									<td>{r.hours ? `${r.hours}h ($${r.hoursUsd.toFixed(2)})` : '—'}</td>
+									<td>{r.cashEarnedUsd ? `$${r.cashEarnedUsd.toFixed(2)}` : '—'}{#if r.cashPaidUsd}<span class="b-sub">${r.cashPaidUsd.toFixed(2)} paid</span>{/if}</td>
+									<td><strong class:owed={r.owedUsd > 0}>${r.owedUsd.toFixed(2)}</strong></td>
+									<td class="act">
+										{#if r.owedUsd > 0}
+											<form method="POST" action="?/payReviewer" use:enhance>
+												<input type="hidden" name="user_id" value={r.id} />
+												<button class="text-btn" type="submit">Mark ${r.owedUsd.toFixed(2)} paid</button>
+											</form>
+										{/if}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+						<tfoot>
+							<tr class="pay-total">
+								<td><span class="b-name">Total</span></td>
+								<td>{Math.round(data.reviewerPay.reduce((t, r) => t + r.approvedHours, 0) * 100) / 100}h</td>
+								<td><strong>${data.reviewerPay.reduce((t, r) => t + r.budgetUsd, 0).toFixed(2)}</strong></td>
+								<td></td>
+								<td>{data.reviewerPay.reduce((t, r) => t + r.reviews, 0)}</td>
+								<td>${data.reviewerPay.reduce((t, r) => t + r.hoursUsd, 0).toFixed(2)}</td>
+								<td>${data.reviewerPay.reduce((t, r) => t + r.cashEarnedUsd, 0).toFixed(2)}</td>
+								<td><strong>${data.reviewerPay.reduce((t, r) => t + r.owedUsd, 0).toFixed(2)}</strong></td>
+								<td></td>
+							</tr>
+						</tfoot>
+					</table>
+				</div>
+				<p class="b-sub pay-note">
+					Budget generated is the approved hours they signed off × $8.50. $1.50 per submission a non-admin reviewer decides. Hours reviewers get it as Expedition hours automatically; cash reviewers are owed it until you mark it paid.
+					Total owed: <strong>${data.reviewerPay.reduce((t, r) => t + r.owedUsd, 0).toFixed(2)}</strong>
+				</p>
+			{:else}
+				<p class="empty">No reviewers yet.</p>
+			{/if}
+		</section>
+
 		<section class="ledger">
 			<div class="b-head">
 				<p class="section-label">Progress to Galway</p>
@@ -703,6 +755,20 @@
 		.f-pct {
 			grid-column: 1 / -1;
 		}
+	}
+	.pay-block {
+		margin-bottom: 2.5rem;
+	}
+	.pay-note {
+		margin-top: 0.6rem;
+	}
+	.pay-total td {
+		border-top: 2px solid var(--navy);
+		font-weight: 700;
+		color: var(--navy);
+	}
+	strong.owed {
+		color: #a34a00;
 	}
 	.ledger {
 		margin-top: 1rem;
