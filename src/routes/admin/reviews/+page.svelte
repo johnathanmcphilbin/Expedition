@@ -7,6 +7,7 @@
 	import { enhance, deserialize } from '$app/forms';
 	import LapseVideos from '$lib/components/LapseVideos.svelte';
 	import ReviewHistory from '$lib/components/ReviewHistory.svelte';
+	import { safeUrl } from '$lib/safe-url';
 	import { invalidateAll } from '$app/navigation';
 	import CheckpointTimeline from '$lib/components/CheckpointTimeline.svelte';
 	import JustificationFields from '$lib/components/JustificationFields.svelte';
@@ -173,12 +174,14 @@
 				{#if data.selectedFlag.reason}<span>{data.selectedFlag.reason}</span>{/if}
 				<span class="hint">{new Date(data.selectedFlag.at).toLocaleDateString()}</span>
 			</p>
-			<form method="POST" action="?/flag" use:enhance={() => async ({ update }) => update({ reset: false })}>
-				<input type="hidden" name="kind" value={kind} />
-				<input type="hidden" name="key" value={key} />
-				<input type="hidden" name="on" value="no" />
-				<button class="text-btn" type="submit">Remove flag</button>
-			</form>
+			{#if data.isAdmin}
+				<form method="POST" action="?/flag" use:enhance={() => async ({ update }) => update({ reset: false })}>
+					<input type="hidden" name="kind" value={kind} />
+					<input type="hidden" name="key" value={key} />
+					<input type="hidden" name="on" value="no" />
+					<button class="text-btn" type="submit">Remove flag</button>
+				</form>
+			{/if}
 		{:else if flagging}
 			<form
 				method="POST"
@@ -280,9 +283,9 @@
 							</p>
 						</div>
 						<div class="links">
-							<a class="link-btn" href={r.code_url} target="_blank" rel="noopener noreferrer">Code ↗</a>
+							<a class="link-btn" href={safeUrl(r.code_url)} target="_blank" rel="noopener noreferrer">Code ↗</a>
 							{#if r.playable_url !== r.code_url}
-								<a class="link-btn" href={r.playable_url} target="_blank" rel="noopener noreferrer">Demo ↗</a>
+								<a class="link-btn" href={safeUrl(r.playable_url)} target="_blank" rel="noopener noreferrer">Demo ↗</a>
 							{/if}
 						</div>
 					</header>
@@ -521,8 +524,9 @@
 					{/if}
 
 					<div class="links">
-						{#if s.code_url}<a class="link-btn" href={s.code_url} target="_blank" rel="noopener noreferrer">Code ↗</a>{/if}
-						{#if s.playable_url}<a class="link-btn" href={s.playable_url} target="_blank" rel="noopener noreferrer">Demo ↗</a>{/if}
+						<!-- these come from Hack Club's Airtable, so only http(s) links are linked -->
+						{#if safeUrl(s.code_url)}<a class="link-btn" href={safeUrl(s.code_url)} target="_blank" rel="noopener noreferrer">Code ↗</a>{/if}
+						{#if safeUrl(s.playable_url)}<a class="link-btn" href={safeUrl(s.playable_url)} target="_blank" rel="noopener noreferrer">Demo ↗</a>{/if}
 						{#if s.github_username}<span class="link-plain">GitHub: {s.github_username}</span>{/if}
 					</div>
 

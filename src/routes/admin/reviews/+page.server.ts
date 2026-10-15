@@ -649,6 +649,17 @@ export const actions: Actions = {
 		try {
 			const kind = oneOf(form.get('kind'), ['hc', 'new'] as const, 'Kind');
 			const key = text(form.get('key'), 'Submission', { max: 64, required: true })!;
+			// whose work it is, so nobody flags (or clears a flag on) their own or a friend's
+			const owner =
+				kind === 'new'
+					? (await getQueued(key).catch(() => null))?.user_id
+					: (await getHackClubSubmission(key).catch(() => null))?.user_id;
+			if (owner && (owner === admin.id || (await referredBy(admin.id, owner)))) {
+				return fail(403, { message: "You can't flag your own project or someone you referred." });
+			}
+			if (form.get('on') !== 'yes' && admin.role !== 'admin') {
+				return fail(403, { message: 'Only an admin can remove a fraud flag.' });
+			}
 			if (form.get('on') === 'yes') {
 				const { error } = await db()
 					.from('review_flags')

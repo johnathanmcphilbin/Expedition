@@ -84,7 +84,16 @@ export async function handleJoin(cookies: Cookies, user: UserRow | null, code: s
 	if (!owner) return { valid: false, referrer: null, enrolled: !!user };
 	const name = ((owner as unknown as { users: { display_name: string | null } | null }).users?.display_name ?? '').split(' ')[0] || null;
 
-	await db().from('referral_events').insert({ code, type: 'click', visitor_hash: visitorHash(cookies) });
+	// one click per browser per code every 30 minutes, so reloading can't pad the count
+	const vh = visitorHash(cookies);
+	const { count: recent } = await db()
+		.from('referral_events')
+		.select('id', { count: 'exact', head: true })
+		.eq('code', code)
+		.eq('type', 'click')
+		.eq('visitor_hash', vh)
+		.gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString());
+	if (!recent) await db().from('referral_events').insert({ code, type: 'click', visitor_hash: vh });
 
 	// a disabled code or a paused program still counts the click, nothing more
 	if (!owner.active || !cfg.active) return { valid: false, referrer: name, enrolled: !!user };
