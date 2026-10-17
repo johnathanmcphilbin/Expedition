@@ -2,7 +2,7 @@
 	import '$lib/styles/app.css';
 	import Footer from '$lib/components/Footer.svelte';
 	import { enhance } from '$app/forms';
-	import { TRAVEL_RATE, TRAVEL_CAP_HOURS, money } from '$lib/data';
+	import { TRAVEL_RATE, TRAVEL_CAP_HOURS, VISA_CLAIM_HOURS, money } from '$lib/data';
 	import GrantAmount from '$lib/components/GrantAmount.svelte';
 	import { skyscannerUrl } from '$lib/travel-estimates';
 	import type { PageData, ActionData } from './$types';
@@ -375,7 +375,8 @@
 					</div>
 				{/if}
 
-				{#if t.remaining === 0 && t.estimate?.flight !== 0}
+				{#if (t.remaining === 0 || t.approved >= VISA_CLAIM_HOURS) && t.estimate?.flight !== 0}
+					{@const qualified = t.remaining === 0}
 					<div class="grant">
 						<p class="trip-k">Your travel grant</p>
 						{#if data.travelClaims.length}
@@ -396,10 +397,14 @@
 							</ul>
 						{/if}
 						{#if data.claimable}
-							{@const open = (['visa', 'flights', 'accommodation'] as const).filter((b) => data.claimable![b].free > 0)}
+							{@const open = (qualified ? (['visa', 'flights', 'accommodation'] as const) : (['visa'] as const)).filter((b) => data.claimable![b].free > 0)}
 							{#if open.length}
 								<form method="POST" action="?/claimTravel" use:enhance class="grant-form">
-									<p>You qualify! Claim what you've banked. Claimed hours can't be moved back, and you can add on more later.</p>
+									{#if qualified}
+										<p>You qualify! Claim what you've banked. Claimed hours can't be moved back, and you can add on more later.</p>
+									{:else}
+										<p>You can claim your visa money now, so you can apply in time. Flights and accommodation unlock at {t.target}h. Claimed hours can't be moved back.</p>
+									{/if}
 									<textarea name="note" rows="2" maxlength="1000" placeholder="Anything we should know? (optional)"></textarea>
 									<div class="claim-btns">
 										{#each open as b (b)}
@@ -410,6 +415,8 @@
 										{/each}
 									</div>
 								</form>
+							{:else if !qualified}
+								<p>You can claim visa money now. Bank hours into visa below, then claim them here. Flights and accommodation unlock at {t.target}h.</p>
 							{:else if !data.travelClaims.length}
 								<p>You qualify! Bank hours into your travel fund below, then claim them here.</p>
 							{:else}

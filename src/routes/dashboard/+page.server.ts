@@ -18,7 +18,7 @@ import { connectionStatus, fetchProjectTimes, formatHours } from '$lib/server/ha
 import { syncHackClubSubmissions } from '$lib/server/airtable';
 import { listOwnQueued, countQueuePending, hackatimeNames } from '$lib/server/queue';
 import { listOwnCheckpoints, unlockedCount } from '$lib/server/checkpoints';
-import { drops, TRAVEL_CAP_HOURS, TRAVEL_RATE, hoursToQualify, money } from '$lib/data';
+import { drops, TRAVEL_CAP_HOURS, TRAVEL_RATE, VISA_CLAIM_HOURS, hoursToQualify, money } from '$lib/data';
 import { getOwnClaim, submitClaim, type QualificationClaim } from '$lib/server/qualification';
 import type { TripEstimate } from '$lib/travel-estimates';
 
@@ -317,9 +317,11 @@ export const actions: Actions = {
 			const bucket = oneOf(form.get('bucket'), BUCKETS, 'What it goes toward');
 			const note = text(form.get('note'), 'Note', { max: 1000 });
 			const [progress, origin, qclaim] = await Promise.all([getProgress(user.id), getOwnOrigin(user.id), getOwnClaim(user.id).catch(() => null)]);
-			const needed = targetHours(origin ? estimateTrip(origin) : null, qclaim);
+			const target = targetHours(origin ? estimateTrip(origin) : null, qclaim);
+			// visa money can be claimed early, so they can apply in time
+			const needed = bucket === 'visa' ? Math.min(VISA_CLAIM_HOURS, target) : target;
 			const approved = Number(progress.hours_earned);
-			if (approved < needed) return fail(400, { grantMessage: `You need ${needed}h approved to qualify. You have ${approved}h.` });
+			if (approved < needed) return fail(400, { grantMessage: `You need ${needed}h approved to claim ${bucket === 'visa' ? 'visa money' : 'this'}. You have ${approved}h.` });
 			const before = (await listOwnTravelClaims(user.id)).some((c) => c.bucket === bucket && ['requested', 'approved', 'paid'].includes(c.status));
 			const claimRow = await createTravelClaim(user.id, bucket, note);
 			if (!claimRow) return fail(409, { grantMessage: `Nothing new banked for ${bucket} to claim. Bank more hours first.` });

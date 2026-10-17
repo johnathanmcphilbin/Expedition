@@ -131,7 +131,15 @@
 									<td>{usd(p.banked.visa)} / {usd(p.banked.flights)} / {usd(p.banked.accommodation)}</td>
 									<td>{p.owed ? usd(p.owed) : '—'}</td>
 									<td>{p.waiting ? usd(p.waiting) : '—'}</td>
-									<td>{p.unclaimed ? usd(p.unclaimed) : '—'}</td>
+									<td>
+										{#if p.unclaimed}
+											{usd(p.unclaimed)}
+											<form method="POST" action="?/claimFor" use:enhance={({ cancel }) => { if (!confirm(`Claim ${usd(p.unclaimed)} for ${p.name}? This skips the qualify check.`)) cancel(); }}>
+												<input type="hidden" name="user_id" value={p.id} />
+												<button class="text-btn" type="submit">Claim for them</button>
+											</form>
+										{:else}—{/if}
+									</td>
 									<td>{p.paid ? usd(p.paid) : '—'}</td>
 									<td>
 										{#if p.flightPrice !== null}

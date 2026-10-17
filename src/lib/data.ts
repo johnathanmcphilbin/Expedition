@@ -267,6 +267,9 @@ export const TRAVEL_RATE = 8;
 export const TRAVEL_QUALIFY_SHARE = 0.5;
 export const TRAVEL_CAP_HOURS = 40;
 
+/** Approved hours needed to claim visa money, ahead of qualifying for the whole trip. */
+export const VISA_CLAIM_HOURS = 10;
+
 /** Approved hours needed to qualify for a flight of this cost. */
 export const hoursToQualify = (flightCost: number) =>
 	Math.min(TRAVEL_CAP_HOURS, Math.ceil((flightCost * TRAVEL_QUALIFY_SHARE) / TRAVEL_RATE));

@@ -3,7 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin } from '$lib/server/guards';
 import { db } from '$lib/server/supabase';
 import { listAllTravelBuckets, listAllClaims } from '$lib/server/queries';
-import { listAllTravelClaims, decideTravelClaim, payTravelClaim, BUCKETS } from '$lib/server/travel-claims';
+import { listAllTravelClaims, decideTravelClaim, payTravelClaim, createTravelClaim, BUCKETS } from '$lib/server/travel-claims';
 import { reviewerPay, markReviewerPaid } from '$lib/server/payouts';
 import { logAdminAction } from '$lib/server/referrals';
 import { text, uuid, ValidationError } from '$lib/server/validate';
@@ -112,6 +112,31 @@ export const actions: Actions = {
 			if (!claim) return fail(409, { message: 'That claim has already been decided.' });
 			await logAdminAction(admin.id, approve ? 'travel_claim_approved' : 'travel_claim_declined', claim.user_id, `$${Number(claim.usd).toFixed(2)} (${claim.bucket})${note ? `: ${note}` : ''}`);
 			return { done: approve ? 'Claim approved.' : 'Claim declined.' };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { message: e.message });
+			throw e;
+		}
+	},
+
+	/**
+	 * Claim someone's unclaimed banked hours for them, every bucket, without
+	 * the qualify check. For when they can't (or couldn't) claim themselves.
+	 * The claims land as waiting, to approve and pay as usual.
+	 */
+	claimFor: async ({ request, locals }) => {
+		const admin = requireAdmin(locals);
+		const form = await request.formData();
+		try {
+			const userId = uuid(form.get('user_id')?.toString(), 'person');
+			const made = [];
+			for (const bucket of BUCKETS) {
+				const c = await createTravelClaim(userId, bucket, 'Claimed by an organiser');
+				if (c) made.push(c);
+			}
+			if (!made.length) return fail(409, { message: 'Nothing unclaimed for them.' });
+			const total = made.reduce((t, c) => t + Number(c.usd), 0);
+			await logAdminAction(admin.id, 'travel_claim_for', userId, made.map((c) => `$${Number(c.usd).toFixed(2)} (${c.bucket})`).join(', '));
+			return { done: `Claimed $${total.toFixed(2)} for them. Approve it under Travel claims.` };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { message: e.message });
 			throw e;
