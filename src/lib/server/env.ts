@@ -45,7 +45,12 @@ export const config = {
 		 * claims, returned under `profile`. Requesting them as scopes gets the
 		 * whole authorization rejected with `invalid_scope`.
 		 */
-		scope: 'openid profile'
+		get scope() {
+			// birthdate and address need the app to be "HQ official" in Hack Club
+			// Auth; asking for them before that fails every sign-in, so they're
+			// only requested once HCA_SCOPE says so (e.g. "openid profile birthdate address")
+			return env.HCA_SCOPE?.trim() || 'openid profile';
+		}
 	},
 
 	/** Hackatime — coding-time evidence only, never an awarder of hours. */

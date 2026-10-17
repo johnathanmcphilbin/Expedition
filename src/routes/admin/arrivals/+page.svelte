@@ -94,42 +94,34 @@
 			</section>
 		{/if}
 
-		<!-- ---------------- grant requests ---------------- -->
+		<!-- ---------------- travel claims ---------------- -->
 		<section class="block">
-			<h2 class="section-label">Travel grant requests</h2>
-			{#if data.grants.length}
+			<h2 class="section-label">Travel claims waiting</h2>
+			{#if data.travelClaims.length}
 				<ul class="grants">
-					{#each data.grants as g (g.user_id)}
-						<li class="g-{g.status}">
+					{#each data.travelClaims as g (g.id)}
+						<li class="g-requested">
 							<div class="g-main">
 								<span class="who">{g.owner?.display_name ?? 'Unnamed'}</span>
 								{#if g.owner?.email}<a class="sub" href="mailto:{g.owner.email}">{g.owner.email}</a>{/if}
-								<span class="sub">
-									Asked {new Date(g.requested_at).toLocaleDateString('en-IE')} · {g.approved_hours}h approved (needed {g.hours_needed}h)
-									· trip ~${g.est_travel_usd ?? '?'}{g.home_airport ? ` from ${g.home_airport}` : ''}
-								</span>
+								<span class="sub">Claimed {new Date(g.requested_at).toLocaleDateString('en-IE')} for {g.bucket}</span>
 								{#if g.note}<span class="g-note">“{g.note}”</span>{/if}
 							</div>
-							<div class="g-amount"><strong>${g.grantUsd}</strong><span class="sub">{g.hours_banked}h banked</span></div>
+							<div class="g-amount"><strong>${Number(g.usd).toFixed(2)}</strong><span class="sub">{g.hours}h</span></div>
 							<div class="g-act">
-								{#if g.status === 'requested'}
-									<form method="POST" action="?/grant" use:enhance class="g-form">
-										<input type="hidden" name="user_id" value={g.user_id} />
-										<input name="admin_note" maxlength="1000" placeholder="Note (needed to decline)" />
-										<span class="sub">Fund locked since they asked. Declining unlocks it.</span>
-										<button class="btn" type="submit" name="decision" value="approve">Approve</button>
-										<button class="text-btn danger" type="submit" name="decision" value="decline">Decline</button>
-									</form>
-								{:else}
-									<span class="status s-{g.status === 'approved' ? 'booked' : 'cancelled'}">{g.status === 'approved' ? 'Approved · fund locked' : 'Declined · fund unlocked'}</span>
-									{#if g.admin_note}<span class="sub">{g.admin_note}</span>{/if}
-								{/if}
+								<form method="POST" action="/admin/owed?/decideClaim" use:enhance class="g-form">
+									<input type="hidden" name="id" value={g.id} />
+									<input name="admin_note" maxlength="1000" placeholder="Note (needed to decline)" />
+									<button class="btn" type="submit" name="decision" value="approve">Approve</button>
+									<button class="text-btn danger" type="submit" name="decision" value="decline">Decline</button>
+								</form>
 							</div>
 						</li>
 					{/each}
 				</ul>
+				<p class="sub"><a href="/admin/owed">All claims and payments →</a></p>
 			{:else}
-				<p class="empty">No requests yet. People can ask once they qualify, from their dashboard.</p>
+				<p class="empty">Nothing waiting. People claim from their dashboard once they qualify. <a href="/admin/owed">All claims →</a></p>
 			{/if}
 		</section>
 

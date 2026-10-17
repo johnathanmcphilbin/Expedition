@@ -400,7 +400,7 @@
 						<p class="hint step-hint">Hack Club checks you're 13 to 18. It isn't shown to anyone else.</p>
 						<div class="field birthday">
 							<label class="sr-only" for="birthday">Birthday</label>
-							<input id="birthday" name="birthday" defaultValue={data.resubmit?.birthday ?? ''} type="date" required autocomplete="bday" />
+							<input id="birthday" name="birthday" defaultValue={data.resubmit?.birthday ?? data.defaults.birthday} type="date" required autocomplete="bday" />
 						</div>
 					</section>
 
@@ -410,28 +410,28 @@
 						<p class="hint step-hint">Only used to ship you what you claim. Your browser can fill this in.</p>
 						<div class="field">
 							<label for="address_line1">Address</label>
-							<input id="address_line1" name="address_line1" defaultValue={data.resubmit?.address_line1 ?? ''} type="text" required autocomplete="address-line1" />
+							<input id="address_line1" name="address_line1" defaultValue={data.resubmit?.address_line1 ?? data.defaults.addressLine1} type="text" required autocomplete="address-line1" />
 						</div>
 						<div class="field">
 							<label for="address_line2">Apartment, unit, etc. <span class="optional">optional</span></label>
-							<input id="address_line2" name="address_line2" defaultValue={data.resubmit?.address_line2 ?? ''} type="text" autocomplete="address-line2" />
+							<input id="address_line2" name="address_line2" defaultValue={data.resubmit?.address_line2 ?? data.defaults.addressLine2} type="text" autocomplete="address-line2" />
 						</div>
 						<div class="grid-2 tight">
 							<div class="field">
 								<label for="city">City</label>
-								<input id="city" name="city" defaultValue={data.resubmit?.city ?? ''} type="text" required autocomplete="address-level2" />
+								<input id="city" name="city" defaultValue={data.resubmit?.city ?? data.defaults.city} type="text" required autocomplete="address-level2" />
 							</div>
 							<div class="field">
 								<label for="state">State / province</label>
-								<input id="state" name="state" defaultValue={data.resubmit?.state ?? ''} type="text" required autocomplete="address-level1" />
+								<input id="state" name="state" defaultValue={data.resubmit?.state ?? data.defaults.state} type="text" required autocomplete="address-level1" />
 							</div>
 							<div class="field">
 								<label for="zip">Postal code</label>
-								<input id="zip" name="zip" defaultValue={data.resubmit?.zip ?? ''} type="text" required autocomplete="postal-code" />
+								<input id="zip" name="zip" defaultValue={data.resubmit?.zip ?? data.defaults.zip} type="text" required autocomplete="postal-code" />
 							</div>
 							<div class="field">
 								<label for="country">Country</label>
-								<input id="country" name="country" defaultValue={data.resubmit?.country ?? ''} type="text" required autocomplete="country-name" />
+								<input id="country" name="country" defaultValue={data.resubmit?.country ?? data.defaults.country} type="text" required autocomplete="country-name" />
 							</div>
 						</div>
 					</section>

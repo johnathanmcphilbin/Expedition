@@ -136,3 +136,15 @@ export function notifyQualificationClaim(c: { name: string | null; approvedHours
 		`${SITE}/admin/arrivals`
 	);
 }
+
+export function notifyTravelClaim(c: { name: string | null; bucket: string; hours: number; usd: number; addOn: boolean; note: string | null }) {
+	return send(
+		`Travel claim${c.addOn ? ' (add-on)' : ''}: ${c.name ?? 'a participant'}, $${c.usd.toFixed(2)} for ${c.bucket}`,
+		[
+			['From', c.name ?? 'Unnamed participant'],
+			['Claim', `$${c.usd.toFixed(2)} (${c.hours}h) for ${c.bucket}${c.addOn ? ', on top of an earlier claim' : ''}`],
+			['Note', c.note]
+		],
+		`${SITE}/admin/owed`
+	);
+}

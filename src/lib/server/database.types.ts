@@ -43,6 +43,10 @@ export type UserRow = {
 	travel_locked_at: string | null;
 	/** how review pay reaches them: hours on their account, or cash from an organiser */
 	review_pay?: 'hours' | 'cash';
+	/** from Hack Club Auth (birthdate scope), to fill in the submit form */
+	hca_birthdate?: string | null;
+	/** from Hack Club Auth (address scope), to fill in the submit form */
+	hca_address?: { street_address?: string; locality?: string; region?: string; postal_code?: string; country?: string } | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -354,6 +358,21 @@ export interface Database {
 			review_payouts: Table<ReviewPayoutRow>;
 			travel_grant_requests: Table<TravelGrantRequestRow>;
 			referral_config: Table<AnyRow>;
+			travel_claims: Table<{
+				id: string;
+				user_id: string;
+				bucket: 'visa' | 'flights' | 'accommodation';
+				hours: number;
+				usd: number;
+				status: 'requested' | 'approved' | 'declined' | 'withdrawn' | 'paid';
+				note: string | null;
+				admin_note: string | null;
+				requested_at: string;
+				decided_at: string | null;
+				decided_by: string | null;
+				paid_at: string | null;
+				paid_by: string | null;
+			}>;
 			travel_payouts: Table<{
 				id: string;
 				user_id: string;

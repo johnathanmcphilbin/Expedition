@@ -30,8 +30,8 @@ function targetHours(est: TripEstimate | null, claim: QualificationClaim | null)
 	if (claim?.status === 'approved') return hoursToQualify(claim.trip_cost_usd);
 	return est ? est.hoursToQualify : TRAVEL_CAP_HOURS;
 }
-import { getOwnGrantRequest, requestGrant, withdrawGrant } from '$lib/server/grants';
-import { notifyGrantRequest, notifyTravelBanked, notifyQualificationClaim } from '$lib/server/notify';
+import { listOwnTravelClaims, travelClaimable, createTravelClaim, withdrawTravelClaim } from '$lib/server/travel-claims';
+import { notifyTravelClaim, notifyTravelBanked, notifyQualificationClaim } from '$lib/server/notify';
 import { myReferrals } from '$lib/server/referrals';
 import { getFlightQuote } from '$lib/server/flight-quotes';
 import { getOwnOrigin, recordOrigin } from '$lib/server/origins';
@@ -82,16 +82,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			getTravelBuckets(user.id),
 			listOwnQueued(user.id)
 		]);
-	const [ownCheckpoints, flight, origin, grant, referrals, claim] = await Promise.all([
+	const [ownCheckpoints, flight, origin, travelClaims, referrals, claim, claimable] = await Promise.all([
 		listOwnCheckpoints(user.id),
 		getOwnFlight(user.id),
 		getOwnOrigin(user.id),
-		getOwnGrantRequest(user.id),
+		listOwnTravelClaims(user.id),
 		myReferrals(user.id).catch((e) => {
 			console.error('myReferrals', e);
 			return null;
 		}),
-		getOwnClaim(user.id).catch(() => null)
+		getOwnClaim(user.id).catch(() => null),
+		travelClaimable(user.id).catch(() => null)
 	]);
 	// their trip: estimated cost from their home airport, and how far they are from qualifying
 	const approvedHours = Number(progress.hours_earned);
@@ -214,7 +215,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		pendingReviews,
 		trip,
 		referrals: referrals ? { ...referrals, link: referrals.code ? `${url.origin}/join?ref=${referrals.code}` : null } : null,
-		grant,
+		travelClaims,
+		claimable,
 		// hardware sent in without a Hackatime project: no project card to hang off
 		untracked: queued
 			.filter((q) => !hackatimeNames(q).length)
@@ -251,6 +253,13 @@ export const actions: Actions = {
 			const amount = hours(form.get('hours'), 'Hours');
 			const bucket = oneOf(form.get('bucket'), BUCKETS, 'What it goes toward');
 			const direction = form.get('direction') === 'back' ? -1 : 1;
+			if (direction < 0) {
+				// hours in a claim are spoken for
+				const free = (await travelClaimable(user.id))[bucket].free;
+				if (amount > free) {
+					return fail(409, { travelMessage: `Only ${free}h of your ${bucket} hours are unclaimed, so that's the most you can move back.` });
+				}
+			}
 			const result = await moveTravelHours(user.id, direction * amount, bucket);
 			if (!result.ok) return fail(409, { travelMessage: result.message });
 			if (direction > 0) {
@@ -296,47 +305,39 @@ export const actions: Actions = {
 		}
 	},
 
-	/** Ask for the travel grant: only once they qualify (checked here, not just in the UI). */
-	requestGrant: async ({ request, locals }) => {
+	/**
+	 * Claim what's banked (and not yet claimed) for one of visa / flights /
+	 * accommodation. Only once they qualify. Claiming again later, after
+	 * banking more, adds on as a new claim.
+	 */
+	claimTravel: async ({ request, locals }) => {
 		const user = requireUser(locals, '/dashboard');
 		const form = await request.formData();
 		try {
+			const bucket = oneOf(form.get('bucket'), BUCKETS, 'What it goes toward');
 			const note = text(form.get('note'), 'Note', { max: 1000 });
-			const [progress, balance, origin] = await Promise.all([getProgress(user.id), getBalance(user.id), getOwnOrigin(user.id)]);
-			const est = origin ? estimateTrip(origin) : null;
-			const needed = targetHours(est, await getOwnClaim(user.id).catch(() => null));
+			const [progress, origin, qclaim] = await Promise.all([getProgress(user.id), getOwnOrigin(user.id), getOwnClaim(user.id).catch(() => null)]);
+			const needed = targetHours(origin ? estimateTrip(origin) : null, qclaim);
 			const approved = Number(progress.hours_earned);
 			if (approved < needed) return fail(400, { grantMessage: `You need ${needed}h approved to qualify. You have ${approved}h.` });
-			const banked = Number(balance.hours_travel);
-			if (banked <= 0) return fail(400, { grantMessage: 'Bank some hours into your travel fund first: your grant is what you bank.' });
-			const ok = await requestGrant(user.id, {
-				hoursBanked: banked,
-				approvedHours: approved,
-				hoursNeeded: needed,
-				estTravelUsd: est?.total ?? null,
-				homeAirport: origin?.airport ?? null,
-				note
-			});
-			if (!ok) return fail(409, { grantMessage: "You've already asked. An organiser will get back to you." });
-			await notifyGrantRequest({
-				name: user.display_name,
-				hoursBanked: banked,
-				grantUsd: banked * TRAVEL_RATE,
-				estTravelUsd: est?.total ?? null,
-				airport: origin?.airport ?? null,
-				note
-			}).catch(() => {});
-			return { grantRequested: true };
+			const before = (await listOwnTravelClaims(user.id)).some((c) => c.bucket === bucket && ['requested', 'approved', 'paid'].includes(c.status));
+			const claimRow = await createTravelClaim(user.id, bucket, note);
+			if (!claimRow) return fail(409, { grantMessage: `Nothing new banked for ${bucket} to claim. Bank more hours first.` });
+			await notifyTravelClaim({ name: user.display_name, bucket, hours: Number(claimRow.hours), usd: Number(claimRow.usd), addOn: before, note }).catch(() => {});
+			return { travelClaimed: { bucket, usd: Number(claimRow.usd) } };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { grantMessage: e.message });
 			throw e;
 		}
 	},
 
-	withdrawGrant: async ({ locals }) => {
+	withdrawTravelClaim: async ({ request, locals }) => {
 		const user = requireUser(locals, '/dashboard');
-		await withdrawGrant(user.id);
-		return { grantWithdrawn: true };
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '');
+		if (!/^[0-9a-f-]{36}$/.test(id)) return fail(400, { grantMessage: 'Invalid claim.' });
+		await withdrawTravelClaim(user.id, id);
+		return { travelClaimWithdrawn: true };
 	},
 
 	/** "My approved hours cover half my real trip cost": checked here, then an organiser confirms. */

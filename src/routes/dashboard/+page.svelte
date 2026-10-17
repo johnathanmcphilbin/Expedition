@@ -15,6 +15,14 @@
 	]);
 
 	let bookedDifferent = $state(false);
+	const BUCKET_LABEL: Record<string, string> = { visa: 'visa', flights: 'flights', accommodation: 'accommodation' };
+	const CLAIM_STATUS: Record<string, string> = {
+		requested: 'Waiting for an organiser',
+		approved: 'Approved',
+		paid: 'Paid ✓',
+		declined: 'Not approved',
+		withdrawn: 'Withdrawn'
+	};
 	let copied = $state(false);
 	// "2026-12-04 07:50" → "Fri 4 Dec, 07:50"
 	const fmtLocal = (s: string) => {
@@ -369,32 +377,46 @@
 
 				{#if t.remaining === 0 && t.estimate?.flight !== 0}
 					<div class="grant">
-						{#if data.grant?.status === 'requested'}
-							<p>
-								<strong>Grant requested ✓</strong> {data.grant.hours_banked}h = {money(data.grant.hours_banked * TRAVEL_RATE)}.
-								Your travel fund is locked while an organiser looks at it.
-							</p>
-							<form method="POST" action="?/withdrawGrant" use:enhance><button class="text-link" type="submit">Withdraw request (unlocks your fund)</button></form>
-						{:else if data.grant?.status === 'approved'}
-							<p><strong>Grant approved 🎉</strong> Your travel fund is locked while we sort your trip. We'll be in touch with next steps.</p>
-						{:else}
-							{#if data.grant?.status === 'declined'}
-								<p class="grant-declined">Your last request wasn't approved{data.grant.admin_note ? `: ${data.grant.admin_note}` : '.'} Your fund is unlocked, so you can adjust it and ask again.</p>
-							{/if}
-							{#if travelHours > 0}
-								<form method="POST" action="?/requestGrant" use:enhance class="grant-form">
-									<p>
-										You qualify! Your grant is what's in your travel fund: <strong>{travelHours}h = {money(travelHours * TRAVEL_RATE)}</strong>.
-										Requesting it <strong>locks your travel fund</strong>, so bank everything you want for travel first.
-									</p>
-									<textarea name="note" rows="2" maxlength="1000" placeholder="Anything we should know? (optional)"></textarea>
-									<button class="btn" type="submit">Request my travel grant</button>
-								</form>
-							{:else}
-								<p>You qualify! Bank hours into your travel fund below, then request your grant here.</p>
-							{/if}
-							{#if form && 'grantMessage' in form && form.grantMessage}<p class="hint error">{form.grantMessage}</p>{/if}
+						<p class="trip-k">Your travel grant</p>
+						{#if data.travelClaims.length}
+							<ul class="claims">
+								{#each data.travelClaims.filter((c) => c.status !== 'withdrawn') as c (c.id)}
+									<li>
+										<span><strong>{money(Number(c.usd))}</strong> for {BUCKET_LABEL[c.bucket]}</span>
+										<span class="claim-status cs-{c.status}">{CLAIM_STATUS[c.status]}</span>
+										{#if c.status === 'declined' && c.admin_note}<span class="trip-fine">{c.admin_note}</span>{/if}
+										{#if c.status === 'requested'}
+											<form method="POST" action="?/withdrawTravelClaim" use:enhance>
+												<input type="hidden" name="id" value={c.id} />
+												<button class="text-link" type="submit">Withdraw</button>
+											</form>
+										{/if}
+									</li>
+								{/each}
+							</ul>
 						{/if}
+						{#if data.claimable}
+							{@const open = (['visa', 'flights', 'accommodation'] as const).filter((b) => data.claimable![b].free > 0)}
+							{#if open.length}
+								<form method="POST" action="?/claimTravel" use:enhance class="grant-form">
+									<p>You qualify! Claim what you've banked. Claimed hours can't be moved back, and you can add on more later.</p>
+									<textarea name="note" rows="2" maxlength="1000" placeholder="Anything we should know? (optional)"></textarea>
+									<div class="claim-btns">
+										{#each open as b (b)}
+											{@const held = data.travelClaims.some((c) => c.bucket === b && ['requested', 'approved', 'paid'].includes(c.status))}
+											<button class="btn" type="submit" name="bucket" value={b}>
+												{held ? `Add ${money(data.claimable![b].freeUsd)} to your ${BUCKET_LABEL[b]} claim` : `Claim ${money(data.claimable![b].freeUsd)} for ${BUCKET_LABEL[b]}`}
+											</button>
+										{/each}
+									</div>
+								</form>
+							{:else if !data.travelClaims.length}
+								<p>You qualify! Bank hours into your travel fund below, then claim them here.</p>
+							{:else}
+								<p class="trip-fine">Bank more hours below to add on to your claims.</p>
+							{/if}
+						{/if}
+						{#if form && 'grantMessage' in form && form.grantMessage}<p class="hint error">{form.grantMessage}</p>{/if}
 					</div>
 				{/if}
 
@@ -892,6 +914,39 @@
 		margin-top: 1rem;
 		padding-top: 1rem;
 		border-top: 1px solid var(--rule);
+	}
+	.claims {
+		list-style: none;
+		margin: 0.5rem 0 1rem;
+		padding: 0;
+	}
+	.claims li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.3rem 0.9rem;
+		padding: 0.45rem 0;
+		border-top: 1px solid var(--rule);
+	}
+	.claim-status {
+		font-size: 0.75rem;
+		font-weight: 800;
+		text-transform: uppercase;
+	}
+	.cs-requested {
+		color: #a34a00;
+	}
+	.cs-approved,
+	.cs-paid {
+		color: #2f7a46;
+	}
+	.cs-declined {
+		color: #9b1c1c;
+	}
+	.claim-btns {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
 	}
 	.grant-form {
 		display: flex;

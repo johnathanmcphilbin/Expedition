@@ -3,120 +3,131 @@ import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin } from '$lib/server/guards';
 import { db } from '$lib/server/supabase';
 import { listAllTravelBuckets, listAllClaims } from '$lib/server/queries';
-import { listGrantRequests } from '$lib/server/grants';
+import { listAllTravelClaims, decideTravelClaim, payTravelClaim, BUCKETS } from '$lib/server/travel-claims';
 import { reviewerPay, markReviewerPaid } from '$lib/server/payouts';
 import { logAdminAction } from '$lib/server/referrals';
 import { text, uuid, ValidationError } from '$lib/server/validate';
 import { drops, TRAVEL_RATE } from '$lib/data';
 
 /**
- * Everything the program owes people: travel stipends (what's banked in each
- * person's travel fund, by visa / flights / accommodation, at $8/h), cash
- * owed to reviewers, and shop items still to send.
+ * Everything the program owes people. Travel is per claim: each claim is one
+ * ask for visa, flights or accommodation money (add-ons are new claims),
+ * approved and paid separately. Hours banked but not claimed yet are shown
+ * as what could still come. Plus reviewer cash and shop items to send.
  */
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
-	const [buckets, grants, pay, claims, { data: users }, { data: flights }, { data: paidRows }] = await Promise.all([
+	const [buckets, travelClaims, pay, shopClaims, { data: users }, { data: flights }] = await Promise.all([
 		listAllTravelBuckets(),
-		listGrantRequests(),
+		listAllTravelClaims(),
 		reviewerPay(),
 		listAllClaims(),
-		db().from('users').select('id, display_name, email, hackclub_id, travel_locked_at'),
-		db().from('trip_flights').select('user_id, price_usd, status'),
-		db().from('travel_payouts').select('user_id, bucket, amount_usd, paid_at')
+		db().from('users').select('id, display_name, email, hackclub_id'),
+		db().from('trip_flights').select('user_id, price_usd, status')
 	]);
-	const paidOf = (id: string, bucket: string) =>
-		Math.round((paidRows ?? []).filter((p) => p.user_id === id && p.bucket === bucket).reduce((t, p) => t + Number(p.amount_usd), 0) * 100) / 100;
+	const r2 = (n: number) => Math.round(n * 100) / 100;
 	const userBy = new Map((users ?? []).map((u) => [u.id, u]));
 	const real = (id: string) => !!userBy.get(id)?.hackclub_id?.startsWith('ident!');
-	const usd = (h: number) => Math.round(h * TRAVEL_RATE * 100) / 100;
+	type B = (typeof BUCKETS)[number];
+	const zero = () => ({ visa: 0, flights: 0, accommodation: 0, total: 0 });
+	const add = (acc: Record<B | 'total', number>, bucket: B, usd: number) => {
+		acc[bucket] = r2(acc[bucket] + usd);
+		acc.total = r2(acc.total + usd);
+	};
+
+	// totals by stage, across everyone
+	const stages = { approved: zero(), requested: zero(), paid: zero(), unclaimed: zero() };
+	for (const c of travelClaims) {
+		if (c.status === 'approved' || c.status === 'requested' || c.status === 'paid') add(stages[c.status], c.bucket, Number(c.usd));
+	}
 
 	const people = buckets
 		.filter((b) => real(b.user_id) && Number(b.visa) + Number(b.accommodation) + Number(b.flights) > 0)
 		.map((b) => {
 			const u = userBy.get(b.user_id)!;
-			const g = grants.find((x) => x.user_id === b.user_id);
+			const mine = travelClaims.filter((c) => c.user_id === b.user_id);
 			const f = (flights ?? []).find((x) => x.user_id === b.user_id && x.status !== 'cancelled');
-			// what's still owed in each bucket: banked minus what's been paid
-			const left = (banked: number, bucket: string) => Math.max(0, Math.round((usd(banked) - paidOf(b.user_id, bucket)) * 100) / 100);
-			const visa = left(Number(b.visa), 'visa');
-			const flightsUsd = left(Number(b.flights), 'flights');
-			const accommodation = left(Number(b.accommodation), 'accommodation');
-			const paid = Math.round((paidOf(b.user_id, 'visa') + paidOf(b.user_id, 'flights') + paidOf(b.user_id, 'accommodation')) * 100) / 100;
+			const sumOf = (bucket: B, st: string[]) => r2(mine.filter((c) => c.bucket === bucket && st.includes(c.status)).reduce((t, c) => t + Number(c.usd), 0));
+			const unclaimed = zero();
+			for (const bucket of BUCKETS) {
+				const free = r2(Number(b[bucket]) * TRAVEL_RATE - sumOf(bucket, ['requested', 'approved', 'paid']));
+				if (free > 0) add(unclaimed, bucket, free);
+			}
+			for (const bucket of BUCKETS) if (unclaimed[bucket]) add(stages.unclaimed, bucket, unclaimed[bucket]);
+			const owed = r2(BUCKETS.reduce((t, x) => t + sumOf(x, ['approved']), 0));
+			const waiting = r2(BUCKETS.reduce((t, x) => t + sumOf(x, ['requested']), 0));
+			const paid = r2(BUCKETS.reduce((t, x) => t + sumOf(x, ['paid']), 0));
 			return {
 				id: b.user_id,
 				name: u.display_name ?? 'Unnamed',
 				email: u.email,
-				stage: (g?.status === 'approved' ? 'approved' : g?.status === 'requested' ? 'requested' : 'banked') as 'approved' | 'requested' | 'banked',
-				locked: !!u.travel_locked_at,
-				visa,
-				flights: flightsUsd,
-				accommodation,
-				total: Math.round((visa + flightsUsd + accommodation) * 100) / 100,
+				banked: { visa: r2(Number(b.visa) * TRAVEL_RATE), flights: r2(Number(b.flights) * TRAVEL_RATE), accommodation: r2(Number(b.accommodation) * TRAVEL_RATE) },
+				owed,
+				waiting,
 				paid,
+				unclaimed: unclaimed.total,
 				flightPrice: f?.price_usd === null || f?.price_usd === undefined ? null : Number(f.price_usd)
 			};
 		})
-		.sort((a, b) => ['approved', 'requested', 'banked'].indexOf(a.stage) - ['approved', 'requested', 'banked'].indexOf(b.stage) || b.total - a.total);
+		.sort((a, b) => b.owed - a.owed || b.waiting - a.waiting || b.unclaimed - a.unclaimed);
 
-	const sum = (rows: typeof people, k: 'visa' | 'flights' | 'accommodation' | 'total') =>
-		Math.round(rows.reduce((t, r) => t + r[k], 0) * 100) / 100;
-	const byStage = (s: 'approved' | 'requested' | 'banked') => {
-		const rows = people.filter((p) => p.stage === s);
-		return { people: rows.length, visa: sum(rows, 'visa'), flights: sum(rows, 'flights'), accommodation: sum(rows, 'accommodation'), total: sum(rows, 'total') };
-	};
-
-	const toSend = claims.filter((c) => c.status === 'requested');
+	const toSend = shopClaims.filter((c) => c.status === 'requested');
 	const shopUsd = toSend.reduce((t, c) => t + (drops.find((d) => String(d.hours) === c.reward_key)?.value ?? Number(c.hours_cost) * 5), 0);
 	const reviewers = pay.filter((r) => r.owedUsd > 0);
 	const reviewersUsd = reviewers.reduce((t, r) => t + r.owedUsd, 0);
 
-	const stages = { approved: byStage('approved'), requested: byStage('requested'), banked: byStage('banked') };
+	const order = ['requested', 'approved', 'paid', 'declined', 'withdrawn'];
 	return {
+		claims: travelClaims
+			.filter((c) => c.status !== 'withdrawn')
+			.map((c) => {
+				// an add-on: they already had a claim for this bucket before this one
+				const earlier = travelClaims.some(
+					(x) => x.user_id === c.user_id && x.bucket === c.bucket && x.id !== c.id && x.requested_at < c.requested_at && ['requested', 'approved', 'paid'].includes(x.status)
+				);
+				return { ...c, usd: Number(c.usd), hours: Number(c.hours), name: c.owner?.display_name ?? 'Unnamed', email: c.owner?.email ?? null, addOn: earlier };
+			})
+			.sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status) || (a.status === 'requested' ? a.requested_at.localeCompare(b.requested_at) : b.requested_at.localeCompare(a.requested_at))),
 		people,
 		stages,
-		all: { visa: sum(people, 'visa'), flights: sum(people, 'flights'), accommodation: sum(people, 'accommodation'), total: sum(people, 'total') },
 		reviewers: reviewers.map((r) => ({ id: r.id, name: r.name, owedUsd: r.owedUsd })),
-		paidTotal: Math.round((paidRows ?? []).reduce((t, p) => t + Number(p.amount_usd), 0) * 100) / 100,
 		reviewersUsd,
 		shop: { items: toSend.map((c) => ({ name: c.owner?.display_name ?? 'Unnamed', reward: c.reward_name })), usd: shopUsd },
-		// everything owed: every banked travel fund + reviewer cash + shop items to send
-		totalUsd: Math.round((sum(people, 'total') + reviewersUsd + shopUsd) * 100) / 100
+		// owed now: approved travel claims + reviewer cash + shop items to send
+		totalUsd: r2(stages.approved.total + reviewersUsd + shopUsd)
 	};
 };
 
 export const actions: Actions = {
-	/** Record travel stipend money paid to someone (one bucket, or everything still owed); locks their fund. */
-	payTravel: async ({ request, locals }) => {
+	/** Approve or decline one travel claim. Declining needs a reason (they see it) and frees those hours. */
+	decideClaim: async ({ request, locals }) => {
 		const admin = requireAdmin(locals);
 		const form = await request.formData();
 		try {
-			const userId = uuid(form.get('user_id')?.toString(), 'person');
-			const which = String(form.get('bucket') ?? 'all');
-			const note = text(form.get('note'), 'Note', { max: 500 });
-			const [{ data: b }, { data: paid }] = await Promise.all([
-				db().from('user_travel_buckets').select('*').eq('user_id', userId).maybeSingle(),
-				db().from('travel_payouts').select('bucket, amount_usd').eq('user_id', userId)
-			]);
-			if (!b) return fail(404, { message: 'No travel fund for that person.' });
-			const BUCKETS = ['visa', 'flights', 'accommodation'] as const;
-			const targets = which === 'all' ? BUCKETS : BUCKETS.filter((x) => x === which);
-			if (!targets.length) return fail(400, { message: 'Pick what it was for.' });
-			const rows = targets
-				.map((bucket) => {
-					const banked = Math.round(Number(b[bucket]) * TRAVEL_RATE * 100) / 100;
-					const already = (paid ?? []).filter((p) => p.bucket === bucket).reduce((t, p) => t + Number(p.amount_usd), 0);
-					return { user_id: userId, bucket, amount_usd: Math.round((banked - already) * 100) / 100, note, paid_by: admin.id };
-				})
-				.filter((r) => r.amount_usd > 0);
-			if (!rows.length) return fail(409, { message: 'Nothing left to pay there.' });
-			const { error } = await db().from('travel_payouts').insert(rows);
-			if (error) return fail(500, { message: error.message });
-			// paid out: the hours behind it can't move any more
-			await db().from('users').update({ travel_locked_at: new Date().toISOString() }).eq('id', userId).is('travel_locked_at', null);
-			const total = rows.reduce((t, r) => t + r.amount_usd, 0);
-			await logAdminAction(admin.id, 'travel_paid', userId, `$${total.toFixed(2)} (${rows.map((r) => r.bucket).join(', ')})${note ? `: ${note}` : ''}`);
-			return { done: `Marked $${total.toFixed(2)} paid.` };
+			const id = uuid(form.get('id')?.toString(), 'claim');
+			const approve = form.get('decision') === 'approve';
+			const note = text(form.get('admin_note'), 'Note', { max: 1000 });
+			if (!approve && !note) return fail(400, { message: 'Say why, so they know what to do next.' });
+			const claim = await decideTravelClaim(admin.id, id, approve, note);
+			if (!claim) return fail(409, { message: 'That claim has already been decided.' });
+			await logAdminAction(admin.id, approve ? 'travel_claim_approved' : 'travel_claim_declined', claim.user_id, `$${Number(claim.usd).toFixed(2)} (${claim.bucket})${note ? `: ${note}` : ''}`);
+			return { done: approve ? 'Claim approved.' : 'Claim declined.' };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { message: e.message });
+			throw e;
+		}
+	},
+
+	/** Money sent for one claim. */
+	payClaim: async ({ request, locals }) => {
+		const admin = requireAdmin(locals);
+		const form = await request.formData();
+		try {
+			const id = uuid(form.get('id')?.toString(), 'claim');
+			const claim = await payTravelClaim(admin.id, id);
+			if (!claim) return fail(409, { message: "That claim can't be marked paid (already paid, declined or withdrawn)." });
+			await logAdminAction(admin.id, 'travel_paid', claim.user_id, `$${Number(claim.usd).toFixed(2)} (${claim.bucket})`);
+			return { done: `Marked $${Number(claim.usd).toFixed(2)} paid.` };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { message: e.message });
 			throw e;

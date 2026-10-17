@@ -4,6 +4,7 @@ import { consumeOAuthState, createSession, safeNext } from '$lib/server/session'
 import { callbackUrl } from '$lib/server/env';
 import { connectionStatus } from '$lib/server/hackatime';
 import { attachReferralOnSignup } from '$lib/server/referrals';
+import { recordOrigin } from '$lib/server/origins';
 
 export const GET: RequestHandler = async ({ url, cookies, request, getClientAddress }) => {
 	const error = url.searchParams.get('error');
@@ -25,6 +26,12 @@ export const GET: RequestHandler = async ({ url, cookies, request, getClientAddr
 	const { user, created } = await upsertUser(claims);
 	// someone new to Expedition: attach the referral link they came through, if any
 	if (created) await attachReferralOnSignup(cookies, user);
+	// a Hack Club address gives us their nearest airport straight away (only the airport is kept for travel)
+	if (user.hca_address?.locality && user.hca_address.country) {
+		await recordOrigin(user.id, { city: user.hca_address.locality, state: user.hca_address.region ?? null, country: user.hca_address.country }).catch(
+			(e) => console.error('recordOrigin at sign-in', e)
+		);
+	}
 
 	await createSession(cookies, user.id, {
 		userAgent: request.headers.get('user-agent'),

@@ -9,6 +9,7 @@ import {
 	connectProject
 } from '$lib/server/queries';
 import { ValidationError, isAllowedImage } from '$lib/server/validate';
+import type { UserRow } from '$lib/server/database.types';
 import { parseSubmissionFields } from '$lib/server/submission-fields';
 import { queueSubmission, listOwnQueued, getOwnForResubmit, resubmitQueued } from '$lib/server/queue';
 import { notifySubmission } from '$lib/server/notify';
@@ -93,10 +94,26 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			firstName: last?.first_name ?? first ?? '',
 			lastName: last?.last_name ?? rest.join(' '),
 			email: last?.email ?? user.email ?? profile?.email ?? '',
-			githubUsername: last?.github_username ?? profile?.githubUsername ?? ''
+			githubUsername: last?.github_username ?? profile?.githubUsername ?? '',
+			// from Hack Club Auth, when the app has the birthdate / address scopes
+			birthday: user.hca_birthdate ?? '',
+			...hcaAddress(user.hca_address)
 		}
 	};
 };
+
+/** Hack Club Auth's address claim → the submit form's fields. */
+function hcaAddress(a: UserRow['hca_address']) {
+	const [line1 = '', ...rest] = (a?.street_address ?? '').split('\n');
+	return {
+		addressLine1: line1,
+		addressLine2: rest.join(', '),
+		city: a?.locality ?? '',
+		state: a?.region ?? '',
+		zip: a?.postal_code ?? '',
+		country: a?.country ?? ''
+	};
+}
 
 const MAX_SCREENSHOT = 4 * 1024 * 1024;
 

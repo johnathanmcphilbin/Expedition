@@ -24,6 +24,10 @@ export interface HcaClaims {
 	slack_id?: string;
 	verification_status?: string;
 	ysws_eligible?: boolean;
+	/** "2009-04-12", with the birthdate scope */
+	birthdate?: string;
+	/** with the address scope */
+	address?: { street_address?: string; locality?: string; region?: string; postal_code?: string; country?: string };
 }
 
 export function authorizeUrl(redirectUri: string, state: string): string {
@@ -87,7 +91,10 @@ export async function upsertUser(claims: HcaClaims): Promise<{ user: UserRow; cr
 		email: claims.email ?? null,
 		slack_id: claims.slack_id ?? null,
 		display_name: displayName,
-		avatar_url: claims.picture ?? null
+		avatar_url: claims.picture ?? null,
+		// only sent once the app has the birthdate / address scopes; never cleared by a sign-in without them
+		...(claims.birthdate && /^\d{4}-\d{2}-\d{2}$/.test(claims.birthdate) ? { hca_birthdate: claims.birthdate } : {}),
+		...(claims.address && (claims.address.street_address || claims.address.locality) ? { hca_address: claims.address } : {})
 	};
 
 	// Look up first, so the moment someone joins Expedition (the insert) is
