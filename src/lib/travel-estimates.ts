@@ -7,8 +7,17 @@ import { EVENT, hoursToQualify, TRAVEL_RATE } from '$lib/data';
  * the Skyscanner link before promising anything.
  */
 
-/** Close enough to Dublin that it's a bus or train, not a flight. */
-export const NO_FLIGHT_KM = 300;
+/**
+ * Northern Ireland's airports: on the island, so it's a bus or train to
+ * Dublin. Distance alone doesn't work: Manchester or Glasgow are closer than
+ * some Irish towns but still across the sea.
+ */
+const NI_AIRPORTS = new Set(['BFS', 'BHD', 'LDY']);
+
+/** Somewhere on the island of Ireland, so no flight needed. */
+export function onIsland(countryCode: string | null, airport: string): boolean {
+	return countryCode === 'IE' || NI_AIRPORTS.has(airport);
+}
 
 /**
  * Economy return to Dublin in USD from distance alone. Calibrated against
@@ -16,7 +25,6 @@ export const NO_FLIGHT_KM = 300;
  * that isn't a major gateway adds a connection.
  */
 export function estimateFare(flightKm: number, hub: boolean): number {
-	if (flightKm < NO_FLIGHT_KM) return 0;
 	const base = flightKm < 2500 ? 60 + 0.07 * flightKm : 100 + 0.095 * flightKm;
 	return Math.round((base + (hub ? 0 : 120)) / 10) * 10;
 }
@@ -86,7 +94,7 @@ export function estimateTrip(origin: {
 	hub: boolean;
 	precision: 'city' | 'region' | 'country';
 }): TripEstimate {
-	const flight = estimateFare(origin.flight_km, origin.hub);
+	const flight = onIsland(origin.country_code, origin.airport) ? 0 : estimateFare(origin.flight_km, origin.hub);
 	const visa = visaFor(origin.country_code);
 	// travelling within Ireland (no flight): nothing to qualify for, they can just come
 	const travel = flight;
