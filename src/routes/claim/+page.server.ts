@@ -2,7 +2,7 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireUser } from '$lib/server/guards';
 import { getBalance, claimReward, listOwnClaims } from '$lib/server/queries';
-import { drops } from '$lib/data';
+import { drops, grants, GRANT_RATE } from '$lib/data';
 import { text, ValidationError } from '$lib/server/validate';
 import { notifyClaim } from '$lib/server/notify';
 
@@ -17,10 +17,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	const [balance, claims] = await Promise.all([getBalance(user.id), listOwnClaims(user.id)]);
 
-	// one live claim per tier — claiming the same drop twice isn't a thing
-	const taken = new Set(
-		claims.filter((c) => c.status !== 'cancelled').map((c) => c.reward_key)
-	);
+	// how many of each drop they've claimed; buying one again is fine
+	const taken = new Map<string, number>();
+	for (const c of claims) if (c.status !== 'cancelled') taken.set(c.reward_key, (taken.get(c.reward_key) ?? 0) + 1);
 
 	return {
 		balance,
@@ -34,8 +33,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			hours: d.hours,
 			value: d.value,
 			affordable: Number(balance.hours_available) >= d.hours,
-			claimed: taken.has(String(d.hours))
+			claimed: taken.get(String(d.hours)) ?? 0
 		})),
+		grants: grants.map((g) => ({ ...g, claimed: taken.get(g.key) ?? 0 })),
 		flash: url.searchParams.get('claimed')
 	};
 };
@@ -49,14 +49,21 @@ export const actions: Actions = {
 			const key = text(form.get('reward_key'), 'Reward', { max: 20, required: true })!;
 			const note = text(form.get('note'), 'Note', { max: 500 });
 
+			// a grant: they choose the hours, the rate is ours
+			const grant = grants.find((g) => g.key === key);
+			if (grant) {
+				const hours = Number(form.get('hours'));
+				if (!Number.isInteger(hours) || hours < 1 || hours > 100) return fail(400, { message: 'Pick a whole number of hours, at least 1.' });
+				const name = `${grant.name} ($${hours * GRANT_RATE})`;
+				const result = await claimReward({ userId: user.id, rewardKey: grant.key, rewardName: name, hoursCost: hours, note });
+				if (!result.ok) return fail(409, { message: result.message });
+				await notifyClaim({ name: user.display_name, reward: name, hours, note });
+				return { success: true, claimed: name };
+			}
+
 			// price and name come from the catalogue, never the form
 			const drop = drops.find((d) => String(d.hours) === key && !d.finisher);
 			if (!drop) return fail(400, { message: 'That reward does not exist.' });
-
-			const existing = await listOwnClaims(user.id);
-			if (existing.some((c) => c.reward_key === key && c.status !== 'cancelled')) {
-				return fail(409, { message: "You've already claimed that one." });
-			}
 
 			const result = await claimReward({
 				userId: user.id,

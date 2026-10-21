@@ -227,6 +227,16 @@ export const checkpoints: Checkpoint[] = [
 	}
 ];
 
+/**
+ * Open-ended grants in the shop: they pick how many hours to put in, at
+ * GRANT_RATE per hour, as often as they like. Not stops on the trail.
+ */
+export const GRANT_RATE = 5;
+export const grants = [
+	{ key: 'souvenir', name: 'Souvenir grant', blurb: 'Spending money for the Galway Christmas market, or anything else you want to bring home.' },
+	{ key: '3d-printing', name: '3D printing grant', blurb: 'For filament, prints or a printing service for your project.' }
+] as const;
+
 /** `value` is the grant amount in USD — only shown when someone asks for it. */
 export const drops: Drop[] = [
 	{ hours: 5, value: 25, name: 'Custom Expedition cap', extra: 'Jukebox Expedition stickers', art: 'cap', image: '/drop-cap.webp', merch: true },

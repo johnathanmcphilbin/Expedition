@@ -1,6 +1,7 @@
 <script lang="ts">
 	import RewardTrail from '$lib/components/RewardTrail.svelte';
 	import Footer from '$lib/components/Footer.svelte';
+	import { money, GRANT_RATE } from '$lib/data';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -36,6 +37,11 @@
 					you spend on gear or bank for Galway. {FINISH} hours also qualifies you to use your Galway
 					travel stipend, however much your flight costs. And {FINISH} isn't the end, so keep
 					building.
+				</p>
+				<p class="tease-copy">
+					You can also turn hours into a souvenir grant for the Galway Christmas market, or a 3D
+					printing grant for your project, at {money(GRANT_RATE)} an hour. Put in as many hours as you
+					like, as often as you like, from <a href="/claim">the shop</a>.
 				</p>
 			</div>
 			<div class="tease-progress">
@@ -137,7 +143,8 @@
 		color: rgba(248, 243, 231, 0.82);
 		font-size: 1.3rem;
 	}
-	.tp-sub a {
+	.tp-sub a,
+	.tease-copy a {
 		color: var(--cream);
 	}
 	@media (max-width: 760px) {

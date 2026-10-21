@@ -1,6 +1,6 @@
 <script lang="ts">
 	import GrantAmount from '$lib/components/GrantAmount.svelte';
-	import { money } from '$lib/data';
+	import { money, GRANT_RATE } from '$lib/data';
 	import '$lib/styles/app.css';
 	import { enhance } from '$app/forms';
 	import Footer from '$lib/components/Footer.svelte';
@@ -65,7 +65,7 @@
 		<p class="section-label" style="margin-top:2rem">The drops</p>
 		<div class="drops">
 			{#each data.catalogue as d (d.key)}
-				<div class="drop" class:locked={!d.affordable && !d.claimed} class:done={d.claimed}>
+				<div class="drop" class:locked={!d.affordable && !d.claimed} class:done={d.claimed && !d.affordable}>
 					{#if d.image}<img class="drop-img" src={d.image} alt={d.name} loading="lazy" />{/if}
 					<div class="drop-head">
 						<span class="drop-hours">{d.hours}h</span>
@@ -76,12 +76,15 @@
 					{#if !d.merch}<GrantAmount reveal="{money(d.value)} grant" />{/if}
 
 					{#if d.claimed}
-						<p class="drop-state">Claimed</p>
-					{:else if !d.affordable}
-						<p class="drop-state">
-							{(d.hours - Number(data.balance.hours_available)).toFixed(2).replace(/\.?0+$/, '')}h
-							more needed
-						</p>
+						<p class="drop-state">Claimed{d.claimed > 1 ? ` ×${d.claimed}` : ''}</p>
+					{/if}
+					{#if !d.affordable}
+						{#if !d.claimed}
+							<p class="drop-state">
+								{(d.hours - Number(data.balance.hours_available)).toFixed(2).replace(/\.?0+$/, '')}h
+								more needed
+							</p>
+						{/if}
 					{:else}
 						<form
 							method="POST"
@@ -100,9 +103,49 @@
 								maxlength="500"
 								placeholder="Size, colour, anything we should know" />
 							<button class="btn" type="submit" disabled={claiming === d.key}>
-								Claim for {d.hours}h
+								{d.claimed ? 'Claim another' : 'Claim'} for {d.hours}h
 							</button>
 						</form>
+					{/if}
+				</div>
+			{/each}
+		</div>
+
+		<p class="section-label" style="margin-top:2.5rem">Grants</p>
+		<p class="hint" style="margin-bottom:1rem">Put in as many hours as you like, at {money(GRANT_RATE)} an hour. You can claim these more than once.</p>
+		<div class="drops">
+			{#each data.grants as g (g.key)}
+				<div class="drop" class:locked={Number(data.balance.hours_available) < 1}>
+					<div class="drop-head">
+						<span class="drop-hours">{money(GRANT_RATE)}/h</span>
+						<span class="drop-value">Grant</span>
+					</div>
+					<p class="drop-name">{g.name}</p>
+					<p class="drop-extra">{g.blurb}</p>
+					{#if g.claimed}<p class="drop-state">Claimed{g.claimed > 1 ? ` ×${g.claimed}` : ''}</p>{/if}
+					{#if Number(data.balance.hours_available) >= 1}
+						<form
+							method="POST"
+							action="?/claim"
+							use:enhance={() => {
+								claiming = g.key;
+								return async ({ update }) => {
+									await update();
+									claiming = null;
+								};
+							}}>
+							<input type="hidden" name="reward_key" value={g.key} />
+							<label class="grant-hours">
+								Hours
+								<input name="hours" type="number" min="1" step="1" max={Math.floor(Number(data.balance.hours_available))} value="1" required />
+							</label>
+							<input name="note" type="text" maxlength="500" placeholder="What it's for (optional)" />
+							<button class="btn" type="submit" disabled={claiming === g.key}>
+								{g.claimed ? 'Claim more' : 'Claim'}
+							</button>
+						</form>
+					{:else}
+						<p class="drop-state">Needs at least 1h available</p>
 					{/if}
 				</div>
 			{/each}
@@ -196,5 +239,15 @@
 	}
 	.error {
 		color: var(--red);
+	}
+	.grant-hours {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.85rem;
+		font-weight: 700;
+	}
+	.grant-hours input {
+		width: 5rem;
 	}
 </style>

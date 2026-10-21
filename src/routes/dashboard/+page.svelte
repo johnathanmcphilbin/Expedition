@@ -9,10 +9,14 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	const needsChanges = $derived([
-		...data.projects.filter((p) => p.queued?.status === 'changes_requested').map((p) => ({ name: p.name, id: p.queued!.id })),
-		...data.untracked.filter((u) => u.status === 'changes_requested').map((u) => ({ name: u.name, id: u.id }))
-	]);
+	// one entry per submission: a submission covering several Hackatime
+	// projects shows on each of them, and a repeated key crashes the page
+	const needsChanges = $derived.by(() => {
+		const byId = new Map<string, string[]>();
+		for (const p of data.projects) if (p.queued?.status === 'changes_requested') byId.set(p.queued.id, [...(byId.get(p.queued.id) ?? []), p.name]);
+		for (const u of data.untracked) if (u.status === 'changes_requested' && !byId.has(u.id)) byId.set(u.id, [u.name]);
+		return [...byId].map(([id, names]) => ({ id, name: names.join(' + ') }));
+	});
 
 	let bookedDifferent = $state(false);
 	const BUCKET_LABEL: Record<string, string> = { visa: 'visa', flights: 'flights', accommodation: 'accommodation' };
