@@ -137,6 +137,9 @@ export const actions: Actions = {
 				throw new ValidationError(`"${missing[0]}" isn't in your Hackatime`, 'project');
 			}
 
+			const picked = (times ?? []).filter((t) => fields.hackatime_projects.includes(t.name));
+			const trackedHours = picked.length ? Math.round((picked.reduce((sum, t) => sum + t.totalSeconds, 0) / 3600) * 100) / 100 : null;
+
 			// one waiting submission per project, so the same hours can't be queued twice
 			const waiting = (await listOwnQueued(user.id)).filter((q) => q.status === 'pending');
 			const dupe = fields.hackatime_projects.find((n) =>
@@ -169,12 +172,12 @@ export const actions: Actions = {
 
 			if (resubmitId) {
 				// the same submission, updated, back in the review queue
-				const ok = await resubmitQueued(user.id, resubmitId, fields, file, form.get('library') === 'yes', { [LAPSE_FIELD]: lapse });
+				const ok = await resubmitQueued(user.id, resubmitId, fields, file, form.get('library') === 'yes', { [LAPSE_FIELD]: lapse }, trackedHours);
 				if (!ok) throw new ValidationError("That submission can't be resubmitted any more. Check your dashboard.");
 			} else {
 				// Waits for an Expedition reviewer; it only goes to Hack Club once
 				// approved (see src/lib/server/queue.ts).
-				await queueSubmission(user.id, hackatime.hackatimeUserId, fields, file!, form.get('library') === 'yes', lapse ? { [LAPSE_FIELD]: lapse } : {});
+				await queueSubmission(user.id, hackatime.hackatimeUserId, fields, file!, form.get('library') === 'yes', lapse ? { [LAPSE_FIELD]: lapse } : {}, trackedHours);
 			}
 			for (const n of fields.hackatime_projects) await connectProject(user.id, n).catch(() => {});
 

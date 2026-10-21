@@ -181,7 +181,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				userId: qr.user_id,
 				gone: false,
 				hardware: qr.hardware,
-				trackedHours: null,
+				trackedHours: qr.tracked_hours === null ? null : Number(qr.tracked_hours),
 				flag: flags.get(`new:${qr.id}`) ?? null,
 				searchText: [qr.first_name, qr.last_name, qr.email, qr.github_username, qr.project_name]
 					.join(' ')
@@ -288,6 +288,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				: null,
 			balance
 		};
+		// keep the queue's copy of their hours current
+		if (times && queuedDetail.trackedHours !== row.tracked_hours) {
+			await db().from('submission_queue').update({ tracked_hours: queuedDetail.trackedHours }).eq('id', row.id);
+		}
 	}
 
 	let detail: {
@@ -728,6 +732,8 @@ export const actions: Actions = {
 			const fields = parseSubmissionFields(form);
 
 			const times = await fetchProjectTimes(row.user_id);
+			const matched = (times ?? []).filter((t) => fields.hackatime_projects.includes(t.name));
+			const trackedHours = matched.length ? matched.reduce((sum, t) => sum + t.totalSeconds, 0) / 3600 : null;
 			const missing = times ? fields.hackatime_projects.filter((n) => !times.some((t) => t.name === n)) : [];
 			if (missing.length) {
 				throw new ValidationError(`"${missing[0]}" isn't in their Hackatime`, 'project');
@@ -751,20 +757,19 @@ export const actions: Actions = {
 			await updateQueuedFields(id, fields, parseJustifications(form));
 
 			if (decision === 'approve') {
-				const matched = (times ?? []).filter((t) => fields.hackatime_projects.includes(t.name));
 				const result = await sendQueued({
 					id,
 					reviewer,
 					approvedHours: approvedHours!,
 					internalNotes,
 					participantFeedback: feedback,
-					submittedHours: matched.length ? matched.reduce((sum, t) => sum + t.totalSeconds, 0) / 3600 : null
+					submittedHours: trackedHours
 				});
 				if (!result.ok) return fail(502, { message: result.message });
 				if (result.airtableError) {
 					// approved and credited, but Hack Club's fields didn't take: open it
 					// so the error and the resend button are right there
-					await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at, decision === 'approve' ? approvedHours : null).catch((e) =>
+					await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at, decision === 'approve' ? (trackedHours ?? approvedHours) : null).catch((e) =>
 						console.error('payForReview', e)
 					);
 					redirect(
@@ -785,7 +790,7 @@ export const actions: Actions = {
 
 			if (decision === 'draft') return { saved: true };
 			// non-admin reviewers earn hours for each submission they decide
-			await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at, decision === 'approve' ? approvedHours : null).catch((e) =>
+			await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at, decision === 'approve' ? (trackedHours ?? approvedHours) : null).catch((e) =>
 				console.error('payForReview', e)
 			);
 		} catch (e) {
@@ -923,7 +928,7 @@ export const actions: Actions = {
 					hackatimeProject,
 					review.status === 'pending' || review.status === 'in_review',
 					review.updated_at,
-					status === 'approved' ? approvedHours : null
+					status === 'approved' ? (submittedHours ?? approvedHours) : null
 				).catch((e) => console.error('payForReview', e));
 			}
 

@@ -32,7 +32,8 @@ export async function queueSubmission(
 	screenshot: File,
 	libraryOptIn = false,
 	/** Hack Club justification fields they filled in themselves (e.g. Lapse links) */
-	justifications: Justifications = {}
+	justifications: Justifications = {},
+	trackedHours: number | null = null
 ): Promise<QueuedSubmissionRow> {
 	const ext = (screenshot.name.match(/\.(\w{2,5})$/)?.[1] ?? 'png').toLowerCase();
 	const path = `${userId}/${crypto.randomUUID()}.${ext}`;
@@ -52,7 +53,8 @@ export async function queueSubmission(
 			screenshot_type: screenshot.type,
 			screenshot_name: screenshot.name || `screenshot.${ext}`,
 			library_opt_in: libraryOptIn,
-			justifications
+			justifications,
+			tracked_hours: trackedHours
 		})
 		.select('*')
 		.single();
@@ -480,7 +482,8 @@ export async function resubmitQueued(
 	fields: SubmissionFields,
 	screenshot: File | null,
 	libraryOptIn: boolean,
-	justifications: Justifications
+	justifications: Justifications,
+	trackedHours: number | null = null
 ): Promise<boolean> {
 	const row = await getQueued(id);
 	if (!row || row.user_id !== userId || row.status !== 'changes_requested') return false;
@@ -504,6 +507,7 @@ export async function resubmitQueued(
 			...(shot ?? {}),
 			library_opt_in: libraryOptIn,
 			justifications: { ...(row.justifications ?? {}), ...justifications },
+			tracked_hours: trackedHours,
 			status: 'pending',
 			reviewer_id: null,
 			reviewed_at: null,

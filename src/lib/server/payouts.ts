@@ -8,13 +8,18 @@ export const BUDGET_PER_HOUR_USD = 8.5;
 
 /** What a non-admin reviewer earns per submission they decide. */
 export const REVIEW_PAY_USD = 1.5;
-/** ...or for approving more than BIG_PROJECT_HOURS, so big projects get picked up. */
+/** ...or for approving a project with more than BIG_PROJECT_HOURS tracked, so big projects get picked up. */
 export const BIG_REVIEW_PAY_USD = 2.5;
 export const BIG_PROJECT_HOURS = 10;
 
-/** What deciding a submission pays: approvedHours is null unless it was approved. */
-export const reviewPayFor = (approvedHours: number | null) =>
-	approvedHours !== null && approvedHours > BIG_PROJECT_HOURS ? BIG_REVIEW_PAY_USD : REVIEW_PAY_USD;
+/**
+ * What deciding a submission pays. projectHours is its tracked hours (or the
+ * approved hours when there's nothing tracked, e.g. hardware), and null
+ * unless it was approved. Tracked, not approved, so there's nothing to gain
+ * from approving more hours than the project deserves.
+ */
+export const reviewPayFor = (projectHours: number | null) =>
+	projectHours !== null && projectHours > BIG_PROJECT_HOURS ? BIG_REVIEW_PAY_USD : REVIEW_PAY_USD;
 
 const cents = (n: number) => Math.round(n * 100) / 100;
 
@@ -26,7 +31,7 @@ const cents = (n: number) => Math.round(n * 100) / 100;
  * `round` identifies the waiting period (the row's updated_at before the
  * decision), so a double click within one round still pays once.
  *
- * Approving more than 10 hours pays $2.50, anything else $1.50.
+ * Approving a project with more than 10 hours tracked pays $2.50, anything else $1.50.
  *
  * The ledger keeps two decimals, so each payout is the difference between
  * their running totals in hours: 0.19, 0.18, 0.19, 0.19… never drifting off
@@ -39,11 +44,11 @@ export async function payForReview(
 	project: string,
 	wasWaiting: boolean,
 	round: string,
-	approvedHours: number | null
+	projectHours: number | null
 ): Promise<void> {
 	if (!isReviewerOnly(reviewer) || !wasWaiting) return;
 	const roundKey = `${key}@${round}`;
-	const usd = reviewPayFor(approvedHours);
+	const usd = reviewPayFor(projectHours);
 
 	// paid in cash by an organiser: record it as owed, credit no hours
 	if (reviewer.review_pay === 'cash') {
