@@ -76,6 +76,7 @@
 					</div>
 					<p class="drop-name">{d.name}</p>
 					{#if d.extra}<p class="drop-extra">+ {d.extra}</p>{/if}
+					{#if d.about}<p class="drop-extra">{d.about}</p>{/if}
 					{#if !d.merch}<GrantAmount reveal="{money(d.value)} grant" />{/if}
 
 					{#if d.claimed}
@@ -115,7 +116,7 @@
 		</div>
 
 		<p class="section-label" style="margin-top:2.5rem">Grants</p>
-		<p class="hint" style="margin-bottom:1rem">You can claim these more than once. Where there's no set price, you choose how much, at {money(GRANT_RATE)} an hour.</p>
+		<p class="hint" style="margin-bottom:1rem">You choose how much, at {money(GRANT_RATE)} an hour, and can claim these more than once.</p>
 		<div class="drops">
 			{#each data.grants as g (g.key)}
 				{@const need = g.hours ?? (g.byCost ? 1 / GRANT_RATE : 1)}

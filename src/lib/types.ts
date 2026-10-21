@@ -4,18 +4,24 @@
  * `hours * 5` and includes shipping. Swap `art` for real photography later.
  */
 export interface Drop {
+	/** claim key; defaults to the hour tier. Needed when two drops share a tier. */
+	key?: string;
 	hours: number;
 	value: number;
 	name: string;
 	/** second item in the drop, if there is one */
 	extra?: string;
-	art: 'cap' | 'mouse' | 'charger' | 'earbuds' | 'mic' | 'speaker' | 'camera' | 'keyboard';
+	art?: 'cap' | 'mouse' | 'charger' | 'earbuds' | 'mic' | 'speaker' | 'camera' | 'keyboard';
 	/** the 40 hour drop, which ends the trail. Not revealed or claimable yet. */
 	finisher?: boolean;
 	/** product photo on a transparent background, under /static */
 	image?: string;
 	/** Expedition merch we ship — every other drop is a grant for the item */
 	merch?: boolean;
+	/** a line about it, shown in the shop */
+	about?: string;
+	/** in the shop only, not a stop on the hours trail */
+	shopOnly?: boolean;
 }
 
 export interface Project {

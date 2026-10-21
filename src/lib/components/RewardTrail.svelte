@@ -24,7 +24,7 @@
 	let available = $derived(live ? live.available : hoursBuilt - spent);
 
 	// the 40h finisher prize isn't revealed yet — it's a teaser elsewhere, never a stop
-	const trailDrops = drops.filter((d) => !d.finisher);
+	const trailDrops = drops.filter((d) => !d.finisher && !d.shopOnly);
 	let claimable = $derived(trailDrops.filter((d) => !claimed.has(d.hours) && available >= d.hours));
 	let nextUp = $derived(trailDrops.find((d) => !claimed.has(d.hours) && available < d.hours) ?? null);
 	// Snapshots of where the trail ends up, pinned in the empty half beside a stop.

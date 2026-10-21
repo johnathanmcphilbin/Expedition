@@ -229,28 +229,31 @@ export const checkpoints: Checkpoint[] = [
 
 /**
  * Grants in the shop, claimable as often as they like. Not stops on the
- * trail, so they have their own keys. A grant with `hours` has a set price
- * (up to `value` USD); `byCost` ones are priced from what they say it will
- * cost; the rest they choose the hours for. All at GRANT_RATE per hour.
+ * trail, so they have their own keys. `byCost` ones are priced from what
+ * they say it will cost; the rest they choose the hours for. All at
+ * GRANT_RATE per hour.
  */
 export const GRANT_RATE = 5;
 export type Grant = { key: string; name: string; blurb: string; image?: string; hours?: number; value?: number; byCost?: boolean };
 export const grants: Grant[] = [
-	{ key: 'usb-c-kit', name: 'USB-C Cable & Charging Kit', blurb: 'A useful braided cable, charging adapter or compact accessory kit.', hours: 3, value: 12, image: '/drop-usbc.webp' },
-	{ key: 'steam-game', name: 'Steam Game Grant', blurb: 'A game of your choice, including Katamari Damacy REROLL. Digital delivery, so nothing to ship.', hours: 5, value: 25, image: '/drop-steam.webp' },
-	{ key: 'power-bank', name: 'Power Bank Grant', blurb: 'Especially useful for long hackathons and travel.', hours: 8, value: 34, image: '/drop-powerbank.webp' },
 	{ key: 'hardware', name: 'Hardware grant', blurb: 'Parts to finish your build. Tell us what they will cost and put in an hour for every $5.', byCost: true },
 	{ key: '3d-printing', name: '3D printing grant', blurb: 'For filament, prints or a printing service for your project.' },
 	{ key: 'souvenir', name: 'Souvenir grant', blurb: 'Spending money for the Galway Christmas market, or anything else you want to bring home.' }
 ];
 
+/** A drop's claim key: its own, else its hour tier. */
+export const dropKey = (d: Drop) => d.key ?? String(d.hours);
+
 /** What one shop claim is worth in USD: its catalogue value, else GRANT_RATE per hour. */
 export function shopValue(rewardKey: string, hoursCost: number): number {
-	return drops.find((d) => String(d.hours) === rewardKey)?.value ?? grants.find((g) => g.key === rewardKey)?.value ?? hoursCost * GRANT_RATE;
+	return drops.find((d) => dropKey(d) === rewardKey)?.value ?? grants.find((g) => g.key === rewardKey)?.value ?? hoursCost * GRANT_RATE;
 }
 
 /** `value` is the grant amount in USD — only shown when someone asks for it. */
 export const drops: Drop[] = [
+	{ key: 'usb-c-kit', hours: 3, value: 12, name: 'USB-C Cable & Charging Kit', about: 'Up to $12 product budget. A useful braided cable, charging adapter or compact accessory kit.', image: '/drop-usbc.webp', shopOnly: true },
+	{ key: 'steam-game', hours: 5, value: 25, name: 'Steam Game Grant', about: 'Up to $25 product budget. A game of your choice, including Katamari Damacy REROLL. Digital delivery, so nothing to ship.', image: '/drop-steam.webp', shopOnly: true },
+	{ key: 'power-bank', hours: 8, value: 34, name: 'Power Bank Grant', about: 'Up to $34 product budget. Especially useful for long hackathons and travel.', image: '/drop-powerbank.webp', shopOnly: true },
 	{ hours: 5, value: 25, name: 'Custom Expedition cap', extra: 'Jukebox Expedition stickers', art: 'cap', image: '/drop-cap.webp', merch: true },
 	{ hours: 10, value: 50, name: 'Nice wireless mouse', art: 'mouse', image: '/drop-mouse.webp' },
 	{ hours: 15, value: 75, name: '65W GaN charger', extra: 'USB-C cable', art: 'charger', image: '/drop-charger.webp' },

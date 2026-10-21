@@ -188,7 +188,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	const claimed = new Set(claims.filter((c) => c.status !== 'cancelled').map((c) => c.reward_key));
 	const available = Number(balance.hours_available);
-	const unlocks = drops.filter((d) => !d.finisher).map((d) => ({
+	const unlocks = drops.filter((d) => !d.finisher && !d.shopOnly).map((d) => ({
 		hours: d.hours,
 		name: d.name,
 		extra: d.extra ?? null,

@@ -2,7 +2,7 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireUser } from '$lib/server/guards';
 import { getBalance, claimReward, listOwnClaims } from '$lib/server/queries';
-import { drops, grants, GRANT_RATE, money } from '$lib/data';
+import { drops, dropKey, grants, GRANT_RATE, money } from '$lib/data';
 import { text, ValidationError } from '$lib/server/validate';
 import { notifyClaim } from '$lib/server/notify';
 
@@ -24,16 +24,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	return {
 		balance,
 		claims,
-		catalogue: drops.filter((d) => !d.finisher).map((d) => ({
-			key: String(d.hours),
+		catalogue: drops.filter((d) => !d.finisher).sort((a, b) => a.hours - b.hours).map((d) => ({
+			key: dropKey(d),
 			name: d.name,
 			extra: d.extra ?? null,
+			about: d.about ?? null,
 			image: d.image ?? null,
 			merch: !!d.merch,
 			hours: d.hours,
 			value: d.value,
 			affordable: Number(balance.hours_available) >= d.hours,
-			claimed: taken.get(String(d.hours)) ?? 0
+			claimed: taken.get(dropKey(d)) ?? 0
 		})),
 		grants: grants.map((g) => ({ ...g, claimed: taken.get(g.key) ?? 0 })),
 		flash: url.searchParams.get('claimed')
@@ -72,7 +73,7 @@ export const actions: Actions = {
 			}
 
 			// price and name come from the catalogue, never the form
-			const drop = drops.find((d) => String(d.hours) === key && !d.finisher);
+			const drop = drops.find((d) => dropKey(d) === key && !d.finisher);
 			if (!drop) return fail(400, { message: 'That reward does not exist.' });
 
 			const result = await claimReward({
