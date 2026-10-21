@@ -82,6 +82,7 @@
 					<a href="/admin/reviews">Reviews</a>
 				{/if}
 				<a href="/dashboard">Dashboard</a>
+				<a href="/claim">Shop</a>
 			{/if}
 			<!-- phones: the account action lives in the menu, the bar has no room -->
 			<div class="menu-account">

@@ -133,6 +133,7 @@
 						Review queue{data.pendingReviews ? ` (${data.pendingReviews})` : ''}
 					</a>
 				{/if}
+				<a class="btn btn-outline" href="/claim">Shop</a>
 				<a class="btn" href="/submit-to-hackclub">Submit a project</a>
 			</div>
 		</div>
