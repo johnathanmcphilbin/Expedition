@@ -58,21 +58,17 @@ export const actions: Actions = {
 			const key = text(form.get('reward_key'), 'Reward', { max: 20, required: true })!;
 			const note = text(form.get('note'), 'Note', { max: 500 });
 
-			// a grant: a set price, priced from their cost, or hours they choose; the rate is ours
+			// a grant: a set price, or hours they choose; the rate is ours
 			const grant = grants.find((g) => g.key === key);
 			if (grant) {
 				let hours: number;
 				if (grant.hours) {
 					hours = grant.hours;
-				} else if (grant.byCost) {
-					const cost = Number(form.get('cost'));
-					if (!Number.isInteger(cost) || cost < 1 || cost > 1000) return fail(400, { message: 'Put in what it will cost, in whole dollars.' });
-					if (!note) return fail(400, { message: "Say what you're building and what the money is for." });
-					hours = Math.round((cost / GRANT_RATE) * 100) / 100;
 				} else {
 					hours = Number(form.get('hours'));
-					if (!Number.isInteger(hours) || hours < 1 || hours > 100) return fail(400, { message: 'Pick a whole number of hours, at least 1.' });
+					if (!Number.isInteger(hours) || hours < 1 || hours > 200) return fail(400, { message: 'Pick a whole number of hours, at least 1.' });
 				}
+				if (grant.needsNote && !note) return fail(400, { message: "Say what you're building and what you need." });
 				const name = grant.hours ? grant.name : `${grant.name} (${money(hours * GRANT_RATE)})`;
 				const result = await claimReward({ userId: user.id, rewardKey: grant.key, rewardName: name, hoursCost: hours, note });
 				if (!result.ok) return fail(409, { message: result.message });

@@ -229,14 +229,13 @@ export const checkpoints: Checkpoint[] = [
 
 /**
  * Grants in the shop, claimable as often as they like. Not stops on the
- * trail, so they have their own keys. `byCost` ones are priced from what
- * they say it will cost; the rest they choose the hours for. All at
- * GRANT_RATE per hour.
+ * trail, so they have their own keys. They choose the hours, at GRANT_RATE
+ * per hour; `needsNote` ones must say what the money is for.
  */
 export const GRANT_RATE = 5;
-export type Grant = { key: string; name: string; blurb: string; image?: string; hours?: number; value?: number; byCost?: boolean };
+export type Grant = { key: string; name: string; blurb: string; image?: string; hours?: number; value?: number; needsNote?: boolean };
 export const grants: Grant[] = [
-	{ key: 'hardware', name: 'Hardware grant', blurb: 'Parts to finish your build. Tell us what they will cost and put in an hour for every $5.', byCost: true },
+	{ key: 'hardware', name: 'Hardware grant', blurb: 'Parts to finish your build. Put in an hour for every $5 they will cost, and tell us what you need.', needsNote: true },
 	{ key: '3d-printing', name: '3D printing grant', blurb: 'For filament, prints or a printing service for your project.' },
 	{ key: 'souvenir', name: 'Souvenir grant', blurb: 'Spending money for the Galway Christmas market, or anything else you want to bring home.' }
 ];

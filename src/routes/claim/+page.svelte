@@ -1,6 +1,6 @@
 <script lang="ts">
 	import GrantAmount from '$lib/components/GrantAmount.svelte';
-	import { money, GRANT_RATE } from '$lib/data';
+	import { money, GRANT_RATE, grants } from '$lib/data';
 	import '$lib/styles/app.css';
 	import { enhance } from '$app/forms';
 	import Footer from '$lib/components/Footer.svelte';
@@ -9,7 +9,8 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let claiming = $state<string | null>(null);
-	let costs = $state<Record<string, number>>({});
+	// hours typed into each grant, starting at 1
+	let hoursFor = $state<Record<string, number>>(Object.fromEntries(grants.map((g) => [g.key, 1])));
 	const available = $derived(Number(data.balance.hours_available));
 	const fmtH = (n: number) => `${n.toFixed(2).replace(/\.?0+$/, '')}h`;
 
@@ -137,7 +138,7 @@
 		<p class="hint" style="margin-bottom:1rem">You choose how much, at {money(GRANT_RATE)} an hour, and can claim these more than once.</p>
 		<div class="drops">
 			{#each data.grants as g (g.key)}
-				{@const need = g.hours ?? (g.byCost ? 1 / GRANT_RATE : 1)}
+				{@const need = g.hours ?? 1}
 				{@const affordable = available >= need}
 				<div class="drop" class:locked={!affordable && !g.claimed}>
 					{#if g.image}<img class="drop-img" src={g.image} alt={g.name} loading="lazy" />{/if}
@@ -161,19 +162,17 @@
 								};
 							}}>
 							<input type="hidden" name="reward_key" value={g.key} />
-							{#if g.byCost}
-								<label class="grant-hours">
-									It will cost $
-									<input name="cost" type="number" min="1" step="1" max={Math.floor(available * GRANT_RATE)} bind:value={costs[g.key]} required />
-								</label>
-								<p class="drop-extra">That's {fmtH((costs[g.key] ?? 0) / GRANT_RATE)} of your hours.</p>
-								<input name="note" type="text" maxlength="500" placeholder="What you're building and what you need" required />
-							{:else if !g.hours}
+							{#if !g.hours}
 								<label class="grant-hours">
 									Hours
-									<input name="hours" type="number" min="1" step="1" max={Math.floor(available)} value="1" required />
+									<input name="hours" type="number" min="1" step="1" max={Math.floor(available)} bind:value={hoursFor[g.key]} required />
 								</label>
-								<input name="note" type="text" maxlength="500" placeholder="What it's for (optional)" />
+								<p class="drop-extra">A {money((hoursFor[g.key] ?? 1) * GRANT_RATE)} grant.</p>
+								{#if g.needsNote}
+									<input name="note" type="text" maxlength="500" placeholder="What you're building and what you need" required />
+								{:else}
+									<input name="note" type="text" maxlength="500" placeholder="What it's for (optional)" />
+								{/if}
 							{:else}
 								<input name="note" type="text" maxlength="500" placeholder="Anything we should know (optional)" />
 							{/if}
