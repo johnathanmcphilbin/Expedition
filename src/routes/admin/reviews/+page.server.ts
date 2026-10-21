@@ -75,6 +75,20 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		listQueue(),
 		db().from('review_flags').select('item_kind, item_key, reason, flagged_at')
 	]);
+	// waiting submissions from before tracked hours were saved: look them up
+	// once, so the queue can show which pay the big-project rate
+	await Promise.all(
+		queued
+			.filter((qr) => qr.status === 'pending' && qr.tracked_hours == null && hackatimeNames(qr).length)
+			.map(async (qr) => {
+				const times = await fetchProjectTimes(qr.user_id);
+				const picked = (times ?? []).filter((t) => hackatimeNames(qr).includes(t.name));
+				if (!picked.length) return;
+				qr.tracked_hours = Math.round((picked.reduce((sum, t) => sum + t.totalSeconds, 0) / 3600) * 100) / 100;
+				await db().from('submission_queue').update({ tracked_hours: qr.tracked_hours }).eq('id', qr.id);
+			})
+	);
+
 	// "possible fraud" marks, by kind:key
 	const flags = new Map(
 		(flagRows.data ?? []).map((f) => [`${f.item_kind}:${f.item_key}`, { reason: f.reason, at: f.flagged_at }])
@@ -181,7 +195,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				userId: qr.user_id,
 				gone: false,
 				hardware: qr.hardware,
-				trackedHours: qr.tracked_hours === null ? null : Number(qr.tracked_hours),
+				trackedHours: qr.tracked_hours == null ? null : Number(qr.tracked_hours),
 				flag: flags.get(`new:${qr.id}`) ?? null,
 				searchText: [qr.first_name, qr.last_name, qr.email, qr.github_username, qr.project_name]
 					.join(' ')
@@ -395,8 +409,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		airtableError: url.searchParams.get('airtable_error'),
 		reviewerName: reviewerName(viewer),
 		earnings: isReviewerOnly(viewer)
-			? { ...(await reviewEarnings(viewer.id)), per: REVIEW_PAY_USD, big: BIG_REVIEW_PAY_USD, bigHours: BIG_PROJECT_HOURS, cash: viewer.review_pay === 'cash' }
+			? { ...(await reviewEarnings(viewer.id)), per: REVIEW_PAY_USD, cash: viewer.review_pay === 'cash' }
 			: null,
+		// everyone sees which submissions pay the big-project rate
+		bigPay: { per: REVIEW_PAY_USD, big: BIG_REVIEW_PAY_USD, hours: BIG_PROJECT_HOURS },
 		filter: validFilter,
 		counts,
 		search: q,

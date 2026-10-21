@@ -231,7 +231,7 @@
 
 		{#if !data.isAdmin}
 			<p class="shadow-note">Hi {data.reviewerName}! Your decisions are signed "Reviewed by {data.reviewerName}" in the notes and in Hack Club's Additional Justification. Your own projects don't show up here.
-				{#if data.earnings}You earn ${data.earnings.per.toFixed(2)}{data.earnings.cash ? ', paid by an organiser,' : ' in hours'} for each submission you decide, and <strong>${data.earnings.big.toFixed(2)} when you approve a project with more than {data.earnings.bigHours}h tracked</strong>, so the big projects are worth picking up: <strong>{data.earnings.reviews} so far (${data.earnings.usd.toFixed(2)})</strong>.{/if}</p>
+				{#if data.earnings}You earn ${data.earnings.per.toFixed(2)}{data.earnings.cash ? ', paid by an organiser,' : ' in hours'} for each submission you decide, and <strong>${data.bigPay.big.toFixed(2)} when you approve a project with more than {data.bigPay.hours}h tracked</strong>, so the big projects are worth picking up: <strong>{data.earnings.reviews} so far (${data.earnings.usd.toFixed(2)})</strong>.{/if}</p>
 		{/if}
 
 		<nav class="tabs" aria-label="Filter by status">
@@ -256,7 +256,7 @@
 							{#if item.hardware}<span class="tag tag-hw">Hardware</span>{/if}
 							<span class="tag tag-{item.status}">{STATUS_LABEL[item.status]}</span>
 							{#if item.kind === 'new' && item.status === 'pending'}<span class="tag tag-new">Not sent yet</span>{/if}
-							{#if data.earnings && item.trackedHours !== null && item.trackedHours > data.earnings.bigHours && (item.status === 'pending' || item.status === 'in_review')}<span class="tag tag-big" title="Over {data.earnings.bigHours}h tracked: approving it pays ${data.earnings.big.toFixed(2)}">${data.earnings.big.toFixed(2)}</span>{/if}
+							{#if item.trackedHours !== null && item.trackedHours > data.bigPay.hours && (item.status === 'pending' || item.status === 'in_review')}<span class="tag tag-big" title="Over {data.bigPay.hours}h tracked: approving it pays a reviewer ${data.bigPay.big.toFixed(2)}">${data.bigPay.big.toFixed(2)}</span>{/if}
 							{#if !item.matched}<span class="tag tag-warn">No account</span>{/if}
 							{#if item.gone}<span class="tag tag-warn">Gone from Airtable</span>{/if}
 						</span>
@@ -453,7 +453,7 @@
 									{#if data.queuedDetail.trackedHours !== null}
 										<span class="hint">{data.queuedDetail.trackedHours}h tracked on this project in Hackatime.</span>
 									{/if}
-									{#if data.earnings}<span class="hint big-pay">Projects with more than {data.earnings.bigHours}h tracked pay you ${data.earnings.big.toFixed(2)} instead of ${data.earnings.per.toFixed(2)} when approved.</span>{/if}
+									<span class="hint big-pay">Projects with more than {data.bigPay.hours}h tracked pay {data.earnings ? 'you' : 'a reviewer'} ${data.bigPay.big.toFixed(2)} instead of ${data.bigPay.per.toFixed(2)} when approved.</span>
 								</div>
 								<div class="field">
 									<label for="participant_feedback">Feedback to them</label>
@@ -626,7 +626,7 @@
 											{#if data.detail.review?.submitted_hours != null}{data.detail.review.submitted_hours}h tracked on this project.{/if}
 											{#if data.detail.balance}They've had {data.detail.balance.hours_earned}h approved so far.{/if}
 										</span>
-										{#if data.earnings}<span class="hint big-pay">Projects with more than {data.earnings.bigHours}h tracked pay you ${data.earnings.big.toFixed(2)} instead of ${data.earnings.per.toFixed(2)} when approved.</span>{/if}
+										<span class="hint big-pay">Projects with more than {data.bigPay.hours}h tracked pay {data.earnings ? 'you' : 'a reviewer'} ${data.bigPay.big.toFixed(2)} instead of ${data.bigPay.per.toFixed(2)} when approved.</span>
 									</div>
 								</div>
 
