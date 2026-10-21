@@ -3,7 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin, requireReviewer, isReviewerOnly, reviewerName } from '$lib/server/guards';
 import { lapsesFor, LAPSE_FIELD, type Lapse } from '$lib/server/lapse';
 import { referredBy } from '$lib/server/referrals';
-import { payForReview, reviewEarnings, REVIEW_PAY_USD } from '$lib/server/payouts';
+import { payForReview, reviewEarnings, REVIEW_PAY_USD, BIG_REVIEW_PAY_USD, BIG_PROJECT_HOURS } from '$lib/server/payouts';
 import type { UserRow, SubmissionReviewRow, QueuedSubmissionRow } from '$lib/server/database.types';
 import { db } from '$lib/server/supabase';
 import {
@@ -119,6 +119,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		/** deleted from Hack Club's Airtable: nothing left to review */
 		gone: boolean;
 		hardware: boolean;
+		trackedHours: number | null;
 		flag: { reason: string | null; at: string } | null;
 		searchText: string;
 	};
@@ -154,6 +155,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			matched: !!r.submission.user_id,
 			userId: r.submission.user_id,
 			hardware: hardwareByRecord.get(r.submission.airtable_record_id) ?? false,
+			// tracked hours, once the review's been opened: shows the big-project pay
+			trackedHours: r.review?.submitted_hours ?? null,
 			gone: r.submission.airtable_status === AIRTABLE_GONE,
 			// a flag set while it was still queued follows it once sent
 			flag:
@@ -178,6 +181,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				userId: qr.user_id,
 				gone: false,
 				hardware: qr.hardware,
+				trackedHours: null,
 				flag: flags.get(`new:${qr.id}`) ?? null,
 				searchText: [qr.first_name, qr.last_name, qr.email, qr.github_username, qr.project_name]
 					.join(' ')
@@ -386,7 +390,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		isAdmin: viewer.role === 'admin',
 		airtableError: url.searchParams.get('airtable_error'),
 		reviewerName: reviewerName(viewer),
-		earnings: isReviewerOnly(viewer) ? { ...(await reviewEarnings(viewer.id)), per: REVIEW_PAY_USD, cash: viewer.review_pay === 'cash' } : null,
+		earnings: isReviewerOnly(viewer)
+			? { ...(await reviewEarnings(viewer.id)), per: REVIEW_PAY_USD, big: BIG_REVIEW_PAY_USD, bigHours: BIG_PROJECT_HOURS, cash: viewer.review_pay === 'cash' }
+			: null,
 		filter: validFilter,
 		counts,
 		search: q,
@@ -758,7 +764,7 @@ export const actions: Actions = {
 				if (result.airtableError) {
 					// approved and credited, but Hack Club's fields didn't take: open it
 					// so the error and the resend button are right there
-					await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at).catch((e) =>
+					await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at, decision === 'approve' ? approvedHours : null).catch((e) =>
 						console.error('payForReview', e)
 					);
 					redirect(
@@ -779,7 +785,7 @@ export const actions: Actions = {
 
 			if (decision === 'draft') return { saved: true };
 			// non-admin reviewers earn hours for each submission they decide
-			await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at).catch((e) =>
+			await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at, decision === 'approve' ? approvedHours : null).catch((e) =>
 				console.error('payForReview', e)
 			);
 		} catch (e) {
@@ -916,7 +922,8 @@ export const actions: Actions = {
 					airtableRecordId,
 					hackatimeProject,
 					review.status === 'pending' || review.status === 'in_review',
-					review.updated_at
+					review.updated_at,
+					status === 'approved' ? approvedHours : null
 				).catch((e) => console.error('payForReview', e));
 			}
 

@@ -1,6 +1,6 @@
 import { db } from './supabase';
 import { shopValue, TRAVEL_RATE } from '$lib/data';
-import { REVIEW_PAY_USD, BUDGET_PER_HOUR_USD } from './payouts';
+import { BUDGET_PER_HOUR_USD } from './payouts';
 
 /**
  * Where the program budget goes. Every approved build hour brings in $8.50.
@@ -14,7 +14,7 @@ export async function programBudget() {
 		db().from('users').select('id, hackclub_id'),
 		db().from('hour_transactions').select('user_id, amount').eq('type', 'checkpoint_approved'),
 		db().from('reward_claims').select('user_id, reward_key, hours_cost, status').neq('status', 'cancelled'),
-		db().from('review_payouts').select('reviewer_id, amount, paid_as'),
+		db().from('review_payouts').select('reviewer_id, amount, usd, paid_as'),
 		db().from('referral_rewards').select('referrer_id, referred_id, amount_cents, status').eq('status', 'earned')
 	]);
 	const real = new Set((users ?? []).filter((u) => u.hackclub_id?.startsWith('ident!')).map((u) => u.id));
@@ -30,7 +30,7 @@ export async function programBudget() {
 	const reviewerUsd = r2(
 		(payouts ?? [])
 			.filter((p) => real.has(p.reviewer_id))
-			.reduce((s, p) => s + (p.paid_as === 'cash' ? REVIEW_PAY_USD : Number(p.amount ?? 0) * TRAVEL_RATE), 0)
+			.reduce((s, p) => s + (p.paid_as === 'cash' ? Number(p.usd) : Number(p.amount ?? 0) * TRAVEL_RATE), 0)
 	);
 	const referralUsd = r2(
 		(referrals ?? []).filter((r) => real.has(r.referrer_id) && real.has(r.referred_id)).reduce((s, r) => s + r.amount_cents / 100, 0)

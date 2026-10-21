@@ -419,7 +419,7 @@
 					</table>
 				</div>
 				<p class="b-sub pay-note">
-					Budget generated is the approved hours they signed off × $8.50. $1.50 per submission a non-admin reviewer decides. Hours reviewers get it as Expedition hours automatically; cash reviewers are owed it until you mark it paid.
+					Budget generated is the approved hours they signed off × $8.50. $1.50 per submission a non-admin reviewer decides, $2.50 when they approve more than 10 hours. Hours reviewers get it as Expedition hours automatically; cash reviewers are owed it until you mark it paid.
 					Total owed: <strong>${data.reviewerPay.reduce((t, r) => t + r.owedUsd, 0).toFixed(2)}</strong>
 				</p>
 			{:else}

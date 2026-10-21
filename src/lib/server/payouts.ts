@@ -8,7 +8,13 @@ export const BUDGET_PER_HOUR_USD = 8.5;
 
 /** What a non-admin reviewer earns per submission they decide. */
 export const REVIEW_PAY_USD = 1.5;
-const PER_REVIEW_HOURS = REVIEW_PAY_USD / TRAVEL_RATE; // 0.1875h
+/** ...or for approving more than BIG_PROJECT_HOURS, so big projects get picked up. */
+export const BIG_REVIEW_PAY_USD = 2.5;
+export const BIG_PROJECT_HOURS = 10;
+
+/** What deciding a submission pays: approvedHours is null unless it was approved. */
+export const reviewPayFor = (approvedHours: number | null) =>
+	approvedHours !== null && approvedHours > BIG_PROJECT_HOURS ? BIG_REVIEW_PAY_USD : REVIEW_PAY_USD;
 
 const cents = (n: number) => Math.round(n * 100) / 100;
 
@@ -20,8 +26,11 @@ const cents = (n: number) => Math.round(n * 100) / 100;
  * `round` identifies the waiting period (the row's updated_at before the
  * decision), so a double click within one round still pays once.
  *
+ * Approving more than 10 hours pays $2.50, anything else $1.50.
+ *
  * The ledger keeps two decimals, so each payout is the difference between
- * their running totals: 0.19, 0.18, 0.19, 0.19… adding up to exactly $1.50 each.
+ * their running totals in hours: 0.19, 0.18, 0.19, 0.19… never drifting off
+ * what they've earned in dollars.
  */
 export async function payForReview(
 	reviewer: UserRow,
@@ -29,17 +38,19 @@ export async function payForReview(
 	key: string,
 	project: string,
 	wasWaiting: boolean,
-	round: string
+	round: string,
+	approvedHours: number | null
 ): Promise<void> {
 	if (!isReviewerOnly(reviewer) || !wasWaiting) return;
 	const roundKey = `${key}@${round}`;
+	const usd = reviewPayFor(approvedHours);
 
 	// paid in cash by an organiser: record it as owed, credit no hours
 	if (reviewer.review_pay === 'cash') {
 		await db()
 			.from('review_payouts')
 			.upsert(
-				{ item_kind: kind, item_key: roundKey, reviewer_id: reviewer.id, paid_as: 'cash' },
+				{ item_kind: kind, item_key: roundKey, reviewer_id: reviewer.id, paid_as: 'cash', usd },
 				{ onConflict: 'item_kind,item_key', ignoreDuplicates: true }
 			);
 		return;
@@ -48,21 +59,18 @@ export async function payForReview(
 	// claim the payout first: a second request for the same round stops here
 	const { data: claimed, error } = await db()
 		.from('review_payouts')
-		.upsert({ item_kind: kind, item_key: roundKey, reviewer_id: reviewer.id }, { onConflict: 'item_kind,item_key', ignoreDuplicates: true })
+		.upsert({ item_kind: kind, item_key: roundKey, reviewer_id: reviewer.id, usd }, { onConflict: 'item_kind,item_key', ignoreDuplicates: true })
 		.select('item_key');
 	if (error) throw new Error(`Couldn't record review payout: ${error.message}`);
 	if (!claimed?.length) return;
 
-	const { count } = await db()
-		.from('review_payouts')
-		.select('*', { count: 'exact', head: true })
-		.eq('reviewer_id', reviewer.id);
-	const n = count ?? 1;
-	const amount = cents(cents(n * PER_REVIEW_HOURS) - cents((n - 1) * PER_REVIEW_HOURS));
+	const { data: mine } = await db().from('review_payouts').select('usd').eq('reviewer_id', reviewer.id);
+	const totalUsd = (mine ?? []).reduce((t, r) => t + Number(r.usd), 0) || usd;
+	const amount = cents(cents(totalUsd / TRAVEL_RATE) - cents((totalUsd - usd) / TRAVEL_RATE));
 
 	const tx = await db()
 		.from('hour_transactions')
-		.insert({ user_id: reviewer.id, amount, type: 'manual_adjustment', note: `Review reward ($${REVIEW_PAY_USD}): ${project}`.slice(0, 500) });
+		.insert({ user_id: reviewer.id, amount, type: 'manual_adjustment', note: `Review reward ($${usd.toFixed(2)}): ${project}`.slice(0, 500) });
 	if (tx.error) {
 		// undo the claim so the next decision can pay it
 		await db().from('review_payouts').delete().eq('item_kind', kind).eq('item_key', roundKey);
@@ -73,18 +81,15 @@ export async function payForReview(
 
 /** How many reviews someone has been paid for, and the total. */
 export async function reviewEarnings(reviewerId: string): Promise<{ reviews: number; usd: number }> {
-	const { count } = await db()
-		.from('review_payouts')
-		.select('*', { count: 'exact', head: true })
-		.eq('reviewer_id', reviewerId);
-	return { reviews: count ?? 0, usd: (count ?? 0) * REVIEW_PAY_USD };
+	const { data } = await db().from('review_payouts').select('usd').eq('reviewer_id', reviewerId);
+	return { reviews: data?.length ?? 0, usd: cents((data ?? []).reduce((t, r) => t + Number(r.usd), 0)) };
 }
 
 /** What each reviewer has earned, how it was paid, and the cash still owed. */
 export async function reviewerPay() {
 	const [{ data: staff }, { data: rows }, { data: approvals }, { data: testAccounts }] = await Promise.all([
 		db().from('users').select('id, display_name, role, review_pay').in('role', ['reviewer', 'admin']),
-		db().from('review_payouts').select('reviewer_id, amount, paid_as, cash_paid_at'),
+		db().from('review_payouts').select('reviewer_id, amount, usd, paid_as, cash_paid_at'),
 		// every approval (both review paths) lands here with who approved it
 		db().from('submission_reviews').select('reviewer_id, approved_hours').eq('status', 'approved').not('reviewer_id', 'is', null),
 		db().from('users').select('id').not('hackclub_id', 'like', 'ident!%')
@@ -103,7 +108,9 @@ export async function reviewerPay() {
 			const hoursRows = mine.filter((r) => r.paid_as !== 'cash');
 			const cashRows = mine.filter((r) => r.paid_as === 'cash');
 			const hours = Math.round(hoursRows.reduce((t, r) => t + Number(r.amount ?? 0), 0) * 100) / 100;
-			const cashPaid = cashRows.filter((r) => r.cash_paid_at).length;
+			const usdOf = (rs: typeof mine) => cents(rs.reduce((t, r) => t + Number(r.usd), 0));
+			const cashEarnedUsd = usdOf(cashRows);
+			const cashPaidUsd = usdOf(cashRows.filter((r) => r.cash_paid_at));
 			const approvedHours =
 				Math.round((approvals ?? []).filter((a) => a.reviewer_id === id).reduce((t, a) => t + Number(a.approved_hours ?? 0), 0) * 100) / 100;
 			return {
@@ -116,9 +123,9 @@ export async function reviewerPay() {
 				reviews: mine.length,
 				hours,
 				hoursUsd: Math.round(hours * TRAVEL_RATE * 100) / 100,
-				cashEarnedUsd: cashRows.length * REVIEW_PAY_USD,
-				cashPaidUsd: cashPaid * REVIEW_PAY_USD,
-				owedUsd: (cashRows.length - cashPaid) * REVIEW_PAY_USD
+				cashEarnedUsd,
+				cashPaidUsd,
+				owedUsd: cents(cashEarnedUsd - cashPaidUsd)
 			};
 		})
 		.filter((r) => r.reviews > 0 || r.approvedHours > 0 || r.pay === 'cash')
