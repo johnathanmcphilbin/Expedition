@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { db } from './supabase';
+import { CHALLENGE } from '$lib/data';
 import type {
 	MailingSignupRow,
 	RewardClaimRow,
@@ -357,6 +358,45 @@ export async function claimReward(params: {
 		return { ok: false, message: 'Could not record that claim. Try again.' };
 	}
 	return { ok: true, claimId: data as unknown as string };
+}
+
+// ------------------------------------------------------------ challenge ----
+
+/** Spots taken, and (for a participant) hours spent since it started and whether they won. */
+export async function challengeStatus(userId: string | null) {
+	const ch = CHALLENGE;
+	if (!ch) return null;
+	const [{ count }, mine] = await Promise.all([
+		db().from('reward_claims').select('id', { count: 'exact', head: true }).eq('reward_key', ch.key).neq('status', 'cancelled'),
+		userId
+			? db().from('reward_claims').select('reward_key, hours_cost, created_at').eq('user_id', userId).neq('status', 'cancelled').gte('created_at', ch.since)
+			: Promise.resolve({ data: [] as { reward_key: string; hours_cost: number }[] })
+	]);
+	const rows = mine.data ?? [];
+	return {
+		...ch,
+		taken: count ?? 0,
+		spent: rows.filter((c) => c.reward_key !== ch.key).reduce((t, c) => t + Number(c.hours_cost), 0),
+		won: rows.some((c) => c.reward_key === ch.key)
+	};
+}
+
+/** After a purchase: give them the prize if they've now earned it and a spot is left. */
+export async function awardChallenge(userId: string): Promise<boolean> {
+	if (!CHALLENGE) return false;
+	const { data, error: e } = await db().rpc('award_challenge', {
+		p_user_id: userId,
+		p_key: CHALLENGE.key,
+		p_name: `Challenge prize: ${CHALLENGE.prize}`,
+		p_spots: CHALLENGE.spots,
+		p_spend: CHALLENGE.spend,
+		p_since: CHALLENGE.since
+	});
+	if (e) {
+		console.error('awardChallenge', e.message);
+		return false;
+	}
+	return data === true;
 }
 
 // ---------------------------------------------------------- travel fund ----

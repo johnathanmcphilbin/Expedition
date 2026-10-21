@@ -2,7 +2,7 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin } from '$lib/server/guards';
 import { db } from '$lib/server/supabase';
-import { listAllTravelBuckets, listAllClaims } from '$lib/server/queries';
+import { listAllTravelBuckets, listAllClaims, challengeStatus } from '$lib/server/queries';
 import { listAllTravelClaims, decideTravelClaim, payTravelClaim, createTravelClaim, BUCKETS } from '$lib/server/travel-claims';
 import { reviewerPay, markReviewerPaid } from '$lib/server/payouts';
 import { logAdminAction } from '$lib/server/referrals';
@@ -17,13 +17,14 @@ import { shopValue, TRAVEL_RATE } from '$lib/data';
  */
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
-	const [buckets, travelClaims, pay, shopClaims, { data: users }, { data: flights }] = await Promise.all([
+	const [buckets, travelClaims, pay, shopClaims, { data: users }, { data: flights }, challenge] = await Promise.all([
 		listAllTravelBuckets(),
 		listAllTravelClaims(),
 		reviewerPay(),
 		listAllClaims(),
 		db().from('users').select('id, display_name, email, hackclub_id'),
-		db().from('trip_flights').select('user_id, price_usd, status')
+		db().from('trip_flights').select('user_id, price_usd, status'),
+		challengeStatus(null)
 	]);
 	const r2 = (n: number) => Math.round(n * 100) / 100;
 	const userBy = new Map((users ?? []).map((u) => [u.id, u]));
@@ -92,6 +93,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		stages,
 		reviewers: reviewers.map((r) => ({ id: r.id, name: r.name, owedUsd: r.owedUsd })),
 		reviewersUsd,
+		challenge,
 		shop: { items: toSend.map((c) => ({ name: c.owner?.display_name ?? 'Unnamed', reward: c.reward_name })), usd: shopUsd },
 		// owed now: approved travel claims + reviewer cash + shop items to send
 		totalUsd: r2(stages.approved.total + reviewersUsd + shopUsd)

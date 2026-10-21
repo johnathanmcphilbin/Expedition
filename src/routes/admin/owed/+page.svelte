@@ -183,6 +183,9 @@
 					<ul class="list">{#each data.shop.items as s, i (i)}<li><span>{s.name}</span><span>{s.reward}</span></li>{/each}</ul>
 					<p class="sub">Worth about {usd(data.shop.usd)}. <a href="/admin/fulfilment">Fulfilment →</a></p>
 				{:else}<p class="empty">Nothing to send.</p>{/if}
+				{#if data.challenge}
+					<p class="sub">Challenge ({data.challenge.prize} for spending {data.challenge.spend}h): {data.challenge.taken} of {data.challenge.spots} won.</p>
+				{/if}
 			</div>
 		</section>
 	</div>

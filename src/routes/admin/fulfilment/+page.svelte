@@ -41,6 +41,12 @@
 			<div>
 				<h1 class="app-title">Fulfilment</h1>
 				<p class="hint lead">Everything people have claimed from the shop. Mark it sent once it's on its way.</p>
+				{#if data.challenge}
+					<p class="hint">
+						Challenge: first {data.challenge.spots} to spend {data.challenge.spend}h win {data.challenge.prize}.
+						<strong>{data.challenge.taken} of {data.challenge.spots} won</strong>; winners show here as "Challenge prize".
+					</p>
+				{/if}
 			</div>
 		</div>
 

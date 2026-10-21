@@ -1,8 +1,8 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireUser } from '$lib/server/guards';
-import { getBalance, claimReward, listOwnClaims } from '$lib/server/queries';
-import { drops, dropKey, grants, GRANT_RATE, money } from '$lib/data';
+import { getBalance, claimReward, listOwnClaims, challengeStatus, awardChallenge } from '$lib/server/queries';
+import { drops, dropKey, grants, GRANT_RATE, money, CHALLENGE } from '$lib/data';
 import { text, ValidationError } from '$lib/server/validate';
 import { notifyClaim } from '$lib/server/notify';
 
@@ -15,7 +15,7 @@ import { notifyClaim } from '$lib/server/notify';
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const user = requireUser(locals, '/claim');
 
-	const [balance, claims] = await Promise.all([getBalance(user.id), listOwnClaims(user.id)]);
+	const [balance, claims, challenge] = await Promise.all([getBalance(user.id), listOwnClaims(user.id), challengeStatus(user.id)]);
 
 	// how many of each drop they've claimed; buying one again is fine
 	const taken = new Map<string, number>();
@@ -37,9 +37,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			claimed: taken.get(dropKey(d)) ?? 0
 		})),
 		grants: grants.map((g) => ({ ...g, claimed: taken.get(g.key) ?? 0 })),
+		challenge,
 		flash: url.searchParams.get('claimed')
 	};
 };
+
+/** After a purchase: the challenge prize, if this one got them there. */
+async function checkChallenge(user: { id: string; display_name: string | null }): Promise<boolean> {
+	const won = await awardChallenge(user.id);
+	if (won && CHALLENGE) await notifyClaim({ name: user.display_name, reward: `Challenge prize: ${CHALLENGE.prize}`, hours: 0, note: null }).catch(() => {});
+	return won;
+}
 
 export const actions: Actions = {
 	claim: async ({ request, locals }) => {
@@ -69,7 +77,7 @@ export const actions: Actions = {
 				const result = await claimReward({ userId: user.id, rewardKey: grant.key, rewardName: name, hoursCost: hours, note });
 				if (!result.ok) return fail(409, { message: result.message });
 				await notifyClaim({ name: user.display_name, reward: name, hours, note });
-				return { success: true, claimed: name };
+				return { success: true, claimed: name, wonChallenge: await checkChallenge(user) };
 			}
 
 			// price and name come from the catalogue, never the form
@@ -91,7 +99,7 @@ export const actions: Actions = {
 				hours: drop.hours,
 				note
 			});
-			return { success: true, claimed: drop.name };
+			return { success: true, claimed: drop.name, wonChallenge: await checkChallenge(user) };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { message: e.message, field: e.field });
 			throw e;

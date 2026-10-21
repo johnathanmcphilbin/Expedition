@@ -57,9 +57,27 @@
 			</p>
 		{/if}
 
+		{#if data.challenge}
+			{@const c = data.challenge}
+			<div class="challenge" class:won={c.won}>
+				<p class="section-label">Challenge</p>
+				{#if c.won}
+					<p><strong>You won {c.prize}.</strong> We'll ship them to you.</p>
+				{:else if c.taken >= c.spots}
+					<p>All {c.spots} spots are gone. Thanks to everyone who took part.</p>
+				{:else}
+					<p>
+						<strong>The next {c.spots - c.taken} {c.spots - c.taken === 1 ? 'person' : 'people'} to spend {c.spend} hours in the shop get {c.prize}, shipped free.</strong>
+						You've spent {Number(c.spent.toFixed(2))}h of {c.spend}h so far.
+					</p>
+				{/if}
+			</div>
+		{/if}
+
 		{#if form?.success}
 			<p class="notice">
 				Claimed {form.claimed}. We'll be in touch about getting it to you.
+				{#if form.wonChallenge && data.challenge}You also won {data.challenge.prize}, shipped free.{/if}
 			</p>
 		{:else if form?.message}
 			<p class="notice error">{form.message}</p>
@@ -258,6 +276,18 @@
 	}
 	.error {
 		color: var(--red);
+	}
+	.challenge {
+		margin: 0 0 1.5rem;
+		padding: 0.9rem 1.1rem;
+		border: 2px solid var(--navy);
+		background: var(--white);
+	}
+	.challenge.won {
+		border-color: var(--green);
+	}
+	.challenge p:last-child {
+		margin: 0.3rem 0 0;
 	}
 	.grant-hours {
 		display: flex;

@@ -2,7 +2,7 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin } from '$lib/server/guards';
 import { db } from '$lib/server/supabase';
-import { listAllClaims, fulfilClaim, cancelClaim } from '$lib/server/queries';
+import { listAllClaims, fulfilClaim, cancelClaim, challengeStatus } from '$lib/server/queries';
 import { getShippingAddress } from '$lib/server/airtable';
 import { text, uuid, ValidationError } from '$lib/server/validate';
 
@@ -13,7 +13,7 @@ type Tab = (typeof TABS)[number];
 export const load: PageServerLoad = async ({ locals, url }) => {
 	requireAdmin(locals);
 
-	const claims = await listAllClaims();
+	const [claims, challenge] = await Promise.all([listAllClaims(), challengeStatus(null)]);
 	const tab: Tab = TABS.find((t) => t === url.searchParams.get('status')) ?? 'requested';
 	const shown = claims.filter((c) => c.status === tab);
 	// oldest first while waiting, so nobody waits longest; newest first otherwise
@@ -46,6 +46,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	return {
+		challenge,
 		tab,
 		counts: Object.fromEntries(TABS.map((t) => [t, claims.filter((c) => c.status === t).length])) as Record<Tab, number>,
 		claims: shown.map((c) => ({

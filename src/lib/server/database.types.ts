@@ -457,6 +457,17 @@ export interface Database {
 				};
 				Returns: string;
 			};
+			award_challenge: {
+				Args: {
+					p_user_id: string;
+					p_key: string;
+					p_name: string;
+					p_spots: number;
+					p_spend: number;
+					p_since: string;
+				};
+				Returns: boolean;
+			};
 			cancel_reward_claim: {
 				Args: {
 					p_claim_id: string;
