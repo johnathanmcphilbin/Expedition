@@ -352,6 +352,30 @@
 		</section>
 
 		<section class="block pay-block">
+			<div class="b-head"><p class="section-label">Visa ready: {data.visaReady.length} with {data.visaHours}h+ approved</p></div>
+			{#if data.visaReady.length}
+				<div class="table-wrap">
+					<table class="builders">
+						<thead><tr><th>Builder</th><th>Approved</th><th>Country</th><th>Visa</th><th>Visa claim</th></tr></thead>
+						<tbody>
+							{#each data.visaReady as v (v.id)}
+								<tr>
+									<td><span class="b-name">{v.name}</span>{#if v.email}<span class="b-sub">{v.email}</span>{/if}</td>
+									<td>{v.approved}h</td>
+									<td>{v.country ?? '—'}</td>
+									<td>{v.visa === null ? 'check' : v.visa ? `$${v.visa}` : 'none needed'}</td>
+									<td>{v.claim ? `${v.claim.status[0].toUpperCase()}${v.claim.status.slice(1)} ($${Number(v.claim.usd).toFixed(2)})` : 'Not claimed'}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{:else}
+				<p class="b-sub">Nobody has {data.visaHours} approved hours yet.</p>
+			{/if}
+		</section>
+
+		<section class="block pay-block">
 			<div class="b-head"><p class="section-label">Budget</p></div>
 			<div class="table-wrap budget-wrap">
 				<table class="builders budget">

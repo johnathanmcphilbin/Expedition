@@ -3,7 +3,7 @@ import { reviewerPay, markReviewerPaid } from '$lib/server/payouts';
 import { programBudget } from '$lib/server/budget';
 import { logAdminAction } from '$lib/server/referrals';
 import { estimateTrip } from '$lib/travel-estimates';
-import { TRAVEL_CAP_HOURS, hoursToQualify } from '$lib/data';
+import { TRAVEL_CAP_HOURS, VISA_CLAIM_HOURS, hoursToQualify } from '$lib/data';
 import { countryName } from '$lib/server/geo';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -48,6 +48,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.order('reviewed_at', { ascending: true }),
 		listOrigins()
 	]);
+
+	const { data: visaClaims } = await db()
+		.from('travel_claims')
+		.select('user_id, status, usd, requested_at')
+		.eq('bucket', 'visa')
+		.neq('status', 'withdrawn')
+		.order('requested_at', { ascending: false });
 
 	const { data: approvedClaims } = await db().from('qualification_claims').select('user_id, trip_cost_usd').eq('status', 'approved');
 	const claimCost = new Map((approvedClaims ?? []).map((c) => [c.user_id, c.trip_cost_usd]));
@@ -133,7 +140,24 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// qualified first, then whoever is closest
 		.sort((a, b) => a.remaining - b.remaining || b.approved - a.approved);
 
+	// everyone with enough approved hours to claim visa money, most hours first
+	const visaReady = builders
+		.filter((b) => b.approved >= VISA_CLAIM_HOURS)
+		.map((b) => ({
+			id: b.id,
+			name: b.name,
+			email: b.email,
+			approved: b.approved,
+			country: b.trip?.country ?? null,
+			visa: b.trip ? b.trip.visa : null,
+			// their latest visa claim, if they've made one
+			claim: (visaClaims ?? []).find((c) => c.user_id === b.id) ?? null
+		}))
+		.sort((a, b) => b.approved - a.approved);
+
 	return {
+		visaReady,
+		visaHours: VISA_CLAIM_HOURS,
 		reviewerPay: await reviewerPay(),
 		budget: await programBudget(),
 		users,
