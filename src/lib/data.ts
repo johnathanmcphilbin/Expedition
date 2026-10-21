@@ -228,14 +228,26 @@ export const checkpoints: Checkpoint[] = [
 ];
 
 /**
- * Open-ended grants in the shop: they pick how many hours to put in, at
- * GRANT_RATE per hour, as often as they like. Not stops on the trail.
+ * Grants in the shop, claimable as often as they like. Not stops on the
+ * trail, so they have their own keys. A grant with `hours` has a set price
+ * (up to `value` USD); `byCost` ones are priced from what they say it will
+ * cost; the rest they choose the hours for. All at GRANT_RATE per hour.
  */
 export const GRANT_RATE = 5;
-export const grants = [
-	{ key: 'souvenir', name: 'Souvenir grant', blurb: 'Spending money for the Galway Christmas market, or anything else you want to bring home.' },
-	{ key: '3d-printing', name: '3D printing grant', blurb: 'For filament, prints or a printing service for your project.' }
-] as const;
+export type Grant = { key: string; name: string; blurb: string; image?: string; hours?: number; value?: number; byCost?: boolean };
+export const grants: Grant[] = [
+	{ key: 'usb-c-kit', name: 'USB-C Cable & Charging Kit', blurb: 'A useful braided cable, charging adapter or compact accessory kit.', hours: 3, value: 12, image: '/drop-usbc.webp' },
+	{ key: 'steam-game', name: 'Steam Game Grant', blurb: 'A game of your choice, including Katamari Damacy REROLL. Digital delivery, so nothing to ship.', hours: 5, value: 25, image: '/drop-steam.webp' },
+	{ key: 'power-bank', name: 'Power Bank Grant', blurb: 'Especially useful for long hackathons and travel.', hours: 8, value: 34, image: '/drop-powerbank.webp' },
+	{ key: 'hardware', name: 'Hardware grant', blurb: 'Parts to finish your build. Tell us what they will cost and put in an hour for every $5.', byCost: true },
+	{ key: '3d-printing', name: '3D printing grant', blurb: 'For filament, prints or a printing service for your project.' },
+	{ key: 'souvenir', name: 'Souvenir grant', blurb: 'Spending money for the Galway Christmas market, or anything else you want to bring home.' }
+];
+
+/** What one shop claim is worth in USD: its catalogue value, else GRANT_RATE per hour. */
+export function shopValue(rewardKey: string, hoursCost: number): number {
+	return drops.find((d) => String(d.hours) === rewardKey)?.value ?? grants.find((g) => g.key === rewardKey)?.value ?? hoursCost * GRANT_RATE;
+}
 
 /** `value` is the grant amount in USD — only shown when someone asks for it. */
 export const drops: Drop[] = [

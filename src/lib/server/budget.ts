@@ -1,5 +1,5 @@
 import { db } from './supabase';
-import { drops, TRAVEL_RATE } from '$lib/data';
+import { shopValue, TRAVEL_RATE } from '$lib/data';
 import { REVIEW_PAY_USD, BUDGET_PER_HOUR_USD } from './payouts';
 
 /**
@@ -24,9 +24,7 @@ export async function programBudget() {
 	const shop = (claims ?? []).filter((c) => real.has(c.user_id));
 	const shopHours = r2(shop.reduce((s, c) => s + Number(c.hours_cost), 0));
 	// what the items actually cost: the catalogue value, else $5/h
-	const shopUsd = r2(
-		shop.reduce((s, c) => s + (drops.find((d) => String(d.hours) === c.reward_key)?.value ?? Number(c.hours_cost) * 5), 0)
-	);
+	const shopUsd = r2(shop.reduce((s, c) => s + shopValue(c.reward_key, Number(c.hours_cost)), 0));
 	const travelHours = r2(Math.max(0, approvedHours - shopHours));
 	const travelUsd = r2(travelHours * TRAVEL_RATE);
 	const reviewerUsd = r2(

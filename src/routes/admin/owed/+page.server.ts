@@ -7,7 +7,7 @@ import { listAllTravelClaims, decideTravelClaim, payTravelClaim, createTravelCla
 import { reviewerPay, markReviewerPaid } from '$lib/server/payouts';
 import { logAdminAction } from '$lib/server/referrals';
 import { text, uuid, ValidationError } from '$lib/server/validate';
-import { drops, TRAVEL_RATE } from '$lib/data';
+import { shopValue, TRAVEL_RATE } from '$lib/data';
 
 /**
  * Everything the program owes people. Travel is per claim: each claim is one
@@ -72,7 +72,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.sort((a, b) => b.owed - a.owed || b.waiting - a.waiting || b.unclaimed - a.unclaimed);
 
 	const toSend = shopClaims.filter((c) => c.status === 'requested');
-	const shopUsd = toSend.reduce((t, c) => t + (drops.find((d) => String(d.hours) === c.reward_key)?.value ?? Number(c.hours_cost) * 5), 0);
+	const shopUsd = toSend.reduce((t, c) => t + shopValue(c.reward_key, Number(c.hours_cost)), 0);
 	const reviewers = pay.filter((r) => r.owedUsd > 0);
 	const reviewersUsd = reviewers.reduce((t, r) => t + r.owedUsd, 0);
 

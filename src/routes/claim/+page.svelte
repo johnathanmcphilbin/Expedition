@@ -9,6 +9,9 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let claiming = $state<string | null>(null);
+	let costs = $state<Record<string, number>>({});
+	const available = $derived(Number(data.balance.hours_available));
+	const fmtH = (n: number) => `${n.toFixed(2).replace(/\.?0+$/, '')}h`;
 
 	const statusLabel: Record<string, string> = {
 		requested: 'Requested',
@@ -112,18 +115,22 @@
 		</div>
 
 		<p class="section-label" style="margin-top:2.5rem">Grants</p>
-		<p class="hint" style="margin-bottom:1rem">Put in as many hours as you like, at {money(GRANT_RATE)} an hour. You can claim these more than once.</p>
+		<p class="hint" style="margin-bottom:1rem">You can claim these more than once. Where there's no set price, you choose how much, at {money(GRANT_RATE)} an hour.</p>
 		<div class="drops">
 			{#each data.grants as g (g.key)}
-				<div class="drop" class:locked={Number(data.balance.hours_available) < 1}>
+				{@const need = g.hours ?? (g.byCost ? 1 / GRANT_RATE : 1)}
+				{@const affordable = available >= need}
+				<div class="drop" class:locked={!affordable && !g.claimed}>
+					{#if g.image}<img class="drop-img" src={g.image} alt={g.name} loading="lazy" />{/if}
 					<div class="drop-head">
-						<span class="drop-hours">{money(GRANT_RATE)}/h</span>
+						<span class="drop-hours">{g.hours ? `${g.hours}h` : `${money(GRANT_RATE)}/h`}</span>
 						<span class="drop-value">Grant</span>
 					</div>
 					<p class="drop-name">{g.name}</p>
+					{#if g.value}<p class="drop-extra">Up to {money(g.value)} product budget</p>{/if}
 					<p class="drop-extra">{g.blurb}</p>
 					{#if g.claimed}<p class="drop-state">Claimed{g.claimed > 1 ? ` ×${g.claimed}` : ''}</p>{/if}
-					{#if Number(data.balance.hours_available) >= 1}
+					{#if affordable}
 						<form
 							method="POST"
 							action="?/claim"
@@ -135,17 +142,28 @@
 								};
 							}}>
 							<input type="hidden" name="reward_key" value={g.key} />
-							<label class="grant-hours">
-								Hours
-								<input name="hours" type="number" min="1" step="1" max={Math.floor(Number(data.balance.hours_available))} value="1" required />
-							</label>
-							<input name="note" type="text" maxlength="500" placeholder="What it's for (optional)" />
+							{#if g.byCost}
+								<label class="grant-hours">
+									It will cost $
+									<input name="cost" type="number" min="1" step="1" max={Math.floor(available * GRANT_RATE)} bind:value={costs[g.key]} required />
+								</label>
+								<p class="drop-extra">That's {fmtH((costs[g.key] ?? 0) / GRANT_RATE)} of your hours.</p>
+								<input name="note" type="text" maxlength="500" placeholder="What you're building and what you need" required />
+							{:else if !g.hours}
+								<label class="grant-hours">
+									Hours
+									<input name="hours" type="number" min="1" step="1" max={Math.floor(available)} value="1" required />
+								</label>
+								<input name="note" type="text" maxlength="500" placeholder="What it's for (optional)" />
+							{:else}
+								<input name="note" type="text" maxlength="500" placeholder="Anything we should know (optional)" />
+							{/if}
 							<button class="btn" type="submit" disabled={claiming === g.key}>
-								{g.claimed ? 'Claim more' : 'Claim'}
+								{g.claimed ? 'Claim another' : 'Claim'}{g.hours ? ` for ${g.hours}h` : ''}
 							</button>
 						</form>
-					{:else}
-						<p class="drop-state">Needs at least 1h available</p>
+					{:else if !g.claimed || g.hours}
+						<p class="drop-state">{fmtH(need - available)} more needed</p>
 					{/if}
 				</div>
 			{/each}

@@ -2,7 +2,7 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireUser } from '$lib/server/guards';
 import { getBalance, claimReward, listOwnClaims } from '$lib/server/queries';
-import { drops, grants, GRANT_RATE } from '$lib/data';
+import { drops, grants, GRANT_RATE, money } from '$lib/data';
 import { text, ValidationError } from '$lib/server/validate';
 import { notifyClaim } from '$lib/server/notify';
 
@@ -49,12 +49,22 @@ export const actions: Actions = {
 			const key = text(form.get('reward_key'), 'Reward', { max: 20, required: true })!;
 			const note = text(form.get('note'), 'Note', { max: 500 });
 
-			// a grant: they choose the hours, the rate is ours
+			// a grant: a set price, priced from their cost, or hours they choose; the rate is ours
 			const grant = grants.find((g) => g.key === key);
 			if (grant) {
-				const hours = Number(form.get('hours'));
-				if (!Number.isInteger(hours) || hours < 1 || hours > 100) return fail(400, { message: 'Pick a whole number of hours, at least 1.' });
-				const name = `${grant.name} ($${hours * GRANT_RATE})`;
+				let hours: number;
+				if (grant.hours) {
+					hours = grant.hours;
+				} else if (grant.byCost) {
+					const cost = Number(form.get('cost'));
+					if (!Number.isInteger(cost) || cost < 1 || cost > 1000) return fail(400, { message: 'Put in what it will cost, in whole dollars.' });
+					if (!note) return fail(400, { message: "Say what you're building and what the money is for." });
+					hours = Math.round((cost / GRANT_RATE) * 100) / 100;
+				} else {
+					hours = Number(form.get('hours'));
+					if (!Number.isInteger(hours) || hours < 1 || hours > 100) return fail(400, { message: 'Pick a whole number of hours, at least 1.' });
+				}
+				const name = grant.hours ? grant.name : `${grant.name} (${money(hours * GRANT_RATE)})`;
 				const result = await claimReward({ userId: user.id, rewardKey: grant.key, rewardName: name, hoursCost: hours, note });
 				if (!result.ok) return fail(409, { message: result.message });
 				await notifyClaim({ name: user.display_name, reward: name, hours, note });
