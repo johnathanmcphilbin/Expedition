@@ -360,6 +360,7 @@ export interface Database {
 			trip_flights: Table<TripFlightRow>;
 			review_flags: Table<ReviewFlagRow>;
 			review_payouts: Table<ReviewPayoutRow>;
+			daily_coding: Table<{ user_id: string; day: string; seconds: number; fetched_at: string }>;
 			travel_grant_requests: Table<TravelGrantRequestRow>;
 			referral_config: Table<AnyRow>;
 			travel_claims: Table<{

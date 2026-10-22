@@ -20,7 +20,7 @@ import {
 } from '$lib/server/queries';
 import { countAwaitingModeration } from '$lib/server/checkpoints';
 import { countQueuePending } from '$lib/server/queue';
-import { getActivityStats, getOverviewStats, getReviewAnalytics } from '$lib/server/stats';
+import { getActivityStats, getDailyActive, getOverviewStats, getReviewAnalytics } from '$lib/server/stats';
 import { signedHours, text, oneOf, uuid, ValidationError } from '$lib/server/validate';
 import { db } from '$lib/server/supabase';
 
@@ -176,6 +176,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// every builder's Hackatime has answered
 		activity: getActivityStats().catch((e) => {
 			console.error('activity stats', e);
+			return null;
+		}),
+		// streamed too: the first load asks Hackatime for 30 days per builder
+		dailyActive: getDailyActive().catch((e) => {
+			console.error('daily active', e);
 			return null;
 		})
 	};

@@ -93,6 +93,60 @@
 			</div>
 		</section>
 
+		<section class="panel">
+			{#await data.dailyActive}
+				<p class="section-label">Daily active builders</p>
+				<p class="hint">Asking everyone's Hackatime about the last 30 days…</p>
+			{:then pts}
+				{#if pts && pts.length > 1}
+					{@const DW = 720}
+					{@const DH = 170}
+					{@const dp = { l: 34, r: 40, t: 12, b: 24 }}
+					{@const dmax = Math.max(1, ...pts.map((d) => d.active))}
+					{@const dx = (i: number) => dp.l + (i / (pts.length - 1)) * (DW - dp.l - dp.r)}
+					{@const dy = (n: number) => dp.t + (DH - dp.t - dp.b) * (1 - n / dmax)}
+					{@const dline = pts.map((d, i) => `${i ? 'L' : 'M'}${dx(i).toFixed(1)},${dy(d.active).toFixed(1)}`).join(' ')}
+					{@const today = pts[pts.length - 1]}
+					{@const avg7 = Math.round((pts.slice(-7).reduce((t, d) => t + d.active, 0) / 7) * 10) / 10}
+					{@const peak = pts.reduce((m, d) => (d.active > m.active ? d : m), pts[0])}
+					{@const fmtDay = (day: string) => new Date(day + 'T00:00:00Z').toLocaleDateString('en-IE', { day: 'numeric', month: 'short', timeZone: 'UTC' })}
+					<div class="tl-head">
+						<p class="section-label">Daily active builders</p>
+						<p class="legend">
+							<span><strong>{today.active}</strong> today</span>
+							<span><strong>{avg7}</strong> a day this week</span>
+							<span><strong>{peak.active}</strong> at most, {fmtDay(peak.day)}</span>
+						</p>
+					</div>
+					<svg class="timeline" viewBox="0 0 {DW} {DH}" role="img" aria-label="Builders who coded each day over the last 30 days: {today.active} today, {avg7} a day this week">
+						{#each [...new Set([0, Math.round(dmax / 2), dmax])] as t (t)}
+							<line class="grid" x1={dp.l} x2={DW - dp.r} y1={dy(t)} y2={dy(t)} />
+							<text class="axis" x={dp.l - 6} y={dy(t) + 4} text-anchor="end">{t}</text>
+						{/each}
+						<path class="area" d="{dline} L{dx(pts.length - 1).toFixed(1)},{dy(0)} L{dx(0).toFixed(1)},{dy(0)} Z" />
+						<path class="line" d={dline} />
+						<circle class="end" cx={dx(pts.length - 1)} cy={dy(today.active)} r="4" />
+						<text class="end-label" x={dx(pts.length - 1) + 8} y={dy(today.active) + 4}>{today.active}</text>
+						{#each pts as d, i (d.day)}
+							<g class="day">
+								<title>{fmtDay(d.day)}: {d.active} builder{d.active === 1 ? '' : 's'} coded, {d.hours}h between them</title>
+								<rect class="hit" x={dx(i) - (DW - dp.l - dp.r) / pts.length / 2} y={dp.t} width={(DW - dp.l - dp.r) / pts.length} height={DH - dp.t - dp.b} />
+								<circle class="dot" cx={dx(i)} cy={dy(d.active)} r="4" />
+							</g>
+							{#if (pts.length - 1 - i) % 7 === 0}
+								<text class="axis" x={dx(i)} y={DH - 6} text-anchor="middle">{fmtDay(d.day)}</text>
+							{/if}
+						{/each}
+						<line class="base" x1={dp.l} x2={DW - dp.r} y1={dy(0)} y2={dy(0)} />
+					</svg>
+					<p class="an-sub">Builders with any coding time in their Hackatime that day (UTC), on any project. Hover a day for the hours. Today is still filling in.</p>
+				{:else}
+					<p class="section-label">Daily active builders</p>
+					<p class="hint">Couldn't load daily activity from Hackatime just now.</p>
+				{/if}
+			{/await}
+		</section>
+
 		{#await data.analytics}
 			<p class="hint analytics-loading">Loading analytics…</p>
 		{:then an}

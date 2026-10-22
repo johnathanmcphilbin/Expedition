@@ -3,6 +3,7 @@ import { reviewerName } from './guards';
 import type { UserRow } from './database.types';
 import { getVisits } from './plausible';
 import { fetchProjectTimes, fetchHackatimeProfile } from './hackatime';
+import { config } from './env';
 
 /**
  * Admin-only numbers about what's happening across Expedition right now.
@@ -155,6 +156,79 @@ export async function getActivityStats(): Promise<ActivityStats> {
 		working: working.slice(0, 20),
 		checkedAt
 	};
+}
+
+// ----------------------------------------------------- daily active ----
+
+/** Days shown on the daily active builders chart. */
+const DAU_DAYS = 30;
+let dauCache: { at: number; value: DailyActive } | null = null;
+
+export type DailyActive = { day: string; active: number; hours: number }[];
+
+/** One builder's Hackatime coding time on one (UTC) day, or null if it couldn't be fetched. */
+async function codedOn(token: string, day: string): Promise<number | null> {
+	try {
+		const u = new URL(`${config.hackatime.apiUrl}/authenticated/hours`);
+		u.searchParams.set('start_date', day);
+		u.searchParams.set('end_date', day);
+		const res = await fetch(u, {
+			headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+			signal: AbortSignal.timeout(8000)
+		});
+		if (!res.ok) return null;
+		const json = (await res.json()) as { total_seconds?: number };
+		return Math.round(json.total_seconds ?? 0);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * How many builders coded each day over the last 30 days (any time at all in
+ * their Hackatime that day, on any project), and how many hours between them.
+ * Past days are stored in daily_coding once fetched; today and yesterday are
+ * asked again, since heartbeats keep arriving. Cached for a few minutes.
+ */
+export async function getDailyActive(): Promise<DailyActive> {
+	if (dauCache && Date.now() - dauCache.at < 5 * 60 * 1000) return dauCache.value;
+
+	const DAY_MS = 24 * 60 * 60 * 1000;
+	const days = Array.from({ length: DAU_DAYS }, (_, i) => new Date(Date.now() - (DAU_DAYS - 1 - i) * DAY_MS).toISOString().slice(0, 10));
+	const fresh = new Set(days.slice(-2));
+
+	const [{ data: conns }, { data: users }, { data: stored }] = await Promise.all([
+		db().from('hackatime_connections').select('user_id, access_token'),
+		db().from('users').select('id').like('hackclub_id', 'ident!%'),
+		db().from('daily_coding').select('user_id, day, seconds').gte('day', days[0])
+	]);
+	const real = new Set((users ?? []).map((u) => u.id));
+	const have = new Set((stored ?? []).filter((r) => !fresh.has(r.day)).map((r) => `${r.user_id}:${r.day}`));
+
+	const todo = (conns ?? [])
+		.filter((c) => real.has(c.user_id))
+		.flatMap((c) => days.filter((d) => !have.has(`${c.user_id}:${d}`)).map((day) => ({ c, day })));
+	const fetched = await mapLimit(todo, 8, async ({ c, day }) => {
+		const seconds = await codedOn(c.access_token, day);
+		return seconds === null ? null : { user_id: c.user_id, day, seconds };
+	});
+	const rows = fetched.filter((r) => r !== null);
+	for (let i = 0; i < rows.length; i += 500) {
+		const { error } = await db()
+			.from('daily_coding')
+			.upsert(rows.slice(i, i + 500).map((r) => ({ ...r, fetched_at: new Date().toISOString() })));
+		if (error) console.error('daily_coding', error.message);
+	}
+
+	// stored days, overwritten by anything just fetched
+	const byKey = new Map((stored ?? []).filter((r) => real.has(r.user_id)).map((r) => [`${r.user_id}:${r.day}`, r]));
+	for (const r of rows) byKey.set(`${r.user_id}:${r.day}`, r);
+	const value = days.map((day) => {
+		const coded = [...byKey.values()].filter((r) => r.day === day && r.seconds > 0);
+		return { day, active: coded.length, hours: Math.round(coded.reduce((t, r) => t + r.seconds, 0) / 360) / 10 };
+	});
+	dauCache = { at: Date.now(), value };
+	return value;
 }
 
 /** Cheap counts straight from the database. */
