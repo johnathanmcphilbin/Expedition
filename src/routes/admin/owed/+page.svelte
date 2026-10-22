@@ -44,6 +44,45 @@
 		</section>
 
 		<section class="block">
+			<h2 class="section-label">What you can spend</h2>
+			{#await data.money}
+				<p class="hint">Checking HCB…</p>
+			{:then m}
+				{#if m}
+					<div class="totals spend">
+						<div><span class="n" class:neg={m.spendUsd < 0}>{usd(m.spendUsd)}</span><span class="k">yours to spend: in the bank, less what participants still hold</span></div>
+						<div><span class="n">{usd(m.stillToCome)}</span><span class="k">next from Max: {m.stillToComeHours}h approved he hasn't paid for yet, at $8.50</span></div>
+						<div><span class="n">{usd(m.hcb.balance)}</span><span class="k">in the bank (<a href={m.hcbUrl} target="_blank" rel="noopener noreferrer">HCB</a>)</span></div>
+						<div><span class="n">{usd(m.heldUsd)}</span><span class="k">held by participants, not paid out yet</span></div>
+						<div><span class="n" class:neg={m.spendAfterUsd < 0}>{usd(m.spendAfterUsd)}</span><span class="k">yours to spend once HQ pays for the {m.stillToComeHours}h still to come</span></div>
+					</div>
+					<div class="table-wrap">
+						<table class="grid spend-table">
+							<tbody>
+								<tr><th>Max has sent for approved hours</th><td>{usd(m.hcb.fromHq)}</td><td class="left">Payouts Clearinghouse and Hack Club HQ transfers on HCB = {m.hoursPaid}h at $8.50</td></tr>
+								<tr><th>In the bank</th><td>{usd(m.hcb.balance)}</td><td class="left">live from HCB</td></tr>
+								<tr><th>Less unspent hours</th><td>−{usd(m.unspentUsd)}</td><td class="left">{m.unspentHours}h across everyone, at $8 as if it all goes on travel</td></tr>
+								<tr><th>Less travel banked or claimed, not paid</th><td>−{usd(m.travelUsd)}</td><td class="left">visa, flights and accommodation</td></tr>
+								<tr><th>Less shop items to send</th><td>−{usd(m.shopUsd)}</td><td class="left">at what they're worth</td></tr>
+								<tr><th>Less reviewer cash owed</th><td>−{usd(m.reviewerCashUsd)}</td><td></td></tr>
+								<tr class="total-row"><th>Yours to spend now</th><td>{usd(m.spendUsd)}</td><td></td></tr>
+								<tr><th>Plus next from Max</th><td>+{usd(m.stillToCome)}</td><td class="left">{m.approved}h approved − {m.hoursPaid}h Max has paid for ({usd(m.hcb.fromHq)} ÷ $8.50) = {m.stillToComeHours}h × $8.50</td></tr>
+								<tr class="total-row"><th>Yours to spend once it arrives</th><td>{usd(m.spendAfterUsd)}</td><td></td></tr>
+							</tbody>
+						</table>
+					</div>
+					<p class="hint">
+						Unspent hours are counted at $8, as if every one goes on travel, so you keep about $0.50 of each.
+						Hours spent in the shop only cost $5, so the real figure comes out better than this.
+						HCB checked {new Date(m.hcb.checkedAt).toLocaleTimeString()}.
+					</p>
+				{:else}
+					<p class="hint">Couldn't reach HCB just now.</p>
+				{/if}
+			{/await}
+		</section>
+
+		<section class="block">
 			<h2 class="section-label">Travel claims</h2>
 			{#if data.claims.length}
 				<div class="table-wrap">
@@ -281,6 +320,14 @@
 	}
 	.st-declined {
 		color: #9b1c1c;
+	}
+	.total-row th,
+	.total-row td {
+		font-weight: 800;
+		border-top: 2px solid currentColor;
+	}
+	.neg {
+		color: #c81e1e;
 	}
 	.grid td.left {
 		text-align: left;

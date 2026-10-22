@@ -4,7 +4,9 @@ import { requireAdmin } from '$lib/server/guards';
 import { db } from '$lib/server/supabase';
 import { listAllTravelBuckets, listAllClaims, challengeStatus } from '$lib/server/queries';
 import { listAllTravelClaims, decideTravelClaim, payTravelClaim, createTravelClaim, BUCKETS } from '$lib/server/travel-claims';
-import { reviewerPay, markReviewerPaid } from '$lib/server/payouts';
+import { reviewerPay, markReviewerPaid, BUDGET_PER_HOUR_USD } from '$lib/server/payouts';
+import { programBudget } from '$lib/server/budget';
+import { hcbSummary, HCB_URL } from '$lib/server/hcb';
 import { logAdminAction } from '$lib/server/referrals';
 import { text, uuid, ValidationError } from '$lib/server/validate';
 import { shopValue, TRAVEL_RATE } from '$lib/data';
@@ -79,6 +81,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const order = ['requested', 'approved', 'paid', 'declined', 'withdrawn'];
 	return {
+		// travel banked or claimed but not paid yet: unclaimed + claimed + approved
+		money: spendable({
+			travelUsd: r2(stages.unclaimed.total + stages.requested.total + stages.approved.total),
+			shopUsd: r2(shopUsd),
+			reviewerCashUsd: r2(reviewersUsd)
+		}).catch((e) => {
+			console.error('spendable', e);
+			return null;
+		}),
 		claims: travelClaims
 			.filter((c) => c.status !== 'withdrawn')
 			.map((c) => {
@@ -99,6 +110,44 @@ export const load: PageServerLoad = async ({ locals }) => {
 		totalUsd: r2(stages.approved.total + reviewersUsd + shopUsd)
 	};
 };
+
+/**
+ * How much is yours to spend: what's in the HCB account, less everything
+ * participants still hold and haven't been paid out yet. Hours are counted
+ * at $8, as if every one went on travel (the worst case; the shop costs $5).
+ * Referral rewards and reviewer pay in hours are already in their balances.
+ */
+async function spendable(held: { travelUsd: number; shopUsd: number; reviewerCashUsd: number }) {
+	const [hcb, { data: balances }, { data: users }, budget] = await Promise.all([
+		hcbSummary(),
+		db().from('user_hour_balances').select('user_id, hours_available'),
+		db().from('users').select('id').like('hackclub_id', 'ident!%'),
+		programBudget()
+	]);
+	const r2 = (n: number) => Math.round(n * 100) / 100;
+	const real = new Set((users ?? []).map((u) => u.id));
+	const unspentHours = r2(
+		(balances ?? []).filter((b) => real.has(b.user_id)).reduce((t, b) => t + Math.max(0, Number(b.hours_available)), 0)
+	);
+	const unspentUsd = r2(unspentHours * TRAVEL_RATE);
+	const heldUsd = r2(unspentUsd + held.travelUsd + held.shopUsd + held.reviewerCashUsd);
+	const hoursPaid = r2(hcb.fromHq / BUDGET_PER_HOUR_USD);
+	return {
+		hcb,
+		hcbUrl: HCB_URL,
+		unspentHours,
+		unspentUsd,
+		...held,
+		heldUsd,
+		spendUsd: r2(hcb.balance - heldUsd),
+		approved: budget.approvedHours,
+		hoursPaid,
+		// approved here but HQ hasn't paid for yet: approved hours less what HQ's sent / $8.50
+		stillToComeHours: r2(budget.approvedHours - hoursPaid),
+		stillToCome: r2((budget.approvedHours - hoursPaid) * BUDGET_PER_HOUR_USD),
+		spendAfterUsd: r2(hcb.balance - heldUsd + (budget.approvedHours - hoursPaid) * BUDGET_PER_HOUR_USD)
+	};
+}
 
 export const actions: Actions = {
 	/** Approve or decline one travel claim. Declining needs a reason (they see it) and frees those hours. */
