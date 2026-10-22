@@ -130,6 +130,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				rewardItems: live.map((c) => ({ name: c.reward_name, status: c.status })),
 				travel,
 				travelLocked: !!u.travel_locked_at,
+				cantCome: u.cant_come ?? null,
 				buckets: travelBuckets[u.id] ?? null,
 				available,
 				// anything the ledger has that isn't approval / claims / travel
@@ -216,6 +217,23 @@ export const actions: Actions = {
 		try {
 			const userId = uuid(form.get('user_id')?.toString(), 'user');
 			await setTravelLock(userId, form.get('locked') === 'yes');
+			return { success: true };
+		} catch (e) {
+			if (e instanceof ValidationError) return fail(400, { message: e.message });
+			throw e;
+		}
+	},
+
+	/** Mark someone as not able to come (e.g. visa refused), or able again with no reason. */
+	cantCome: async ({ request, locals }) => {
+		const admin = requireAdmin(locals);
+		const form = await request.formData();
+		try {
+			const userId = uuid(form.get('user_id')?.toString(), 'user');
+			const reason = text(form.get('reason'), 'Reason', { max: 200 });
+			const { error } = await db().from('users').update({ cant_come: reason || null }).eq('id', userId);
+			if (error) throw new Error(error.message);
+			await logAdminAction(admin.id, reason ? 'cant_come' : 'can_come', userId, reason ?? '');
 			return { success: true };
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { message: e.message });

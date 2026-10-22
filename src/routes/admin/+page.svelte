@@ -549,6 +549,7 @@
 									<td>
 										<span class="strong">{u.approved}h approved</span>
 										<span class="b-sub">{u.available}h unspent{u.rewards ? ` · ${u.rewards}h on rewards` : ''}</span>
+										{#if u.cantCome}<span class="b-sub cant-come">Can't come: {u.cantCome}</span>{/if}
 										{#if u.travel > 0}
 											<span class="b-sub">{u.travel}h banked = ${(u.travel * TRAVEL_RATE).toFixed(0)}{u.travelLocked ? ' · locked' : ''}</span>
 										{/if}
@@ -589,6 +590,22 @@
 												<button class="text-btn" type="submit">{u.travelLocked ? 'Unlock fund' : 'Lock fund'}</button>
 											</form>
 										{/if}
+										<form method="POST" action="?/cantCome" use:enhance class="lock">
+											<input type="hidden" name="user_id" value={u.id} />
+											{#if u.cantCome}
+												<button class="text-btn" type="submit">They can come</button>
+											{:else}
+												<input type="hidden" name="reason" value="Visa refused" />
+												<button
+													class="text-btn"
+													type="submit"
+													onclick={(e) => {
+														const why = prompt(`Why can't ${u.name} come?`, 'Visa refused');
+														if (!why) e.preventDefault();
+														else (e.currentTarget.form!.elements.namedItem('reason') as HTMLInputElement).value = why;
+													}}>Can't come</button>
+											{/if}
+										</form>
 										{#if grantingFor === u.id}
 											<form
 												method="POST"
@@ -1086,6 +1103,10 @@
 	}
 	.muted {
 		color: var(--muted);
+	}
+	.cant-come {
+		color: #c81e1e;
+		font-weight: 700;
 	}
 	.lock {
 		display: flex;

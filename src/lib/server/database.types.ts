@@ -41,6 +41,8 @@ export type UserRow = {
 	role: UserRole;
 	/** set once an organiser starts arranging this person's travel — freezes their fund */
 	travel_locked_at: string | null;
+	/** why they can't come to the event (e.g. visa refused), set by an organiser; null if they can */
+	cant_come?: string | null;
 	/** how review pay reaches them: hours on their account, or cash from an organiser */
 	review_pay?: 'hours' | 'cash';
 	/** from Hack Club Auth (birthdate scope), to fill in the submit form */

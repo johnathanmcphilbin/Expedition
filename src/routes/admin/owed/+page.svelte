@@ -61,7 +61,11 @@
 							<tbody>
 								<tr><th>Max has sent for approved hours</th><td>{usd(m.hcb.fromHq)}</td><td class="left">Payouts Clearinghouse and Hack Club HQ transfers on HCB = {m.hoursPaid}h at $8.50</td></tr>
 								<tr><th>In the bank</th><td>{usd(m.hcb.balance)}</td><td class="left">live from HCB</td></tr>
-								<tr><th>Less unspent hours</th><td>−{usd(m.unspentUsd)}</td><td class="left">{m.unspentHours}h across everyone, at $8 as if it all goes on travel</td></tr>
+								<tr><th>Less unspent hours, shop buyers</th><td>−{usd(m.shopperHours * m.shopRate)}</td><td class="left">{m.shopperHours}h at ${m.shopRate}: they've bought from the shop, so you keep $3.50 an hour</td></tr>
+								<tr><th>Less unspent hours, trip already covered</th><td>−{usd(m.coveredHours * m.shopRate)}</td><td class="left">{m.coveredHours}h at ${m.shopRate}: past what their flight and visa still need, so it can only go on the shop</td></tr>
+								<tr><th>Less hours of people who can't come</th><td>−{usd(m.cantComeHours * m.shopRate)}</td><td class="left">{m.cantComeHours}h at ${m.shopRate} across {m.cantComePeople} {m.cantComePeople === 1 ? 'person' : 'people'} (e.g. visa refused), travel they'd banked included: it can only go on the shop. Mark people on the admin page.</td></tr>
+								<tr><th>Less unspent hours their trip still needs</th><td>−{usd(m.travelHours * 8)}</td><td class="left">{m.travelHours}h at $8 for flights, visas or accommodation</td></tr>
+								<tr><th>Less unspent hours, no trip estimate yet</th><td>−{usd(m.unknownHours * 8)}</td><td class="left">{m.unknownHours}h at $8, the worst case: no home airport yet (Find missing airports on the admin page)</td></tr>
 								<tr><th>Less travel banked or claimed, not paid</th><td>−{usd(m.travelUsd)}</td><td class="left">visa, flights and accommodation</td></tr>
 								<tr><th>Less shop items to send</th><td>−{usd(m.shopUsd)}</td><td class="left">at what they're worth</td></tr>
 								<tr><th>Less reviewer cash owed</th><td>−{usd(m.reviewerCashUsd)}</td><td></td></tr>
@@ -72,8 +76,8 @@
 						</table>
 					</div>
 					<p class="hint">
-						Unspent hours are counted at $8, as if every one goes on travel, so you keep about $0.50 of each.
-						Hours spent in the shop only cost $5, so the real figure comes out better than this.
+						Shop items already bought are out of the bank and ones still to send are at their value, so the shop's $3.50 an hour is already counted there.
+						If shop buyers put their hours into travel instead, it'd cost $3 an hour more.
 						HCB checked {new Date(m.hcb.checkedAt).toLocaleTimeString()}.
 					</p>
 				{:else}
