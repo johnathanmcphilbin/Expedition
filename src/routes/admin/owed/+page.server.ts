@@ -136,7 +136,7 @@ async function spendable(held: { travelUsd: number; cantComeTravelUsd: number; s
 		db().from('user_hour_balances').select('user_id, hours_available'),
 		db().from('users').select('id, cant_come').like('hackclub_id', 'ident!%'),
 		programBudget(),
-		db().from('reward_claims').select('user_id').neq('status', 'cancelled'),
+		db().from('reward_claims').select('user_id, hours_cost').neq('status', 'cancelled'),
 		listOrigins(),
 		db().from('qualification_claims').select('user_id, trip_cost_usd').eq('status', 'approved'),
 		db().from('trip_flights').select('user_id, price_usd, status').neq('status', 'cancelled'),
@@ -178,6 +178,14 @@ async function spendable(held: { travelUsd: number; cantComeTravelUsd: number; s
 	const cantComeHours = r2(hours.cantCome + held.cantComeTravelUsd / TRAVEL_RATE);
 	const unspentUsd = r2((shopperHours + coveredHours + cantComeHours) * GRANT_RATE + (travelHours + unknownHours) * TRAVEL_RATE);
 	const heldUsd = r2(unspentUsd + held.travelUsd + held.shopUsd + held.reviewerCashUsd);
+
+	// Likely, not worst case: the hours that could go either way split the way
+	// everyone's spent so far, shop hours vs hours banked for travel
+	const spentShop = (shoppers ?? []).filter((c) => real.has(c.user_id)).reduce((t, c) => t + Number(c.hours_cost), 0);
+	const spentTravel = buckets.filter((b) => real.has(b.user_id)).reduce((t, b) => t + Number(b.visa) + Number(b.flights) + Number(b.accommodation), 0);
+	const shopShare = spentShop + spentTravel ? spentShop / (spentShop + spentTravel) : 0;
+	const either = travelHours + unknownHours;
+	const likelyHeldUsd = r2(heldUsd - either * shopShare * (TRAVEL_RATE - GRANT_RATE));
 	const hoursPaid = r2(hcb.fromHq / BUDGET_PER_HOUR_USD);
 	return {
 		hcb,
@@ -193,12 +201,18 @@ async function spendable(held: { travelUsd: number; cantComeTravelUsd: number; s
 		...held,
 		heldUsd,
 		spendUsd: r2(hcb.balance - heldUsd),
+		shopSharePct: Math.round(shopShare * 100),
+		spentShop: r2(spentShop),
+		spentTravel: r2(spentTravel),
+		likelySavingUsd: r2(heldUsd - likelyHeldUsd),
+		likelyUsd: r2(hcb.balance - likelyHeldUsd),
 		approved: budget.approvedHours,
 		hoursPaid,
 		// approved here but HQ hasn't paid for yet: approved hours less what HQ's sent / $8.50
 		stillToComeHours: r2(budget.approvedHours - hoursPaid),
 		stillToCome: r2((budget.approvedHours - hoursPaid) * BUDGET_PER_HOUR_USD),
-		spendAfterUsd: r2(hcb.balance - heldUsd + (budget.approvedHours - hoursPaid) * BUDGET_PER_HOUR_USD)
+		spendAfterUsd: r2(hcb.balance - heldUsd + (budget.approvedHours - hoursPaid) * BUDGET_PER_HOUR_USD),
+		likelyAfterUsd: r2(hcb.balance - likelyHeldUsd + (budget.approvedHours - hoursPaid) * BUDGET_PER_HOUR_USD)
 	};
 }
 

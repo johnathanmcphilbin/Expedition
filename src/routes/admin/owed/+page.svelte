@@ -55,6 +55,7 @@
 						<div><span class="n">{usd(m.hcb.balance)}</span><span class="k">in the bank (<a href={m.hcbUrl} target="_blank" rel="noopener noreferrer">HCB</a>)</span></div>
 						<div><span class="n">{usd(m.heldUsd)}</span><span class="k">held by participants, not paid out yet</span></div>
 						<div><span class="n" class:neg={m.spendAfterUsd < 0}>{usd(m.spendAfterUsd)}</span><span class="k">yours to spend once HQ pays for the {m.stillToComeHours}h still to come</span></div>
+						<div><span class="n" class:neg={m.likelyAfterUsd < 0}>{usd(m.likelyAfterUsd)}</span><span class="k">likely, then: if people keep spending {m.shopSharePct}% of hours in the shop</span></div>
 					</div>
 					<div class="table-wrap">
 						<table class="grid spend-table">
@@ -71,7 +72,9 @@
 								<tr><th>Less reviewer cash owed</th><td>−{usd(m.reviewerCashUsd)}</td><td></td></tr>
 								<tr class="total-row"><th>Yours to spend now</th><td>{usd(m.spendUsd)}</td><td></td></tr>
 								<tr><th>Plus next from Max</th><td>+{usd(m.stillToCome)}</td><td class="left">{m.approved}h approved − {m.hoursPaid}h Max has paid for ({usd(m.hcb.fromHq)} ÷ $8.50) = {m.stillToComeHours}h × $8.50</td></tr>
-								<tr class="total-row"><th>Yours to spend once it arrives</th><td>{usd(m.spendAfterUsd)}</td><td></td></tr>
+								<tr class="total-row"><th>Yours to spend once it arrives</th><td>{usd(m.spendAfterUsd)}</td><td class="left">worst case</td></tr>
+								<tr><th>Likely shop spending</th><td>+{usd(m.likelySavingUsd)}</td><td class="left">{m.shopSharePct}% of hours spent so far went on the shop ({m.spentShop}h shop, {m.spentTravel}h travel), so that share of the {usd(m.travelHours * 8 + m.unknownHours * 8)} above probably costs $5 an hour, not $8</td></tr>
+								<tr class="total-row"><th>Likely yours to spend</th><td>{usd(m.likelyUsd)}</td><td class="left">now; {usd(m.likelyAfterUsd)} once Max's next payment arrives</td></tr>
 							</tbody>
 						</table>
 					</div>
