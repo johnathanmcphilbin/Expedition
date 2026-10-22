@@ -96,9 +96,10 @@
 		<section class="panel">
 			{#await data.dailyActive}
 				<p class="section-label">Daily active builders</p>
-				<p class="hint">Asking everyone's Hackatime about the last 30 days…</p>
-			{:then pts}
-				{#if pts && pts.length > 1}
+				<p class="hint">Asking everyone's Hackatime about the last 30 days (a few seconds)…</p>
+			{:then dau}
+				{@const pts = dau?.days ?? []}
+				{#if pts.length > 1}
 					{@const DW = 720}
 					{@const DH = 170}
 					{@const dp = { l: 34, r: 40, t: 12, b: 24 }}
@@ -140,6 +141,9 @@
 						<line class="base" x1={dp.l} x2={DW - dp.r} y1={dy(0)} y2={dy(0)} />
 					</svg>
 					<p class="an-sub">Builders with any coding time in their Hackatime that day (UTC), on any project. Hover a day for the hours. Today is still filling in.</p>
+					{#if dau?.missing}
+						<p class="hint">Still fetching history: {dau.missing} builder-days to go, so older days read low. Reload to carry on.</p>
+					{/if}
 				{:else}
 					<p class="section-label">Daily active builders</p>
 					<p class="hint">Couldn't load daily activity from Hackatime just now.</p>

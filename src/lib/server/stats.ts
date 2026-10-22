@@ -164,7 +164,11 @@ export async function getActivityStats(): Promise<ActivityStats> {
 const DAU_DAYS = 30;
 let dauCache: { at: number; value: DailyActive } | null = null;
 
-export type DailyActive = { day: string; active: number; hours: number }[];
+export type DailyActive = {
+	days: { day: string; active: number; hours: number }[];
+	/** builder-days still to ask Hackatime about; the chart fills in over a few loads */
+	missing: number;
+};
 
 /** One builder's Hackatime coding time on one (UTC) day, or null if it couldn't be fetched. */
 async function codedOn(token: string, day: string): Promise<number | null> {
@@ -174,7 +178,7 @@ async function codedOn(token: string, day: string): Promise<number | null> {
 		u.searchParams.set('end_date', day);
 		const res = await fetch(u, {
 			headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-			signal: AbortSignal.timeout(8000)
+			signal: AbortSignal.timeout(4000)
 		});
 		if (!res.ok) return null;
 		const json = (await res.json()) as { total_seconds?: number };
@@ -205,29 +209,49 @@ export async function getDailyActive(): Promise<DailyActive> {
 	const real = new Set((users ?? []).map((u) => u.id));
 	const have = new Set((stored ?? []).filter((r) => !fresh.has(r.day)).map((r) => `${r.user_id}:${r.day}`));
 
+	// newest days first, so the chart fills in from today backwards
 	const todo = (conns ?? [])
 		.filter((c) => real.has(c.user_id))
-		.flatMap((c) => days.filter((d) => !have.has(`${c.user_id}:${d}`)).map((day) => ({ c, day })));
-	const fetched = await mapLimit(todo, 8, async ({ c, day }) => {
-		const seconds = await codedOn(c.access_token, day);
-		return seconds === null ? null : { user_id: c.user_id, day, seconds };
-	});
-	const rows = fetched.filter((r) => r !== null);
-	for (let i = 0; i < rows.length; i += 500) {
-		const { error } = await db()
-			.from('daily_coding')
-			.upsert(rows.slice(i, i + 500).map((r) => ({ ...r, fetched_at: new Date().toISOString() })));
-		if (error) console.error('daily_coding', error.message);
+		.flatMap((c) => days.filter((d) => !have.has(`${c.user_id}:${d}`)).map((day) => ({ c, day })))
+		.sort((a, b) => b.day.localeCompare(a.day));
+
+	// The first fill is hundreds of calls: do ~6s of them per load and save
+	// each batch straight away, so a request cut off by the host loses nothing
+	// and the next load carries on where this one stopped.
+	const deadline = Date.now() + 6_000;
+	const rows: { user_id: string; day: string; seconds: number }[] = [];
+	let done = 0;
+	while (done < todo.length && Date.now() < deadline) {
+		const batch = todo.slice(done, done + 20);
+		done += batch.length;
+		const fetched = await mapLimit(batch, 10, async ({ c, day }) => {
+			const seconds = await codedOn(c.access_token, day);
+			return seconds === null ? null : { user_id: c.user_id, day, seconds };
+		});
+		const got = fetched.filter((r) => r !== null);
+		rows.push(...got);
+		if (got.length) {
+			const { error } = await db()
+				.from('daily_coding')
+				.upsert(got.map((r) => ({ ...r, fetched_at: new Date().toISOString() })));
+			if (error) console.error('daily_coding', error.message);
+		}
 	}
+	// today and yesterday are always re-asked, so they don't count as missing
+	const missing = todo.slice(done).filter((t) => !fresh.has(t.day)).length;
 
 	// stored days, overwritten by anything just fetched
 	const byKey = new Map((stored ?? []).filter((r) => real.has(r.user_id)).map((r) => [`${r.user_id}:${r.day}`, r]));
 	for (const r of rows) byKey.set(`${r.user_id}:${r.day}`, r);
-	const value = days.map((day) => {
-		const coded = [...byKey.values()].filter((r) => r.day === day && r.seconds > 0);
-		return { day, active: coded.length, hours: Math.round(coded.reduce((t, r) => t + r.seconds, 0) / 360) / 10 };
-	});
-	dauCache = { at: Date.now(), value };
+	const value = {
+		days: days.map((day) => {
+			const coded = [...byKey.values()].filter((r) => r.day === day && r.seconds > 0);
+			return { day, active: coded.length, hours: Math.round(coded.reduce((t, r) => t + r.seconds, 0) / 360) / 10 };
+		}),
+		missing
+	};
+	// only a finished chart is worth keeping; a partial one carries on next load
+	if (!missing) dauCache = { at: Date.now(), value };
 	return value;
 }
 
