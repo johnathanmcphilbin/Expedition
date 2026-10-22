@@ -1,4 +1,5 @@
 import { isReviewerOnly, reviewerName } from './guards';
+import { resumeHeld } from './claims';
 import { recordOrigin } from './origins';
 import { db } from './supabase';
 import { createSubmission, writeReviewToAirtable, saveJustifications, type Justifications } from './airtable';
@@ -524,5 +525,7 @@ export async function resubmitQueued(
 	}
 	if (!data?.length) return false;
 	if (shot && row.screenshot_path) await db().storage.from(BUCKET).remove([row.screenshot_path]);
+	// back to the reviewer who asked for the changes
+	await resumeHeld('new', id).catch((e) => console.error('resumeHeld', e));
 	return true;
 }

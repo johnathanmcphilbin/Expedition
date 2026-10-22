@@ -40,6 +40,8 @@
 		p.set(item.kind === 'new' ? 'new' : 'submission', item.key);
 		return `/admin/reviews?${p}`;
 	}
+	// a reviewer can only edit a waiting submission once they've claimed it
+	const locked = $derived(!data.isAdmin && data.selectedWaiting && !data.selectedClaim?.mine);
 	const isSelected = (item: { kind: string; key: string }) =>
 		data.selected?.kind === item.kind && data.selected?.key === item.key;
 	function filterHref(status: string) {
@@ -166,6 +168,45 @@
 	});
 </script>
 
+{#snippet claimBar(kind: 'hc' | 'new', key: string)}
+	{#if !data.selectedWaiting && data.selectedClaim?.held}
+		{@const c = data.selectedClaim}
+		<div class="claim-bar held">
+			<span><strong>{c.mine ? "It's yours when they resubmit." : `Held for ${c.by}.`}</strong> Sent back for changes, so the resubmission goes to {c.mine ? 'you' : 'them'} first, with {data.claimRules.resubmitHours}h to pick it up.</span>
+			{#if c.mine || data.isAdmin}
+				<form method="POST" action="?/unclaim" use:enhance={() => async ({ update }) => update({ reset: false })}>
+					<input type="hidden" name="kind" value={kind} />
+					<input type="hidden" name="key" value={key} />
+					<button class="text-btn" type="submit">{c.mine ? 'Let anyone take it' : `Release ${c.by}'s hold`}</button>
+				</form>
+			{/if}
+		</div>
+	{:else if data.selectedWaiting}
+		{@const c = data.selectedClaim}
+		<div class="claim-bar" class:mine={c?.mine} class:taken={c && !c.mine}>
+			{#if c?.mine}
+				<span><strong>You've claimed this one.</strong> Nobody else can review it while you do. It's released if you leave it {data.claimRules.hours}h without saving.</span>
+			{:else if c}
+				<span><strong>{c.by} is reviewing this</strong> (claimed {ago(c.at)}).{#if !data.isAdmin} Pick another one.{/if}</span>
+			{:else}
+				<span>Nobody's reviewing this yet.{#if !data.isAdmin} Claim it to start; you can hold {data.claimRules.max} at once ({data.myClaims} now).{/if}</span>
+			{/if}
+			<form method="POST" action={c && (c.mine || data.isAdmin) ? '?/unclaim' : '?/claim'} use:enhance={() => async ({ update }) => update({ reset: false })}>
+				<input type="hidden" name="kind" value={kind} />
+				<input type="hidden" name="key" value={key} />
+				{#if c?.mine}
+					<button class="text-btn" type="submit">Release it</button>
+				{:else if c && data.isAdmin}
+					<button class="text-btn" type="submit">Release {c.by}'s claim</button>
+				{:else if !c}
+					<button class="btn" type="submit">Claim this review</button>
+				{/if}
+			</form>
+			{#if form && 'claimMessage' in form && form.claimMessage}<p class="error">{form.claimMessage}</p>{/if}
+		</div>
+	{/if}
+{/snippet}
+
 {#snippet flagPanel(kind: 'hc' | 'new', key: string)}
 	<div class="flag-panel" class:on={!!data.selectedFlag}>
 		{#if data.selectedFlag}
@@ -234,6 +275,35 @@
 				{#if data.earnings}You earn ${data.earnings.per.toFixed(2)}{data.earnings.cash ? ', paid by an organiser,' : ' in hours'} for each submission you decide, and <strong>${data.bigPay.big.toFixed(2)} when you approve a project with more than {data.bigPay.hours}h tracked</strong>, so the big projects are worth picking up: <strong>{data.earnings.reviews} so far (${data.earnings.usd.toFixed(2)})</strong>.{/if}</p>
 		{/if}
 
+		{#if data.isAdmin}
+			<details class="claims-panel" open={data.allClaims.length > 0}>
+				<summary>Being reviewed now ({data.allClaims.length})</summary>
+				{#if data.allClaims.length}
+					<table>
+						<thead><tr><th>Submission</th><th>Claimed by</th><th>Since</th><th></th></tr></thead>
+						<tbody>
+							{#each data.allClaims as c (c.kind + c.key)}
+								<tr>
+									<td><a href={queueHref(c)}>{c.participant}</a>{#if c.project}<span class="hint"> · {c.project}</span>{/if}{#if c.held}<span class="hint"> · waiting on their changes</span>{:else if !c.waiting}<span class="hint"> · already decided</span>{/if}</td>
+									<td>{c.by}</td>
+									<td>{ago(c.claimedAt)}</td>
+									<td>
+										<form method="POST" action="?/unclaim" use:enhance>
+											<input type="hidden" name="kind" value={c.kind} />
+											<input type="hidden" name="key" value={c.key} />
+											<button class="text-btn" type="submit">Release</button>
+										</form>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				{:else}
+					<p class="hint">Nobody has claimed a submission right now. Claims lapse after {data.claimRules.hours}h without a save.</p>
+				{/if}
+			</details>
+		{/if}
+
 		<nav class="tabs" aria-label="Filter by status">
 			{#each FILTERS as f (f.value)}
 				<a href={filterHref(f.value)} class:active={data.filter === f.value}>
@@ -257,6 +327,7 @@
 							<span class="tag tag-{item.status}">{STATUS_LABEL[item.status]}</span>
 							{#if item.kind === 'new' && item.status === 'pending'}<span class="tag tag-new">Not sent yet</span>{/if}
 							{#if item.trackedHours !== null && item.trackedHours > data.bigPay.hours && (item.status === 'pending' || item.status === 'in_review')}<span class="tag tag-big" title="Over {data.bigPay.hours}h tracked: approving it pays a reviewer ${data.bigPay.big.toFixed(2)}">${data.bigPay.big.toFixed(2)}</span>{/if}
+							{#if item.claim}<span class="tag tag-claim" class:mine={item.claim.mine}>{item.claim.held ? (item.claim.mine ? 'Held for you' : `Held for ${item.claim.by}`) : item.claim.mine ? 'Yours' : `Claimed by ${item.claim.by}`}</span>{/if}
 							{#if !item.matched}<span class="tag tag-warn">No account</span>{/if}
 							{#if item.gone}<span class="tag tag-warn">Gone from Airtable</span>{/if}
 						</span>
@@ -291,6 +362,7 @@
 						</div>
 					</header>
 					{@render flagPanel('new', r.id)}
+					{@render claimBar('new', r.id)}
 
 					{#if data.queuedDetail.screenshot}
 						<a class="shot" href={data.queuedDetail.screenshot} target="_blank" rel="noopener noreferrer">
@@ -332,6 +404,8 @@
 						<p class="description">{r.description}</p>
 					{:else}
 						<form
+							class:claim-locked={locked}
+							inert={locked}
 							method="POST"
 							action="?/saveNew"
 							use:autosave={{ action: '?/autosave', kind: 'new' }}
@@ -502,6 +576,7 @@
 						<span class="tag tag-{status}">{STATUS_LABEL[status]}</span>
 					</header>
 					{@render flagPanel('hc', s.airtable_record_id)}
+					{@render claimBar('hc', s.airtable_record_id)}
 					{#if data.detail.review?.status === 'approved' || (form && 'airtableResend' in form)}
 						<div class="airtable-sync" class:bad={!!(data.airtableError || (form && 'airtableResend' in form && form.airtableResend))}>
 							{#if form && 'airtableResent' in form && form.airtableResent}
@@ -596,6 +671,8 @@
 							<p class="error">Couldn't reach this participant's Hackatime, so there's nothing to review against yet. Try again shortly.</p>
 						{:else}
 							<form
+								class:claim-locked={locked}
+								inert={locked}
 								method="POST"
 								action="?/save"
 								use:autosave={{ action: '?/autosave', kind: 'hc' }}
@@ -662,6 +739,8 @@
 						<summary>Hack Club justification <span class="optional">saved straight to their Airtable</span></summary>
 						{#if data.detail.justifications}
 							<form
+								class:claim-locked={locked}
+								inert={locked}
 								method="POST"
 								action="?/saveJustification"
 								use:autosave={{ action: '?/saveJustification', delay: 2500 }}
@@ -955,6 +1034,72 @@
 		flex-wrap: wrap;
 		align-items: baseline;
 		gap: 0.3rem 0.8rem;
+	}
+	.claim-bar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem 1rem;
+		margin: 0 0 1rem;
+		padding: 0.7rem 0.9rem;
+		background: #eef5fc;
+		border-left: 4px solid #338eda;
+		font-size: 0.9rem;
+	}
+	.claim-bar.mine {
+		background: #ecf8ef;
+		border-left-color: var(--green);
+	}
+	.claim-bar.taken {
+		background: #fff6e5;
+		border-left-color: #d98e04;
+	}
+	.claim-bar.held {
+		background: #f3f0fa;
+		border-left-color: #7a5cc2;
+	}
+	.claim-bar form {
+		margin: 0;
+	}
+	.claim-bar .error {
+		flex-basis: 100%;
+		margin: 0;
+	}
+	.claim-locked {
+		opacity: 0.45;
+	}
+	.tag.tag-claim {
+		border-color: #d98e04;
+		color: #8a5a00;
+	}
+	.tag.tag-claim.mine {
+		border-color: var(--green);
+		color: var(--green-dark);
+	}
+	.claims-panel {
+		margin-bottom: 1rem;
+		padding: 0.6rem 0.9rem;
+		border: 1.5px solid var(--rule-strong);
+		font-size: 0.9rem;
+	}
+	.claims-panel summary {
+		cursor: pointer;
+		font-weight: 800;
+	}
+	.claims-panel table {
+		width: 100%;
+		margin-top: 0.5rem;
+		border-collapse: collapse;
+	}
+	.claims-panel th,
+	.claims-panel td {
+		padding: 0.35rem 0.5rem 0.35rem 0;
+		text-align: left;
+		border-bottom: 1px solid var(--rule-strong);
+	}
+	.claims-panel form {
+		margin: 0;
 	}
 	.shadow-note {
 		margin-bottom: 1rem;

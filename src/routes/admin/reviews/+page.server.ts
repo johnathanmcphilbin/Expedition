@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin, requireReviewer, isReviewerOnly, reviewerName } from '$lib/server/guards';
 import { lapsesFor, LAPSE_FIELD, type Lapse } from '$lib/server/lapse';
 import { referredBy } from '$lib/server/referrals';
+import { claim, release, clearClaim, holdForChanges, claimProblem, listClaims, CLAIM_HOURS, RESUBMIT_HOURS, MAX_CLAIMS } from '$lib/server/claims';
 import { payForReview, reviewEarnings, REVIEW_PAY_USD, BIG_REVIEW_PAY_USD, BIG_PROJECT_HOURS } from '$lib/server/payouts';
 import type { UserRow, SubmissionReviewRow, QueuedSubmissionRow } from '$lib/server/database.types';
 import { db } from '$lib/server/supabase';
@@ -69,12 +70,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const { data: myReferred } = await db().from('referral_attributions').select('referred_id').eq('referrer_id', viewer.id);
 	const referredByViewer = new Set((myReferred ?? []).map((r) => r.referred_id));
 
-	const [submissions, reviews, queued, flagRows] = await Promise.all([
+	const [submissions, reviews, queued, flagRows, claims] = await Promise.all([
 		listAllHackClubSubmissions(),
 		listAllReviewsWithSubmissions(),
 		listQueue(),
-		db().from('review_flags').select('item_kind, item_key, reason, flagged_at')
+		db().from('review_flags').select('item_kind, item_key, reason, flagged_at'),
+		listClaims()
 	]);
+	// who's reviewing what, by kind:key
+	const claimOf = (kind: string, key: string) => {
+		const c = claims.find((x) => x.kind === kind && x.key === key);
+		return c ? { by: c.by, mine: c.reviewerId === viewer.id, at: c.claimedAt, held: c.held } : null;
+	};
 	// waiting submissions from before tracked hours were saved: look them up
 	// once, so the queue can show which pay the big-project rate
 	await Promise.all(
@@ -134,6 +141,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		gone: boolean;
 		hardware: boolean;
 		trackedHours: number | null;
+		/** who's reviewing it right now */
+		claim: { by: string; mine: boolean; at: string; held: boolean } | null;
 		flag: { reason: string | null; at: string } | null;
 		searchText: string;
 	};
@@ -171,6 +180,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			hardware: hardwareByRecord.get(r.submission.airtable_record_id) ?? false,
 			// tracked hours, once the review's been opened: shows the big-project pay
 			trackedHours: r.review?.submitted_hours ?? null,
+			claim: claimOf('hc', r.submission.airtable_record_id),
 			gone: r.submission.airtable_status === AIRTABLE_GONE,
 			// a flag set while it was still queued follows it once sent
 			flag:
@@ -196,6 +206,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				gone: false,
 				hardware: qr.hardware,
 				trackedHours: qr.tracked_hours == null ? null : Number(qr.tracked_hours),
+				claim: claimOf('new', qr.id),
 				flag: flags.get(`new:${qr.id}`) ?? null,
 				searchText: [qr.first_name, qr.last_name, qr.email, qr.github_username, qr.project_name]
 					.join(' ')
@@ -397,6 +408,19 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	return {
 		queue: searched.map(({ searchText: _s, ...i }) => i),
 		selected: selectedItem ? { kind: selectedItem.kind, key: selectedItem.key } : null,
+		// the selected one is waiting and the viewer may need to claim it first
+		selectedWaiting: selectedItem ? waiting(selectedItem) : false,
+		selectedClaim: selectedItem?.claim ?? null,
+		myClaims: claims.filter((c) => c.reviewerId === viewer.id && !c.held).length,
+		claimRules: { hours: CLAIM_HOURS, resubmitHours: RESUBMIT_HOURS, max: MAX_CLAIMS },
+		// admins see every claim, with what it's on
+		allClaims:
+			viewer.role === 'admin'
+				? claims.map((c) => {
+						const item = items.find((i) => i.kind === c.kind && i.key === c.key);
+						return { ...c, participant: item?.participant ?? 'Unknown', project: item?.project ?? null, waiting: item ? waiting(item) : false };
+					})
+				: [],
 		selectedFlag: selectedItem ? (flags.get(`${selectedItem.kind}:${selectedItem.key}`) ?? null) : null,
 		track,
 		trackCounts,
@@ -509,7 +533,42 @@ async function ownsRecord(userId: string, recordId: string): Promise<boolean> {
 	return data?.user_id === userId;
 }
 
+/** A Hack Club submission with no decision yet: claims apply to it. */
+async function hcWaiting(recordId: string): Promise<boolean> {
+	const { data } = await db()
+		.from('submission_reviews')
+		.select('status')
+		.eq('airtable_record_id', recordId)
+		.order('created_at', { ascending: false })
+		.limit(1)
+		.maybeSingle();
+	return !data || data.status === 'pending' || data.status === 'in_review';
+}
+
 export const actions: Actions = {
+	/** Take a waiting submission so nobody else reviews it at the same time. */
+	claim: async ({ request, locals }) => {
+		const reviewer = requireReviewer(locals);
+		const form = await request.formData();
+		const kind = form.get('kind') === 'hc' ? 'hc' : 'new';
+		const key = String(form.get('key') ?? '');
+		if (!key || key.length > 64) return fail(400, { claimMessage: 'Invalid submission.' });
+		const problem = await claim(reviewer, kind, key);
+		if (problem) return fail(409, { claimMessage: problem });
+		return { claimed: true };
+	},
+
+	/** Give a claim back: your own, or (admins) anyone's. */
+	unclaim: async ({ request, locals }) => {
+		const user = requireReviewer(locals);
+		const form = await request.formData();
+		const kind = form.get('kind') === 'hc' ? 'hc' : 'new';
+		const key = String(form.get('key') ?? '');
+		if (!key || key.length > 64) return fail(400, { claimMessage: 'Invalid submission.' });
+		await release(user, kind, key);
+		return { released: true };
+	},
+
 	/** Edit Hack Club's justification fields on a submission that's already in their Airtable. */
 	saveJustification: async ({ request, locals }) => {
 		const reviewer = requireReviewer(locals);
@@ -518,6 +577,10 @@ export const actions: Actions = {
 			const recordId = text(form.get('airtable_record_id'), 'Submission', { max: 200, required: true })!;
 			if (!/^rec[A-Za-z0-9]{10,20}$/.test(recordId)) return fail(400, { justMessage: 'Invalid submission.' });
 			if (await ownsRecord(reviewer.id, recordId)) return fail(403, { justMessage: "You can't review your own project." });
+			if (await hcWaiting(recordId)) {
+				const problem = await claimProblem(reviewer, 'hc', recordId);
+				if (problem) return fail(403, { justMessage: problem });
+			}
 			await saveJustifications(recordId, parseJustifications(form));
 			return { justSaved: true };
 		} catch (e) {
@@ -579,6 +642,10 @@ export const actions: Actions = {
 			const row = await getQueued(id);
 			if (!row || row.status === 'sent') return fail(409, { autosave: 'Already sent' });
 			if (row.user_id === reviewer.id) return fail(403, { autosave: "You can't review your own project" });
+			if (row.status === 'pending') {
+				const problem = await claimProblem(reviewer, 'new', id);
+				if (problem) return fail(403, { autosave: 'Not claimed' });
+			}
 			keepStoredAddress(form, reviewer, row);
 			let fields: ReturnType<typeof parseSubmissionFields> | null = null;
 			try {
@@ -616,6 +683,10 @@ export const actions: Actions = {
 				.order('created_at', { ascending: false })
 				.limit(1)
 				.maybeSingle();
+			if (!existing || existing.status === 'pending' || existing.status === 'in_review') {
+				const problem = await claimProblem(reviewer, 'hc', recordId);
+				if (problem) return fail(403, { autosave: 'Not claimed' });
+			}
 			let reviewId = existing?.id;
 			if (!reviewId) {
 				if (!project) return fail(400, { autosave: 'Pick the Hackatime project first' });
@@ -738,6 +809,10 @@ export const actions: Actions = {
 			if (row.status === 'sent') return fail(409, { message: 'This one has already been sent to Hack Club.' });
 			if (row.user_id === reviewer.id) return fail(403, { message: "You can't review your own project." });
 			if (await referredBy(reviewer.id, row.user_id)) return fail(403, { message: "You can't review someone you referred." });
+			if (row.status === 'pending') {
+				const problem = await claimProblem(reviewer, 'new', id);
+				if (problem) return fail(403, { message: problem });
+			}
 			keepStoredAddress(form, reviewer, row);
 
 			const decision = oneOf(
@@ -782,6 +857,7 @@ export const actions: Actions = {
 					submittedHours: trackedHours
 				});
 				if (!result.ok) return fail(502, { message: result.message });
+				await clearClaim('new', id);
 				if (result.airtableError) {
 					// approved and credited, but Hack Club's fields didn't take: open it
 					// so the error and the resend button are right there
@@ -802,6 +878,9 @@ export const actions: Actions = {
 					internalNotes,
 					feedback
 				);
+				// needs changes: the resubmission comes back to whoever asked for them
+				if (decision === 'changes_requested') await holdForChanges(reviewer, 'new', id);
+				else if (decision !== 'draft') await clearClaim('new', id);
 			}
 
 			if (decision === 'draft') return { saved: true };
@@ -924,6 +1003,10 @@ export const actions: Actions = {
 				hackatimeProject,
 				submittedHours
 			);
+			if (review.status === 'pending' || review.status === 'in_review') {
+				const problem = await claimProblem(reviewer, 'hc', airtableRecordId);
+				if (problem) return fail(403, { message: problem });
+			}
 
 			const result = await submitReview({
 				reviewId: review.id,
@@ -936,6 +1019,8 @@ export const actions: Actions = {
 			});
 
 			if (!result.ok) return fail(409, { message: result.message });
+			if (status === 'changes_requested') await holdForChanges(reviewer, 'hc', airtableRecordId);
+			else if (status !== 'pending' && status !== 'in_review') await clearClaim('hc', airtableRecordId);
 			if (status !== 'pending' && status !== 'in_review') {
 				await payForReview(
 					reviewer,
