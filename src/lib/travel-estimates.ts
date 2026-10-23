@@ -61,7 +61,7 @@ const yymmdd = (iso: string) => iso.slice(2, 10).replace(/-/g, '');
 
 /**
  * Skyscanner.ie search from that airport to Dublin for the event: out the
- * day before, home the day after.
+ * day it starts, home the day it ends.
  */
 export const skyscannerUrl = (airport: string, out = EVENT.flyOutDate, home = EVENT.flyHomeDate) =>
 	`https://www.skyscanner.ie/transport/flights/${airport.toLowerCase()}/dub/${yymmdd(out)}/${yymmdd(home)}/?adultsv2=1&cabinclass=economy`;

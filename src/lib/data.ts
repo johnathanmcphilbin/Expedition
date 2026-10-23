@@ -290,10 +290,11 @@ export const drops: Drop[] = [
 export const EVENT = {
 	venue: 'PorterShed, Galway',
 	mapsUrl: 'https://www.google.com/maps/search/?api=1&query=PorterShed+Galway',
-	date: '2026-12-05',
-	startsAt: '2026-12-05T08:00:00Z',
+	date: '2026-12-04',
+	/** "the evening of 4 December"; 6pm until the exact time is set */
+	startsAt: '2026-12-04T18:00:00Z',
 	endsAt: '2026-12-06T14:00:00Z',
-	/** fly in the day before: it starts at 8am, a few hours from the airport */
+	/** fly in that day: it starts in the evening, a few hours from the airport */
 	flyOutDate: '2026-12-04',
 	/** assumed day to fly home; change once the schedule is final */
 	flyHomeDate: '2026-12-06'

@@ -25,10 +25,10 @@
 				<figcaption>{p.caption}</figcaption>
 			</figure>
 		{/each}
-		<h2 class="headline">Galway, 5–6 December</h2>
+		<h2 class="headline">Galway, 4–6 December</h2>
 		<p class="lede">
 			A free overnight hackathon at <a href={EVENT.mapsUrl} target="_blank" rel="noopener noreferrer">PorterShed, Galway</a>.
-			Starts 8am on 5 December, ends 2pm on 6 December.
+			Starts the evening of 4 December, ends 2pm on 6 December.
 		</p>
 
 		<div class="travel">

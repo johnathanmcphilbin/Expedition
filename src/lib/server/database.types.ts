@@ -363,7 +363,7 @@ export interface Database {
 			review_flags: Table<ReviewFlagRow>;
 			review_payouts: Table<ReviewPayoutRow>;
 			review_claims: Table<{ item_kind: 'hc' | 'new'; item_key: string; reviewer_id: string; claimed_at: string; expires_at: string | null; held: boolean }>;
-			daily_coding: Table<{ user_id: string; day: string; seconds: number; fetched_at: string }>;
+			daily_project_coding: Table<{ user_id: string; day: string; project: string; seconds: number; fetched_at: string }>;
 			travel_grant_requests: Table<TravelGrantRequestRow>;
 			referral_config: Table<AnyRow>;
 			travel_claims: Table<{

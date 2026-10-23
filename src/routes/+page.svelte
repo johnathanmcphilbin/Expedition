@@ -25,7 +25,7 @@
 				</a>
 				<a class="onward-link" href="/ireland">
 					<span class="onward-title">Galway</span>
-					<span class="onward-desc">A free overnight hackathon at PorterShed, 5–6 December.</span>
+					<span class="onward-desc">A free overnight hackathon at PorterShed, 4–6 December.</span>
 				</a>
 			</div>
 		</div>

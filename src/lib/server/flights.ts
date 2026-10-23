@@ -130,17 +130,18 @@ export type ArrivalFlag = { level: 'warn' | 'bad'; text: string };
 
 /**
  * Anything about a landing time that makes the pickup or the morning hard.
- * The event starts at 8am at PorterShed, Galway: about 3 hours by road from
- * Dublin or Shannon, plus an hour for passport control and bags. So anyone
- * landing on the 5th misses the start; the day before is the plan.
+ * The event starts the evening of the 4th at PorterShed, Galway: about 3
+ * hours by road from Dublin or Shannon, plus an hour for passport control and
+ * bags. So landing on the 4th by early afternoon is the plan; anyone landing
+ * the day before needs an extra night somewhere.
  */
 export function arrivalFlags(arrivesAt: string): ArrivalFlag[] {
 	const t = new Date(arrivesAt).getTime();
 	const hour = new Date(arrivesAt).getUTCHours();
 	const flags: ArrivalFlag[] = [];
-	if (t > start - 3.5 * HOUR) flags.push({ level: 'bad', text: 'Misses the 8am start in Galway' });
+	if (t > start - 3.5 * HOUR) flags.push({ level: 'bad', text: 'Misses the start in Galway' });
 	else if (t > start - 6 * HOUR) flags.push({ level: 'warn', text: 'Tight: Galway is ~3h from the airport' });
-	if (t < start - 48 * HOUR) flags.push({ level: 'warn', text: 'Arrives early: needs an extra night' });
+	if (t < new Date(`${EVENT.date}T00:00:00Z`).getTime()) flags.push({ level: 'warn', text: 'Arrives early: needs an extra night' });
 	if (hour >= 22 || hour < 6) flags.push({ level: 'warn', text: 'Night arrival: driver on call' });
 	return flags;
 }

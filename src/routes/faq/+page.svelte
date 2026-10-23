@@ -21,7 +21,7 @@
 		},
 		{
 			q: 'whenn?!',
-			a: ['5–6 December. it starts at 8am on 5 December and ends at 2pm on 6 December']
+			a: ['4–6 December. it starts on the evening of 4 December and ends at 2pm on 6 December']
 		},
 		{
 			q: 'how do i qualify?!',

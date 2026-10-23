@@ -160,39 +160,57 @@ export async function getActivityStats(): Promise<ActivityStats> {
 
 // ----------------------------------------------------- daily active ----
 
-/** Days shown on the daily active builders chart. */
+/** Days shown on the daily active chart. */
 const DAU_DAYS = 30;
 let dauCache: { at: number; value: DailyActive } | null = null;
 
 export type DailyActive = {
-	days: { day: string; active: number; hours: number }[];
+	/** Expedition-connected projects worked on each day, by how many builders, for how long */
+	days: { day: string; projects: number; builders: number; hours: number }[];
 	/** builder-days still to ask Hackatime about; the chart fills in over a few loads */
 	missing: number;
 };
 
-/** One builder's Hackatime coding time on one (UTC) day, or null if it couldn't be fetched. */
-async function codedOn(token: string, day: string): Promise<number | null> {
+/**
+ * One builder's coding time per Hackatime project on one (UTC) day, or null
+ * if it couldn't be fetched. Their own token, so "my" is them.
+ */
+async function codedOn(token: string, day: string): Promise<{ project: string; seconds: number }[] | null> {
 	try {
-		const u = new URL(`${config.hackatime.apiUrl}/authenticated/hours`);
-		u.searchParams.set('start_date', day);
-		u.searchParams.set('end_date', day);
+		const u = new URL(`${config.hackatime.apiUrl}/users/my/stats`);
+		u.searchParams.set('start_date', `${day}T00:00:00Z`);
+		u.searchParams.set('end_date', `${day}T23:59:59Z`);
+		u.searchParams.set('features', 'projects');
 		const res = await fetch(u, {
 			headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
 			signal: AbortSignal.timeout(4000)
 		});
 		if (!res.ok) return null;
-		const json = (await res.json()) as { total_seconds?: number };
-		return Math.round(json.total_seconds ?? 0);
+		const json = (await res.json()) as { data?: { projects?: { name?: string; total_seconds?: number }[] } };
+		return (json.data?.projects ?? [])
+			.filter((p) => p.name && (p.total_seconds ?? 0) > 0)
+			.map((p) => ({ project: p.name!, seconds: Math.round(p.total_seconds!) }));
 	} catch {
 		return null;
 	}
 }
 
+/** Every row of a select, past the API's 1000-row page. */
+async function allRows<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null }>): Promise<T[]> {
+	const out: T[] = [];
+	for (let from = 0; ; from += 1000) {
+		const { data } = await page(from, from + 999);
+		out.push(...(data ?? []));
+		if (!data || data.length < 1000) return out;
+	}
+}
+
 /**
- * How many builders coded each day over the last 30 days (any time at all in
- * their Hackatime that day, on any project), and how many hours between them.
- * Past days are stored in daily_coding once fetched; today and yesterday are
- * asked again, since heartbeats keep arriving. Cached for a few minutes.
+ * Expedition projects worked on each day over the last 30 days: projects
+ * builders have connected to Expedition with any coding time that (UTC) day
+ * in their Hackatime, how many builders that was, and the hours. Per-project
+ * time is stored in daily_project_coding once fetched; today and yesterday
+ * are asked again, since heartbeats keep arriving. Cached for a few minutes.
  */
 export async function getDailyActive(): Promise<DailyActive> {
 	if (dauCache && Date.now() - dauCache.at < 5 * 60 * 1000) return dauCache.value;
@@ -201,17 +219,20 @@ export async function getDailyActive(): Promise<DailyActive> {
 	const days = Array.from({ length: DAU_DAYS }, (_, i) => new Date(Date.now() - (DAU_DAYS - 1 - i) * DAY_MS).toISOString().slice(0, 10));
 	const fresh = new Set(days.slice(-2));
 
-	const [{ data: conns }, { data: users }, { data: stored }] = await Promise.all([
+	const [{ data: conns }, { data: users }, { data: connected }, stored] = await Promise.all([
 		db().from('hackatime_connections').select('user_id, access_token'),
 		db().from('users').select('id').like('hackclub_id', 'ident!%'),
-		db().from('daily_coding').select('user_id, day, seconds').gte('day', days[0])
+		db().from('expedition_projects').select('user_id, hackatime_project'),
+		allRows((from, to) => db().from('daily_project_coding').select('user_id, day, project, seconds').gte('day', days[0]).range(from, to))
 	]);
 	const real = new Set((users ?? []).map((u) => u.id));
-	const have = new Set((stored ?? []).filter((r) => !fresh.has(r.day)).map((r) => `${r.user_id}:${r.day}`));
+	const isConnected = new Set((connected ?? []).map((p) => `${p.user_id}:${p.hackatime_project}`));
+	const builders = new Set((connected ?? []).map((p) => p.user_id));
+	const have = new Set(stored.filter((r) => !fresh.has(r.day)).map((r) => `${r.user_id}:${r.day}`));
 
-	// newest days first, so the chart fills in from today backwards
+	// only builders with an Expedition project; newest days first, so the chart fills in from today backwards
 	const todo = (conns ?? [])
-		.filter((c) => real.has(c.user_id))
+		.filter((c) => real.has(c.user_id) && builders.has(c.user_id))
 		.flatMap((c) => days.filter((d) => !have.has(`${c.user_id}:${d}`)).map((day) => ({ c, day })))
 		.sort((a, b) => b.day.localeCompare(a.day));
 
@@ -219,34 +240,43 @@ export async function getDailyActive(): Promise<DailyActive> {
 	// each batch straight away, so a request cut off by the host loses nothing
 	// and the next load carries on where this one stopped.
 	const deadline = Date.now() + 6_000;
-	const rows: { user_id: string; day: string; seconds: number }[] = [];
+	const rows: { user_id: string; day: string; project: string; seconds: number }[] = [];
 	let done = 0;
 	while (done < todo.length && Date.now() < deadline) {
 		const batch = todo.slice(done, done + 20);
 		done += batch.length;
 		const fetched = await mapLimit(batch, 10, async ({ c, day }) => {
-			const seconds = await codedOn(c.access_token, day);
-			return seconds === null ? null : { user_id: c.user_id, day, seconds };
+			const projects = await codedOn(c.access_token, day);
+			if (projects === null) return [];
+			// nothing coded still gets a row, so the day isn't asked again
+			return (projects.length ? projects : [{ project: '', seconds: 0 }]).map((p) => ({ user_id: c.user_id, day, ...p }));
 		});
-		const got = fetched.filter((r) => r !== null);
+		const got = fetched.flat();
 		rows.push(...got);
 		if (got.length) {
 			const { error } = await db()
-				.from('daily_coding')
+				.from('daily_project_coding')
 				.upsert(got.map((r) => ({ ...r, fetched_at: new Date().toISOString() })));
-			if (error) console.error('daily_coding', error.message);
+			if (error) console.error('daily_project_coding', error.message);
 		}
 	}
 	// today and yesterday are always re-asked, so they don't count as missing
 	const missing = todo.slice(done).filter((t) => !fresh.has(t.day)).length;
 
-	// stored days, overwritten by anything just fetched
-	const byKey = new Map((stored ?? []).filter((r) => real.has(r.user_id)).map((r) => [`${r.user_id}:${r.day}`, r]));
-	for (const r of rows) byKey.set(`${r.user_id}:${r.day}`, r);
+	// stored days, replaced by any day just fetched
+	const refetched = new Set(rows.map((r) => `${r.user_id}:${r.day}`));
+	const all = [...stored.filter((r) => !refetched.has(`${r.user_id}:${r.day}`)), ...rows].filter(
+		(r) => r.seconds > 0 && real.has(r.user_id) && isConnected.has(`${r.user_id}:${r.project}`)
+	);
 	const value = {
 		days: days.map((day) => {
-			const coded = [...byKey.values()].filter((r) => r.day === day && r.seconds > 0);
-			return { day, active: coded.length, hours: Math.round(coded.reduce((t, r) => t + r.seconds, 0) / 360) / 10 };
+			const worked = all.filter((r) => r.day === day);
+			return {
+				day,
+				projects: worked.length,
+				builders: new Set(worked.map((r) => r.user_id)).size,
+				hours: Math.round(worked.reduce((t, r) => t + r.seconds, 0) / 360) / 10
+			};
 		}),
 		missing
 	};

@@ -41,7 +41,7 @@
 			<div>
 				<h1 class="app-title">Arrivals</h1>
 				<p class="hint lead">
-					The flight each person should take to Ireland for the Galway hackathon (PorterShed, starts 8am on 5 December),
+					The flight each person should take to Ireland for the Galway hackathon (PorterShed, starts the evening of 4 December),
 					whether they've booked it, and when to be at the airport. All times are Irish time.
 				</p>
 			</div>

@@ -17,7 +17,7 @@
 		<h1 class="app-title">Join Expedition</h1>
 		<p class="lead">
 			Build whatever you want, software or hardware. Track your hours, get them approved, and spend them on real gear or a
-			travel grant to our free overnight hackathon at {EVENT.venue} on 5–6 December.
+			travel grant to our free overnight hackathon at {EVENT.venue} on 4–6 December.
 		</p>
 
 		{#if data.enrolled}

@@ -282,7 +282,7 @@
 			</div>
 			<p class="hint block-hint">
 				Bank approved hours here at <strong>{money(TRAVEL_RATE)}/hour</strong> towards your trip to Galway
-				for 5–6 December. To qualify, you need enough approved hours to cover 50% of your travel cost, or the
+				for 4–6 December. To qualify, you need enough approved hours to cover 50% of your travel cost, or the
 				full {TRAVEL_CAP_HOURS} hour Expedition. <strong>{TRAVEL_CAP_HOURS} hours is the maximum
 				requirement.</strong> Once you qualify, your stipend goes towards your travel and accommodation,
 				and you cover anything left over.
