@@ -188,6 +188,11 @@
 								<blockquote>{data.resubmit.feedback}</blockquote>
 							{/if}
 							<p class="hint">Your earlier answers are filled in. Change what they asked for, then send it back. It goes back into the same review (not a new one), with your reviewer's notes still attached.</p>
+							<div class="field">
+								<label for="changes_made">What did you change?</label>
+								<textarea id="changes_made" name="changes_made" rows="3" required minlength="10" maxlength="2000"
+									placeholder="e.g. Added a README with setup steps, fixed the demo link, and logged the missing hours in JOURNAL.md."></textarea>
+							</div>
 						</section>
 					{/if}
 

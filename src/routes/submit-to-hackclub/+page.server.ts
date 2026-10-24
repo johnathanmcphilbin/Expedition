@@ -8,7 +8,7 @@ import {
 	listConnectedProjects,
 	connectProject
 } from '$lib/server/queries';
-import { ValidationError, isAllowedImage } from '$lib/server/validate';
+import { ValidationError, isAllowedImage, text } from '$lib/server/validate';
 import type { UserRow } from '$lib/server/database.types';
 import { parseSubmissionFields } from '$lib/server/submission-fields';
 import { queueSubmission, listOwnQueued, getOwnForResubmit, resubmitQueued } from '$lib/server/queue';
@@ -171,8 +171,10 @@ export const actions: Actions = {
 			}
 
 			if (resubmitId) {
+				const changes = text(form.get('changes_made'), 'What you changed', { max: 2000 });
+				if (!changes || changes.length < 10) throw new ValidationError('Say what you changed, so your reviewer knows what to look at', 'changes_made');
 				// the same submission, updated, back in the review queue
-				const ok = await resubmitQueued(user.id, resubmitId, fields, file, form.get('library') === 'yes', { [LAPSE_FIELD]: lapse }, trackedHours);
+				const ok = await resubmitQueued(user.id, resubmitId, fields, file, form.get('library') === 'yes', { [LAPSE_FIELD]: lapse }, trackedHours, changes);
 				if (!ok) throw new ValidationError("That submission can't be resubmitted any more. Check your dashboard.");
 			} else {
 				// Waits for an Expedition reviewer; it only goes to Hack Club once

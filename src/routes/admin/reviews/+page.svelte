@@ -363,6 +363,13 @@
 					</header>
 					{@render flagPanel('new', r.id)}
 					{@render claimBar('new', r.id)}
+					{#if r.changes_made && r.status === 'pending'}
+						<div class="changes-made">
+							<strong>Resubmitted. What they changed:</strong>
+							<p>{r.changes_made}</p>
+							<span class="hint">The feedback they were given is in the private notes below.</span>
+						</div>
+					{/if}
 
 					{#if data.queuedDetail.screenshot}
 						<a class="shot" href={data.queuedDetail.screenshot} target="_blank" rel="noopener noreferrer">
@@ -530,8 +537,8 @@
 									<span class="hint big-pay">Projects with more than {data.bigPay.hours}h tracked pay {data.earnings ? 'you' : 'a reviewer'} ${data.bigPay.big.toFixed(2)} instead of ${data.bigPay.per.toFixed(2)} when approved.</span>
 								</div>
 								<div class="field">
-									<label for="participant_feedback">Feedback to them</label>
-									<textarea id="participant_feedback" name="participant_feedback" rows="3" maxlength="4000" defaultValue={r.participant_feedback ?? ''}></textarea>
+									<label for="participant_feedback">Feedback to them <span class="optional">required, it's the message they get</span></label>
+									<textarea id="participant_feedback" name="participant_feedback" rows="3" maxlength="4000" required defaultValue={r.participant_feedback ?? ''}></textarea>
 								</div>
 								<div class="field">
 									<label for="internal_notes">Private notes <span class="optional">only organisers see these</span></label>
@@ -550,7 +557,7 @@
 									</button>
 									<button class="btn btn-outline" type="submit" name="decision" value="changes_requested" disabled={!!submitting}>Needs changes</button>
 									<button class="btn btn-outline" type="submit" name="decision" value="rejected" disabled={!!submitting}>Reject</button>
-									<button class="save-draft" type="submit" name="decision" value="draft" disabled={!!submitting}>
+									<button class="save-draft" formnovalidate type="submit" name="decision" value="draft" disabled={!!submitting}>
 										{submitting === 'draft' ? 'Saving…' : 'Save edits'}
 									</button>
 									<span class="autosave-status" aria-live="polite" data-autosave>Changes save automatically</span>
@@ -708,8 +715,8 @@
 								</div>
 
 								<div class="field">
-									<label for="participant_feedback">Feedback to them</label>
-									<textarea id="participant_feedback" name="participant_feedback" rows="3" maxlength="4000" defaultValue={data.detail.review?.participant_feedback ?? ''}></textarea>
+									<label for="participant_feedback">Feedback to them <span class="optional">required, it's the message they get</span></label>
+									<textarea id="participant_feedback" name="participant_feedback" rows="3" maxlength="4000" required defaultValue={data.detail.review?.participant_feedback ?? ''}></textarea>
 								</div>
 								<div class="field">
 									<label for="internal_notes">Private notes <span class="optional">only organisers see these</span></label>
@@ -726,7 +733,7 @@
 									</button>
 									<button class="btn btn-outline" type="submit" name="status" value="changes_requested" disabled={!!submitting}>Needs changes</button>
 									<button class="btn btn-outline" type="submit" name="status" value="rejected" disabled={!!submitting}>Reject</button>
-									<button class="save-draft" type="submit" name="status" value="pending" disabled={!!submitting}>
+									<button class="save-draft" formnovalidate type="submit" name="status" value="pending" disabled={!!submitting}>
 										{submitting === 'pending' ? 'Saving…' : 'Save draft'}
 									</button>
 									<span class="autosave-status" aria-live="polite" data-autosave>Changes save automatically</span>
@@ -1034,6 +1041,17 @@
 		flex-wrap: wrap;
 		align-items: baseline;
 		gap: 0.3rem 0.8rem;
+	}
+	.changes-made {
+		margin: 0 0 1rem;
+		padding: 0.7rem 0.9rem;
+		background: #fff8ec;
+		border-left: 4px solid #e0a040;
+		font-size: 0.9rem;
+	}
+	.changes-made p {
+		margin: 0.3rem 0;
+		white-space: pre-wrap;
 	}
 	.claim-bar {
 		display: flex;

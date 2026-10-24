@@ -484,7 +484,8 @@ export async function resubmitQueued(
 	screenshot: File | null,
 	libraryOptIn: boolean,
 	justifications: Justifications,
-	trackedHours: number | null = null
+	trackedHours: number | null = null,
+	changesMade: string | null = null
 ): Promise<boolean> {
 	const row = await getQueued(id);
 	if (!row || row.user_id !== userId || row.status !== 'changes_requested') return false;
@@ -500,7 +501,15 @@ export async function resubmitQueued(
 		shot = { screenshot_path: path, screenshot_type: screenshot.type, screenshot_name: screenshot.name || `screenshot.${ext}` };
 	}
 
-	const stamp = `[Resubmitted after changes ${new Date().toISOString().slice(0, 10)}]`;
+	// the feedback they acted on moves into the notes, so the next reviewer
+	// starts with an empty feedback box rather than sending the old one again
+	const stamp = [
+		`[Resubmitted after changes ${new Date().toISOString().slice(0, 10)}]`,
+		row.participant_feedback ? `Feedback they were given: ${row.participant_feedback}` : null,
+		changesMade ? `What they changed: ${changesMade}` : null
+	]
+		.filter(Boolean)
+		.join('\n');
 	const { data, error } = await db()
 		.from('submission_queue')
 		.update({
@@ -509,10 +518,11 @@ export async function resubmitQueued(
 			library_opt_in: libraryOptIn,
 			justifications: { ...(row.justifications ?? {}), ...justifications },
 			tracked_hours: trackedHours,
+			changes_made: changesMade,
+			participant_feedback: null,
 			status: 'pending',
 			reviewer_id: null,
 			reviewed_at: null,
-			// the feedback they acted on stays visible to the reviewer
 			internal_notes: row.internal_notes ? `${stamp}\n${row.internal_notes}` : stamp
 		})
 		.eq('id', id)

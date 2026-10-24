@@ -143,6 +143,8 @@ export type QueuedSubmissionRow = {
 	approved_hours: number | null;
 	/** Hackatime hours on its projects, as of submitting or a reviewer last opening it */
 	tracked_hours: number | null;
+	/** what they say they changed, on their latest resubmission */
+	changes_made?: string | null;
 	internal_notes: string | null;
 	participant_feedback: string | null;
 	reviewer_id: string | null;

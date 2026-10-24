@@ -841,8 +841,10 @@ export const actions: Actions = {
 			if (decision === 'approve' && approvedHours === null) {
 				return fail(400, { message: 'Set how many hours to approve before sending it.' });
 			}
-			if ((decision === 'changes_requested' || decision === 'rejected') && !feedback) {
-				return fail(400, { message: 'Give them some feedback to act on.' });
+			if (decision !== 'draft' && !feedback) {
+				return fail(400, {
+					message: decision === 'approve' ? 'Write them some feedback before approving. It’s the message they get.' : 'Give them some feedback to act on.'
+				});
 			}
 
 			await updateQueuedFields(id, fields, parseJustifications(form));

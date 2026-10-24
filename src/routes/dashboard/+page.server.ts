@@ -150,9 +150,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		hackatimeUnavailable = times === null;
 
 		const rawNames = submissions.map((s) => (s.project_names_raw ?? '').toLowerCase());
-		// a review can cover several Hackatime projects; each of them shows it
+		// a review can cover several Hackatime projects; each of them shows it.
+		// Oldest first, so a later review of the same project replaces it: the
+		// newest decision (and its feedback) is the one they see.
 		const reviewsByProject = new Map(
-			ownReviews.flatMap((r) =>
+			[...ownReviews].reverse().flatMap((r) =>
 				(r.hackatime_projects?.length ? r.hackatime_projects : [r.hackatime_project]).map(
 					(n) => [n.toLowerCase(), r] as const
 				)
