@@ -364,6 +364,17 @@ export interface Database {
 			trip_flights: Table<TripFlightRow>;
 			review_flags: Table<ReviewFlagRow>;
 			review_payouts: Table<ReviewPayoutRow>;
+			review_decisions: Table<{
+				id: string;
+				item_kind: 'hc' | 'new';
+				item_key: string;
+				reviewer_id: string | null;
+				decision: 'approved' | 'changes_requested' | 'rejected';
+				approved_hours: number | null;
+				tracked_hours: number | null;
+				hardware: boolean;
+				decided_at: string;
+			}>;
 			review_claims: Table<{ item_kind: 'hc' | 'new'; item_key: string; reviewer_id: string; claimed_at: string; expires_at: string | null; held: boolean }>;
 			daily_project_coding: Table<{ user_id: string; day: string; project: string; seconds: number; fetched_at: string }>;
 			travel_grant_requests: Table<TravelGrantRequestRow>;

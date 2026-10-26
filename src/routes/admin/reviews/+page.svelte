@@ -21,7 +21,8 @@
 		{ value: 'changes_requested', label: 'Needs changes' },
 		{ value: 'approved', label: 'Approved' },
 		{ value: 'rejected', label: 'Rejected' },
-		{ value: 'all', label: 'All' }
+		{ value: 'all', label: 'All' },
+		{ value: 'stats', label: 'Stats' }
 	] as const;
 
 	const STATUS_LABEL: Record<string, string> = {
@@ -307,11 +308,14 @@
 		<nav class="tabs" aria-label="Filter by status">
 			{#each FILTERS as f (f.value)}
 				<a href={filterHref(f.value)} class:active={data.filter === f.value}>
-					{f.label}<span class="tab-count">{data.counts[f.value]}</span>
+					{f.label}{#if f.value !== 'stats'}<span class="tab-count">{data.counts[f.value]}</span>{/if}
 				</a>
 			{/each}
 		</nav>
 
+		{#if data.filter === 'stats'}
+			{@render statsView()}
+		{:else}
 		<div class="layout">
 			<!-- ---------- queue ---------- -->
 			<aside class="queue" aria-label="Submissions">
@@ -770,8 +774,83 @@
 				{/key}
 			</section>
 		</div>
+		{/if}
 	</div>
 </main>
+
+{#snippet statsView()}
+	{@const st = data.stats}
+	{#if !st}
+		<p class="error-box">Couldn't load the stats just now. Try again in a minute.</p>
+	{:else}
+		{@const pct = (n: number | null) => (n === null ? '–' : `${n}%`)}
+		{@const maxDay = Math.max(1, ...st.perDay.map((d) => d.approved + d.other))}
+		<section class="stats-block">
+			<h2 class="section-label">In the queue now</h2>
+			<div class="stat-tiles">
+				<div><span class="n">{st.queue.projects}</span><span class="k">projects waiting<br /><em>{st.queue.software} software · {st.queue.hardware} hardware</em></span></div>
+				<div><span class="n">{st.queue.trackedHours}h</span><span class="k">tracked hours waiting{#if st.queue.unknownHours}<br /><em>+ {st.queue.unknownHours} with no tracked hours (hardware journals)</em>{/if}</span></div>
+				<div><span class="n">{st.queue.waitingOnBuilders}</span><span class="k">sent back for changes<br /><em>waiting on the builder</em></span></div>
+				<div><span class="n">{st.queue.oldestDays === null ? '–' : `${st.queue.oldestDays}d`}</span><span class="k">oldest has waited</span></div>
+			</div>
+		</section>
+
+		<section class="stats-block">
+			<h2 class="section-label">Reviewing so far</h2>
+			<div class="stat-tiles">
+				<div><span class="n">{st.totals.reviews}</span><span class="k">reviews done<br /><em>{st.totals.week} in the last 7 days</em></span></div>
+				<div><span class="n">{pct(st.totals.approvalRate)}</span><span class="k">approved<br /><em>{st.totals.approved} approved · {st.totals.changes} changes · {st.totals.rejected} rejected</em></span></div>
+				<div><span class="n">{st.totals.hoursApproved}h</span><span class="k">hours approved</span></div>
+				<div><span class="n">{pct(st.totals.cutPercent)}</span><span class="k">of tracked time cut<br /><em>on approvals where both are known</em></span></div>
+			</div>
+			<p class="hint">Software: {st.software.reviews} reviews, {pct(st.software.approvalRate)} approved, {st.software.hoursApproved}h. Hardware: {st.hardware.reviews} reviews, {pct(st.hardware.approvalRate)} approved, {st.hardware.hoursApproved}h.</p>
+
+			<div class="day-bars" role="img" aria-label="Reviews per day over the last 14 days">
+				{#each st.perDay as d (d.day)}
+					{@const label = new Date(d.day + 'T00:00:00Z').toLocaleDateString('en-IE', { day: 'numeric', month: 'short', timeZone: 'UTC' })}
+					<div class="day" title="{label}: {d.approved} approved, {d.other} changes or rejected">
+						<span class="bar">
+							<span class="seg other" style="height:{(d.other / maxDay) * 100}%"></span>
+							<span class="seg approved" style="height:{(d.approved / maxDay) * 100}%"></span>
+						</span>
+						<span class="day-n">{d.approved + d.other || ''}</span>
+						<span class="day-k">{label}</span>
+					</div>
+				{/each}
+			</div>
+			<p class="legend"><span><i class="sw approved"></i>Approved</span><span><i class="sw other"></i>Needs changes or rejected</span> <span class="hint">last 14 days</span></p>
+		</section>
+
+		<section class="stats-block">
+			<h2 class="section-label">Leaderboard</h2>
+			{#if st.leaderboard.length}
+				<div class="table-wrap">
+					<table class="board">
+						<thead><tr><th>#</th><th>Reviewer</th><th>Reviews</th><th>Last 7 days</th><th>Approved</th><th>Changes</th><th>Rejected</th><th>Approval rate</th><th>Hours approved</th></tr></thead>
+						<tbody>
+							{#each st.leaderboard as r, i (r.id)}
+								<tr class:me={r.me}>
+									<td>{i + 1}</td>
+									<th>{r.name}{#if r.me} <span class="you">you</span>{/if}</th>
+									<td><strong>{r.reviews}</strong></td>
+									<td>{r.week}</td>
+									<td>{r.approved}</td>
+									<td>{r.changes}</td>
+									<td>{r.rejected}</td>
+									<td>{pct(r.approvalRate)}</td>
+									<td>{r.hoursApproved}h</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+				<p class="hint">Every decision counts, including ones later resubmitted. Drafts don't.</p>
+			{:else}
+				<p class="hint">No reviews logged yet.</p>
+			{/if}
+		</section>
+	{/if}
+{/snippet}
 
 <style>
 	.prior-warn {
@@ -1041,6 +1120,130 @@
 		flex-wrap: wrap;
 		align-items: baseline;
 		gap: 0.3rem 0.8rem;
+	}
+	.stats-block {
+		margin-bottom: 1.6rem;
+	}
+	.stat-tiles {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+		gap: 0.8rem;
+		margin: 0.6rem 0;
+	}
+	.stat-tiles div {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		padding: 0.8rem 0.9rem;
+		background: #fff;
+		border: 1.5px solid var(--rule-strong);
+	}
+	.stat-tiles .n {
+		font-size: 1.6rem;
+		font-weight: 800;
+		color: var(--navy);
+	}
+	.stat-tiles .k {
+		font-size: 0.85rem;
+		color: var(--slate);
+	}
+	.stat-tiles em {
+		font-style: normal;
+		font-size: 0.78rem;
+		color: var(--muted);
+	}
+	.day-bars {
+		display: grid;
+		grid-template-columns: repeat(14, 1fr);
+		gap: 0.3rem;
+		align-items: end;
+		height: 150px;
+		margin-top: 1rem;
+	}
+	.day-bars .day {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		height: 100%;
+		min-width: 0;
+	}
+	.day-bars .bar {
+		display: flex;
+		flex-direction: column-reverse;
+		justify-content: flex-start;
+		width: 100%;
+		max-width: 28px;
+		flex: 1;
+	}
+	.day-bars .seg {
+		display: block;
+		width: 100%;
+	}
+	.seg.approved,
+	.sw.approved {
+		background: var(--green);
+	}
+	.seg.other,
+	.sw.other {
+		background: #d98e04;
+	}
+	.day-bars .seg.other + .seg.approved {
+		border-bottom: 2px solid #fff;
+	}
+	.day-n {
+		font-size: 0.75rem;
+		font-weight: 800;
+		min-height: 1em;
+	}
+	.day-k {
+		font-size: 0.65rem;
+		color: var(--muted);
+		white-space: nowrap;
+		overflow: hidden;
+		max-width: 100%;
+	}
+	.legend {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem 1rem;
+		font-size: 0.8rem;
+		margin-top: 0.4rem;
+	}
+	.legend .sw {
+		display: inline-block;
+		width: 10px;
+		height: 10px;
+		margin-right: 0.3rem;
+	}
+	.table-wrap {
+		overflow-x: auto;
+	}
+	.board {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.9rem;
+		background: #fff;
+	}
+	.board th,
+	.board td {
+		padding: 0.45rem 0.6rem;
+		text-align: left;
+		border-bottom: 1px solid var(--rule-strong);
+		white-space: nowrap;
+	}
+	.board thead th {
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--muted);
+	}
+	.board tr.me {
+		background: #ecf8ef;
+	}
+	.board .you {
+		font-size: 0.7rem;
+		font-weight: 800;
+		color: var(--green-dark);
 	}
 	.changes-made {
 		margin: 0 0 1rem;

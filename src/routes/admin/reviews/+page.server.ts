@@ -4,6 +4,7 @@ import { requireAdmin, requireReviewer, isReviewerOnly, reviewerName } from '$li
 import { lapsesFor, LAPSE_FIELD, type Lapse } from '$lib/server/lapse';
 import { referredBy } from '$lib/server/referrals';
 import { claim, release, clearClaim, holdForChanges, claimProblem, listClaims, CLAIM_HOURS, RESUBMIT_HOURS, MAX_CLAIMS } from '$lib/server/claims';
+import { logDecision, reviewStats } from '$lib/server/review-stats';
 import { payForReview, reviewEarnings, REVIEW_PAY_USD, BIG_REVIEW_PAY_USD, BIG_PROJECT_HOURS } from '$lib/server/payouts';
 import type { UserRow, SubmissionReviewRow, QueuedSubmissionRow } from '$lib/server/database.types';
 import { db } from '$lib/server/supabase';
@@ -47,7 +48,7 @@ import { hours, text, uuid, oneOf, ValidationError } from '$lib/server/validate'
 import type { SubmissionStatus } from '$lib/server/database.types';
 import type { QueueItem } from '$lib/server/queries';
 
-const FILTERS = ['hardware', 'pending', 'changes_requested', 'approved', 'rejected', 'all'] as const;
+const FILTERS = ['hardware', 'pending', 'changes_requested', 'approved', 'rejected', 'all', 'stats'] as const;
 type Filter = (typeof FILTERS)[number];
 
 const STATUSES = ['pending', 'in_review', 'changes_requested', 'approved', 'rejected'] as const;
@@ -245,7 +246,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const filter = (url.searchParams.get('status') as Filter | null) ?? 'pending';
 	const validFilter = FILTERS.includes(filter) ? filter : 'pending';
 	const filtered =
-		validFilter === 'all'
+		validFilter === 'stats'
+			? [] // the Stats tab shows numbers, not a list
+			: validFilter === 'all'
 			? trackItems
 			: validFilter === 'hardware'
 				? trackItems.filter((i) => i.hardware && waiting(i))
@@ -438,6 +441,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// everyone sees which submissions pay the big-project rate
 		bigPay: { per: REVIEW_PAY_USD, big: BIG_REVIEW_PAY_USD, hours: BIG_PROJECT_HOURS },
 		filter: validFilter,
+		// reviewers and admins alike: the queue, how reviewing's going, the leaderboard
+		stats:
+			validFilter === 'stats'
+				? await reviewStats(items, viewer.id).catch((e) => {
+						console.error('reviewStats', e);
+						return null;
+					})
+				: null,
 		counts,
 		search: q,
 		linkQuery: url.searchParams.get('link_q') ?? '',
@@ -860,6 +871,8 @@ export const actions: Actions = {
 				});
 				if (!result.ok) return fail(502, { message: result.message });
 				await clearClaim('new', id);
+				// once sent it's a Hack Club submission, which is how approvals are counted
+				await logDecision({ kind: 'hc', key: result.airtableRecordId, reviewerId: reviewer.id, decision: 'approved', approvedHours, trackedHours, hardware: row.hardware });
 				if (result.airtableError) {
 					// approved and credited, but Hack Club's fields didn't take: open it
 					// so the error and the resend button are right there
@@ -883,6 +896,9 @@ export const actions: Actions = {
 				// needs changes: the resubmission comes back to whoever asked for them
 				if (decision === 'changes_requested') await holdForChanges(reviewer, 'new', id);
 				else if (decision !== 'draft') await clearClaim('new', id);
+				if (decision !== 'draft') {
+					await logDecision({ kind: 'new', key: id, reviewerId: reviewer.id, decision, approvedHours: null, trackedHours, hardware: row.hardware });
+				}
 			}
 
 			if (decision === 'draft') return { saved: true };
@@ -1023,6 +1039,9 @@ export const actions: Actions = {
 			if (!result.ok) return fail(409, { message: result.message });
 			if (status === 'changes_requested') await holdForChanges(reviewer, 'hc', airtableRecordId);
 			else if (status !== 'pending' && status !== 'in_review') await clearClaim('hc', airtableRecordId);
+			if (status === 'approved' || status === 'changes_requested' || status === 'rejected') {
+				await logDecision({ kind: 'hc', key: airtableRecordId, reviewerId: reviewer.id, decision: status, approvedHours, trackedHours: submittedHours });
+			}
 			if (status !== 'pending' && status !== 'in_review') {
 				await payForReview(
 					reviewer,

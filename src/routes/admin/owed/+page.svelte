@@ -5,6 +5,29 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let declining = $state<string | null>(null);
+	// the button being worked on, so it can say so and not be pressed twice
+	let busy = $state<string | null>(null);
+	const act =
+		(key: string, ask?: string) =>
+		({ cancel }: { cancel: () => void }) => {
+			if (busy || (ask && !confirm(ask))) return cancel();
+			busy = key;
+			return async ({ update }: { update: () => Promise<void> }) => {
+				await update();
+				busy = null;
+				declining = null;
+			};
+		};
+
+	// the spend figures stream in after every reload; keep showing the last
+	// ones meanwhile so the page doesn't collapse and jump under the cursor
+	type Money = NonNullable<Awaited<PageData['money']>>;
+	let lastMoney = $state<Money | null>(null);
+	$effect(() => {
+		data.money.then((m) => {
+			if (m) lastMoney = m;
+		});
+	});
 	const usd = (n: number) => `$${n.toFixed(2)}`;
 	const STAGE: Record<string, string> = {
 		approved: 'Approved, to pay',
@@ -18,37 +41,7 @@
 
 <svelte:head><title>What you owe · Expedition</title></svelte:head>
 
-<main class="app-page">
-	<div class="wrap">
-		<div class="app-head">
-			<div>
-				<h1 class="app-title">What you owe</h1>
-				<p class="hint lead">
-					Travel money is claimed per claim, at $8 an hour, for visa, flights or accommodation. Banking more and claiming again adds on as a new claim.
-					Plus reviewer cash and shop items to send.
-				</p>
-			</div>
-		</div>
-
-		{#if form && 'message' in form && form.message}<p class="error-box">{form.message}</p>{/if}
-		{#if form && 'done' in form && form.done}<p class="notice">{form.done}</p>{/if}
-
-		<section class="totals">
-			<div><span class="n">{usd(data.totalUsd)}</span><span class="k">owed now (approved travel + reviewers + shop)</span></div>
-			<div><span class="n">{usd(data.stages.approved.total)}</span><span class="k">travel approved, to pay</span></div>
-			<div><span class="n">{usd(data.stages.requested.total)}</span><span class="k">travel claimed, waiting for you</span></div>
-			<div><span class="n">{usd(data.stages.unclaimed.total)}</span><span class="k">banked, not claimed yet</span></div>
-			<div><span class="n">{usd(data.stages.paid.total)}</span><span class="k">travel already paid</span></div>
-			<div><span class="n">{usd(data.reviewersUsd)}</span><span class="k">reviewer cash</span></div>
-			<div><span class="n">{usd(data.shop.usd)}</span><span class="k">shop items to send</span></div>
-		</section>
-
-		<section class="block">
-			<h2 class="section-label">What you can spend</h2>
-			{#await data.money}
-				<p class="hint">Checking HCB…</p>
-			{:then m}
-				{#if m}
+{#snippet spend(m: Money)}
 					<div class="totals spend">
 						<div><span class="n" class:neg={m.spendUsd < 0}>{usd(m.spendUsd)}</span><span class="k">yours to spend: in the bank, less what participants still hold</span></div>
 						<div><span class="n">{usd(m.stillToCome)}</span><span class="k">next from Max: {m.stillToComeHours}h approved he hasn't paid for yet, at $8.50</span></div>
@@ -83,6 +76,40 @@
 						If shop buyers put their hours into travel instead, it'd cost $3 an hour more.
 						HCB checked {new Date(m.hcb.checkedAt).toLocaleTimeString()}.
 					</p>
+{/snippet}
+
+<main class="app-page">
+	<div class="wrap">
+		<div class="app-head">
+			<div>
+				<h1 class="app-title">What you owe</h1>
+				<p class="hint lead">
+					Travel money is claimed per claim, at $8 an hour, for visa, flights or accommodation. Banking more and claiming again adds on as a new claim.
+					Plus reviewer cash and shop items to send.
+				</p>
+			</div>
+		</div>
+
+		{#if form && 'message' in form && form.message}<p class="error-box">{form.message}</p>{/if}
+		{#if form && 'done' in form && form.done}<p class="notice">{form.done}</p>{/if}
+
+		<section class="totals">
+			<div><span class="n">{usd(data.totalUsd)}</span><span class="k">owed now (approved travel + reviewers + shop)</span></div>
+			<div><span class="n">{usd(data.stages.approved.total)}</span><span class="k">travel approved, to pay</span></div>
+			<div><span class="n">{usd(data.stages.requested.total)}</span><span class="k">travel claimed, waiting for you</span></div>
+			<div><span class="n">{usd(data.stages.unclaimed.total)}</span><span class="k">banked, not claimed yet</span></div>
+			<div><span class="n">{usd(data.stages.paid.total)}</span><span class="k">travel already paid</span></div>
+			<div><span class="n">{usd(data.reviewersUsd)}</span><span class="k">reviewer cash</span></div>
+			<div><span class="n">{usd(data.shop.usd)}</span><span class="k">shop items to send</span></div>
+		</section>
+
+		<section class="block">
+			<h2 class="section-label">What you can spend</h2>
+			{#await data.money}
+				{#if lastMoney}{@render spend(lastMoney)}{:else}<p class="hint">Checking HCB…</p>{/if}
+			{:then m}
+				{#if m}
+					{@render spend(m)}
 				{:else}
 					<p class="hint">Couldn't reach HCB just now.</p>
 				{/if}
@@ -113,29 +140,29 @@
 									<td class="act">
 										{#if c.status === 'requested'}
 											{#if declining === c.id}
-												<form method="POST" action="?/decideClaim" use:enhance={() => async ({ update }) => { await update(); declining = null; }} class="pay-form">
+												<form method="POST" action="?/decideClaim" use:enhance={act(c.id)} class="pay-form">
 													<input type="hidden" name="id" value={c.id} />
 													<input name="admin_note" maxlength="1000" placeholder="Why (they'll see this)" required />
-													<button class="text-btn danger" type="submit" name="decision" value="decline">Decline</button>
+													<button class="text-btn danger" type="submit" name="decision" value="decline" disabled={busy === c.id}>{busy === c.id ? 'Saving…' : 'Decline'}</button>
 													<button class="text-btn" type="button" onclick={() => (declining = null)}>Cancel</button>
 												</form>
 											{:else}
 												<div class="btns">
-													<form method="POST" action="?/decideClaim" use:enhance>
+													<form method="POST" action="?/decideClaim" use:enhance={act(c.id)}>
 														<input type="hidden" name="id" value={c.id} />
-														<button class="btn" type="submit" name="decision" value="approve">Approve</button>
+														<button class="btn btn-sm" type="submit" name="decision" value="approve" disabled={busy === c.id}>{busy === c.id ? 'Saving…' : 'Approve'}</button>
 													</form>
-													<form method="POST" action="?/payClaim" use:enhance>
+													<form method="POST" action="?/payClaim" use:enhance={act(c.id, `Mark ${usd(c.usd)} to ${c.name} as paid? Only once you've sent it.`)}>
 														<input type="hidden" name="id" value={c.id} />
-														<button class="text-btn" type="submit">Approve &amp; mark paid</button>
+														<button class="text-btn" type="submit" disabled={busy === c.id}>Approve &amp; mark paid</button>
 													</form>
-													<button class="text-btn danger" type="button" onclick={() => (declining = c.id)}>Decline</button>
+													<button class="text-btn danger" type="button" disabled={busy === c.id} onclick={() => (declining = c.id)}>Decline</button>
 												</div>
 											{/if}
 										{:else if c.status === 'approved'}
-											<form method="POST" action="?/payClaim" use:enhance>
+											<form method="POST" action="?/payClaim" use:enhance={act(c.id, `Mark ${usd(c.usd)} to ${c.name} as paid? Only once you've sent it.`)}>
 												<input type="hidden" name="id" value={c.id} />
-												<button class="btn" type="submit">Mark paid</button>
+												<button class="btn btn-sm" type="submit" disabled={busy === c.id}>{busy === c.id ? 'Saving…' : 'Mark paid'}</button>
 											</form>
 										{/if}
 									</td>
@@ -180,9 +207,9 @@
 									<td>
 										{#if p.unclaimed}
 											{usd(p.unclaimed)}
-											<form method="POST" action="?/claimFor" use:enhance={({ cancel }) => { if (!confirm(`Claim ${usd(p.unclaimed)} for ${p.name}? This skips the qualify check.`)) cancel(); }}>
+											<form method="POST" action="?/claimFor" use:enhance={act(`claim-${p.id}`, `Claim ${usd(p.unclaimed)} for ${p.name}? This skips the qualify check.`)}>
 												<input type="hidden" name="user_id" value={p.id} />
-												<button class="text-btn" type="submit">Claim for them</button>
+												<button class="text-btn" type="submit" disabled={busy === `claim-${p.id}`}>{busy === `claim-${p.id}` ? 'Claiming…' : 'Claim for them'}</button>
 											</form>
 										{:else}—{/if}
 									</td>
@@ -213,9 +240,9 @@
 								<span>{r.name}</span>
 								<span class="rv">
 									<strong>{usd(r.owedUsd)}</strong>
-									<form method="POST" action="?/payReviewer" use:enhance>
+									<form method="POST" action="?/payReviewer" use:enhance={act(`rev-${r.id}`, `Mark ${usd(r.owedUsd)} to ${r.name} as paid?`)}>
 										<input type="hidden" name="user_id" value={r.id} />
-										<button class="text-btn" type="submit">Mark paid</button>
+										<button class="text-btn" type="submit" disabled={busy === `rev-${r.id}`}>{busy === `rev-${r.id}` ? 'Saving…' : 'Mark paid'}</button>
 									</form>
 								</span>
 							</li>
@@ -356,6 +383,17 @@
 	}
 	.act {
 		text-align: left;
+	}
+	.act form {
+		margin: 0;
+	}
+	.btn-sm {
+		padding: 0.4rem 0.8rem;
+		font-size: 0.8rem;
+	}
+	button:disabled {
+		opacity: 0.55;
+		cursor: wait;
 	}
 	.pay-form {
 		display: flex;
