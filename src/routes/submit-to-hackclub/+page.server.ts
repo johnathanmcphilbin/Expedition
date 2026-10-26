@@ -196,9 +196,10 @@ export const actions: Actions = {
 		} catch (e) {
 			if (e instanceof ValidationError) return fail(400, { message: e.message, field: e.field });
 			console.error('submit-to-hackclub failed', e);
+			// the reason, so an organiser can tell what broke from a screenshot of it
+			const reason = (e instanceof Error ? e.message : String(e)).slice(0, 200);
 			return fail(502, {
-				message:
-					"Something went wrong saving your submission. Nothing was saved, so you can try again in a minute. If it keeps happening, let an organiser know."
+				message: `Something went wrong saving your submission. Nothing was saved, so you can try again in a minute. If it keeps happening, send an organiser this: ${reason}`
 			});
 		}
 	}
