@@ -537,5 +537,8 @@ export async function resubmitQueued(
 	if (shot && row.screenshot_path) await db().storage.from(BUCKET).remove([row.screenshot_path]);
 	// back to the reviewer who asked for the changes
 	await resumeHeld('new', id).catch((e) => console.error('resumeHeld', e));
+	// its wait for a reviewer starts again now (best effort: only for the stats)
+	const { error: qe } = await db().from('submission_queue').update({ queued_at: new Date().toISOString() }).eq('id', id);
+	if (qe) console.error('queued_at', qe.message);
 	return true;
 }

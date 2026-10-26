@@ -145,6 +145,8 @@ export type QueuedSubmissionRow = {
 	tracked_hours: number | null;
 	/** what they say they changed, on their latest resubmission */
 	changes_made?: string | null;
+	/** when it last entered the queue: submitted, or resubmitted after changes */
+	queued_at?: string | null;
 	internal_notes: string | null;
 	participant_feedback: string | null;
 	reviewer_id: string | null;
@@ -374,6 +376,7 @@ export interface Database {
 				tracked_hours: number | null;
 				hardware: boolean;
 				decided_at: string;
+				waited_hours: number | null;
 			}>;
 			review_claims: Table<{ item_kind: 'hc' | 'new'; item_key: string; reviewer_id: string; claimed_at: string; expires_at: string | null; held: boolean }>;
 			daily_project_coding: Table<{ user_id: string; day: string; project: string; seconds: number; fetched_at: string }>;

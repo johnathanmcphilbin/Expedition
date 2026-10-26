@@ -19,6 +19,8 @@ export async function logDecision(params: {
 	approvedHours: number | null;
 	trackedHours: number | null;
 	hardware?: boolean;
+	/** when this round started waiting for a reviewer */
+	waitingSince?: string | null;
 }): Promise<void> {
 	try {
 		let hardware = params.hardware;
@@ -26,43 +28,51 @@ export async function logDecision(params: {
 			const { data } = await db().from('submission_queue').select('hardware').eq('airtable_record_id', params.key).maybeSingle();
 			hardware = data?.hardware ?? false;
 		}
-		const { error } = await db()
+		const row = {
+			item_kind: params.kind,
+			item_key: params.key,
+			reviewer_id: params.reviewerId,
+			decision: params.decision,
+			approved_hours: params.decision === 'approved' ? params.approvedHours : null,
+			tracked_hours: params.trackedHours === null ? null : Math.round(params.trackedHours * 100) / 100,
+			hardware
+		};
+		const waited = params.waitingSince ? (Date.now() - new Date(params.waitingSince).getTime()) / 3_600_000 : null;
+		let { error } = await db()
 			.from('review_decisions')
-			.insert({
-				item_kind: params.kind,
-				item_key: params.key,
-				reviewer_id: params.reviewerId,
-				decision: params.decision,
-				approved_hours: params.decision === 'approved' ? params.approvedHours : null,
-				tracked_hours: params.trackedHours === null ? null : Math.round(params.trackedHours * 100) / 100,
-				hardware
-			});
+			.insert({ ...row, waited_hours: waited !== null && waited >= 0 ? Math.round(waited * 100) / 100 : null });
+		// before the wait-times migration: log it without the wait
+		if (error?.message.includes('waited_hours')) ({ error } = await db().from('review_decisions').insert(row));
 		if (error) console.error('logDecision', error.message);
 	} catch (e) {
 		console.error('logDecision', e);
 	}
 }
 
-type QueueItem = { status: string; hardware: boolean; trackedHours: number | null; submittedAt: string | null; gone: boolean };
+type QueueItem = { status: string; hardware: boolean; trackedHours: number | null; waitingSince: string | null; gone: boolean };
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export async function reviewStats(items: QueueItem[], viewerId: string) {
-	const rows: { reviewer_id: string | null; decision: Decision; approved_hours: number | null; tracked_hours: number | null; hardware: boolean; decided_at: string }[] = [];
+	const rows: { reviewer_id: string | null; decision: Decision; approved_hours: number | null; tracked_hours: number | null; hardware: boolean; decided_at: string; waited_hours?: number | null }[] = [];
+	// waited_hours only once the wait-times migration is in
+	let cols = 'reviewer_id, decision, approved_hours, tracked_hours, hardware, decided_at, waited_hours';
 	for (let from = 0; ; from += 1000) {
-		const { data, error } = await db()
-			.from('review_decisions')
-			.select('reviewer_id, decision, approved_hours, tracked_hours, hardware, decided_at')
-			.range(from, from + 999);
+		let { data, error } = await db().from('review_decisions').select(cols).range(from, from + 999);
+		if (error?.message.includes('waited_hours')) {
+			cols = 'reviewer_id, decision, approved_hours, tracked_hours, hardware, decided_at';
+			({ data, error } = await db().from('review_decisions').select(cols).range(from, from + 999));
+		}
 		if (error) throw new Error(error.message);
-		rows.push(...((data ?? []) as typeof rows));
+		rows.push(...((data ?? []) as unknown as typeof rows));
 		if (!data || data.length < 1000) break;
 	}
 
 	// ---- the queue right now
 	const waiting = items.filter((i) => (i.status === 'pending' || i.status === 'in_review') && !i.gone);
-	const oldest = waiting.reduce<string | null>((o, i) => (i.submittedAt && (!o || i.submittedAt < o) ? i.submittedAt : o), null);
+	// since it last entered the queue: time spent on changes doesn't count
+	const oldest = waiting.reduce<string | null>((o, i) => (i.waitingSince && (!o || i.waitingSince < o) ? i.waitingSince : o), null);
 	const queue = {
 		projects: waiting.length,
 		software: waiting.filter((i) => !i.hardware).length,
@@ -92,6 +102,19 @@ export async function reviewStats(items: QueueItem[], viewerId: string) {
 		};
 	};
 
+	// how long a submission waits for a reviewer, per round, from entering the queue
+	const waitOf = (rs: typeof rows) => {
+		const w = rs.map((r) => r.waited_hours).filter((h): h is number => h !== null && h !== undefined).map(Number).sort((a, b) => a - b);
+		if (!w.length) return null;
+		const mid = Math.floor(w.length / 2);
+		return {
+			averageHours: r1(w.reduce((t, h) => t + h, 0) / w.length),
+			medianHours: r1(w.length % 2 ? w[mid] : (w[mid - 1] + w[mid]) / 2),
+			rounds: w.length
+		};
+	};
+	const wait = { all: waitOf(rows), week: waitOf(rows.filter((r) => r.decided_at >= weekAgo)) };
+
 	const ids = [...new Set(rows.map((r) => r.reviewer_id).filter((x): x is string => !!x))];
 	const { data: people } = ids.length ? await db().from('users').select('*').in('id', ids) : { data: [] };
 	const names = new Map(((people ?? []) as UserRow[]).map((u) => [u.id, reviewerName(u)]));
@@ -106,5 +129,5 @@ export async function reviewStats(items: QueueItem[], viewerId: string) {
 		return { day, approved: d.filter((r) => r.decision === 'approved').length, other: d.filter((r) => r.decision !== 'approved').length };
 	});
 
-	return { queue, totals: tally(rows), hardware: tally(rows.filter((r) => r.hardware)), software: tally(rows.filter((r) => !r.hardware)), leaderboard, perDay };
+	return { queue, wait, totals: tally(rows), hardware: tally(rows.filter((r) => r.hardware)), software: tally(rows.filter((r) => !r.hardware)), leaderboard, perDay };
 }

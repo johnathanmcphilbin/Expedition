@@ -142,6 +142,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		gone: boolean;
 		hardware: boolean;
 		trackedHours: number | null;
+		/** when it last entered the queue, so time spent on changes isn't counted as waiting */
+		waitingSince: string | null;
 		/** who's reviewing it right now */
 		claim: { by: string; mine: boolean; at: string; held: boolean } | null;
 		flag: { reason: string | null; at: string } | null;
@@ -181,6 +183,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			hardware: hardwareByRecord.get(r.submission.airtable_record_id) ?? false,
 			// tracked hours, once the review's been opened: shows the big-project pay
 			trackedHours: r.review?.submitted_hours ?? null,
+			waitingSince: r.submission.airtable_created_at,
 			claim: claimOf('hc', r.submission.airtable_record_id),
 			gone: r.submission.airtable_status === AIRTABLE_GONE,
 			// a flag set while it was still queued follows it once sent
@@ -207,6 +210,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				gone: false,
 				hardware: qr.hardware,
 				trackedHours: qr.tracked_hours == null ? null : Number(qr.tracked_hours),
+				waitingSince: qr.queued_at ?? qr.created_at,
 				claim: claimOf('new', qr.id),
 				flag: flags.get(`new:${qr.id}`) ?? null,
 				searchText: [qr.first_name, qr.last_name, qr.email, qr.github_username, qr.project_name]
@@ -872,7 +876,7 @@ export const actions: Actions = {
 				if (!result.ok) return fail(502, { message: result.message });
 				await clearClaim('new', id);
 				// once sent it's a Hack Club submission, which is how approvals are counted
-				await logDecision({ kind: 'hc', key: result.airtableRecordId, reviewerId: reviewer.id, decision: 'approved', approvedHours, trackedHours, hardware: row.hardware });
+				await logDecision({ kind: 'hc', key: result.airtableRecordId, reviewerId: reviewer.id, decision: 'approved', approvedHours, trackedHours, hardware: row.hardware, waitingSince: row.queued_at ?? row.created_at });
 				if (result.airtableError) {
 					// approved and credited, but Hack Club's fields didn't take: open it
 					// so the error and the resend button are right there
@@ -897,7 +901,7 @@ export const actions: Actions = {
 				if (decision === 'changes_requested') await holdForChanges(reviewer, 'new', id);
 				else if (decision !== 'draft') await clearClaim('new', id);
 				if (decision !== 'draft') {
-					await logDecision({ kind: 'new', key: id, reviewerId: reviewer.id, decision, approvedHours: null, trackedHours, hardware: row.hardware });
+					await logDecision({ kind: 'new', key: id, reviewerId: reviewer.id, decision, approvedHours: null, trackedHours, hardware: row.hardware, waitingSince: row.queued_at ?? row.created_at });
 				}
 			}
 
@@ -1040,7 +1044,7 @@ export const actions: Actions = {
 			if (status === 'changes_requested') await holdForChanges(reviewer, 'hc', airtableRecordId);
 			else if (status !== 'pending' && status !== 'in_review') await clearClaim('hc', airtableRecordId);
 			if (status === 'approved' || status === 'changes_requested' || status === 'rejected') {
-				await logDecision({ kind: 'hc', key: airtableRecordId, reviewerId: reviewer.id, decision: status, approvedHours, trackedHours: submittedHours });
+				await logDecision({ kind: 'hc', key: airtableRecordId, reviewerId: reviewer.id, decision: status, approvedHours, trackedHours: submittedHours, waitingSince: linked.airtable_created_at });
 			}
 			if (status !== 'pending' && status !== 'in_review') {
 				await payForReview(

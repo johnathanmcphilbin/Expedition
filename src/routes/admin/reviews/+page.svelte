@@ -784,6 +784,7 @@
 		<p class="error-box">Couldn't load the stats just now. Try again in a minute.</p>
 	{:else}
 		{@const pct = (n: number | null) => (n === null ? '–' : `${n}%`)}
+		{@const fmtWait = (h: number) => (h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${Math.round(h * 10) / 10}h` : `${Math.round((h / 24) * 10) / 10}d`)}
 		{@const maxDay = Math.max(1, ...st.perDay.map((d) => d.approved + d.other))}
 		<section class="stats-block">
 			<h2 class="section-label">In the queue now</h2>
@@ -791,7 +792,7 @@
 				<div><span class="n">{st.queue.projects}</span><span class="k">projects waiting<br /><em>{st.queue.software} software · {st.queue.hardware} hardware</em></span></div>
 				<div><span class="n">{st.queue.trackedHours}h</span><span class="k">tracked hours waiting{#if st.queue.unknownHours}<br /><em>+ {st.queue.unknownHours} with no tracked hours (hardware journals)</em>{/if}</span></div>
 				<div><span class="n">{st.queue.waitingOnBuilders}</span><span class="k">sent back for changes<br /><em>waiting on the builder</em></span></div>
-				<div><span class="n">{st.queue.oldestDays === null ? '–' : `${st.queue.oldestDays}d`}</span><span class="k">oldest has waited</span></div>
+				<div><span class="n">{st.queue.oldestDays === null ? '–' : `${st.queue.oldestDays}d`}</span><span class="k">oldest has waited<br /><em>since it was last submitted or resubmitted</em></span></div>
 			</div>
 		</section>
 
@@ -801,6 +802,7 @@
 				<div><span class="n">{st.totals.reviews}</span><span class="k">reviews done<br /><em>{st.totals.week} in the last 7 days</em></span></div>
 				<div><span class="n">{pct(st.totals.approvalRate)}</span><span class="k">approved<br /><em>{st.totals.approved} approved · {st.totals.changes} changes · {st.totals.rejected} rejected</em></span></div>
 				<div><span class="n">{st.totals.hoursApproved}h</span><span class="k">hours approved</span></div>
+				<div><span class="n">{st.wait.all ? fmtWait(st.wait.all.averageHours) : '–'}</span><span class="k">average wait for a review<br /><em>{#if st.wait.all}median {fmtWait(st.wait.all.medianHours)}{#if st.wait.week} · last 7 days {fmtWait(st.wait.week.averageHours)}{/if}{:else}from submitting or resubmitting to a decision{/if}</em></span></div>
 				<div><span class="n">{pct(st.totals.cutPercent)}</span><span class="k">of tracked time cut<br /><em>on approvals where both are known</em></span></div>
 			</div>
 			<p class="hint">Software: {st.software.reviews} reviews, {pct(st.software.approvalRate)} approved, {st.software.hoursApproved}h. Hardware: {st.hardware.reviews} reviews, {pct(st.hardware.approvalRate)} approved, {st.hardware.hoursApproved}h.</p>
