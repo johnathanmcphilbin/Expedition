@@ -366,6 +366,8 @@ export interface Database {
 			trip_flights: Table<TripFlightRow>;
 			review_flags: Table<ReviewFlagRow>;
 			review_payouts: Table<ReviewPayoutRow>;
+			outreach_access: Table<{ email: string; added_by: string | null; added_at: string }>;
+			outreach_contacts: Table<{ user_id: string; contacted_by: string | null; contacted_at: string; note: string | null }>;
 			review_decisions: Table<{
 				id: string;
 				item_kind: 'hc' | 'new';
