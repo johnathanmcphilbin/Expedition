@@ -2,11 +2,12 @@
 # Build context is the repository root:
 #   docker build -f deploy/migrate/Dockerfile .
 #
-# Bind the expedition-main database (Variables -> Use a resource) so the
-# process receives DATABASE_URL. Point the command at verify or copy-storage.
-# Source Storage is read over HTTPS (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY).
-# SOURCE_DATABASE_URL is the Supabase session connection, used by verify and
-# backup. The laptop does not need a Postgres port open.
+# Orchard's deploy form has no container command. It sets PORT=3000 and env.
+# Set MIGRATE_COMMAND (initial-load, verify, copy-storage, manifest-check, ...)
+# to run that step once; the process then stays up and serves /health and /status.
+# Bind expedition-main with Variables -> Use a resource (DATABASE_URL).
+# SOURCE_DATABASE_URL is a secret (Supabase session connection) for initial-load,
+# verify, and backup.
 
 FROM node:22-bookworm-slim
 
@@ -27,8 +28,10 @@ RUN npm ci
 COPY scripts scripts
 COPY supabase/migrations supabase/migrations
 COPY deploy/postgrest/roles.sql deploy/postgrest/roles.sql
+COPY deploy/migrate/app.mjs deploy/migrate/app.mjs
+COPY deploy/migrate/decommission-prep.sh deploy/migrate/decommission-prep.sh
 COPY deploy/migrate/entrypoint.sh /entrypoint.sh
-RUN chmod 755 /entrypoint.sh
+RUN chmod 755 /entrypoint.sh deploy/migrate/decommission-prep.sh
 
+EXPOSE 3000
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["verify"]

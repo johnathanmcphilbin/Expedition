@@ -119,7 +119,7 @@ Two images, both built from this repo:
 | Image | Dockerfile | What it is |
 | --- | --- | --- |
 | PostgREST | `deploy/postgrest/Dockerfile` | The API the Vercel app calls. Public HTTPS. |
-| Migrate job | `deploy/migrate/Dockerfile` | `verify`, `copy-storage`, `backup`, `restore`, `readonly-role`, `roles`, `decommission`. |
+| Migrate app | `deploy/migrate/Dockerfile` | An HTTP app. `MIGRATE_COMMAND` runs one step, then `GET /health` and `GET /status` stay up. |
 
 PostgREST's entrypoint maps `DATABASE_URL` to `PGRST_DB_URI` and `PORT` to
 `PGRST_SERVER_PORT`. Because the pooler is **transaction mode**, the image
@@ -187,7 +187,7 @@ change production env vars until the runbook says so.
 | `SUPABASE_URL` | `https://ulmowedmbobncmcriszs.supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Storage list/download, and decommission later |
 
-Commands (the container's first argument):
+Subcommands. Orchard has no command field, so set `MIGRATE_COMMAND` to one of these names. Extra flags go in `MIGRATE_ARGS`. Once an **App command** job step exists, run the same names against this app from that step:
 
 ```
 initial-load
@@ -232,12 +232,22 @@ Import from URL.
 Create an empty database named `expedition-main` if it is not there yet. Build
 an app in the Orchard project `expedition` from this branch:
 
+Orchard's GitHub deploy form has no container command, only the Dockerfile path, an optional stage, and "build from repo root". It sets `PORT=3000` and expects the process to keep serving HTTP. Deploy `deploy/migrate/Dockerfile` as an app (not a Job: Jobs cannot build from this repo). Do not set a Dockerfile `CMD`.
+
 | Setting | Value |
 | --- | --- |
-| Dockerfile | `deploy/migrate/Dockerfile` (build context is the repository root) |
-| Command | `initial-load` |
-| `DATABASE_URL` | **Variables → Use a resource** on `expedition-main`. This is the target. |
+| Dockerfile path | `deploy/migrate/Dockerfile` |
+| Build from repo root | yes |
+| `DATABASE_URL` | **Variables → Use a resource** on empty `expedition-main`. This is the target. |
 | `SOURCE_DATABASE_URL` | Secret. Supabase **session** connection, port 5432 (`db.ulmowedmbobncmcriszs.supabase.co` or the session pooler). Not the transaction pooler on 6543. |
+| `MIGRATE_COMMAND` | `initial-load` |
+| `PORT` | Set by Orchard (`3000`). Do not override. |
+
+The container runs `initial-load` once, writes the full log to its stdout, then stays up. `GET /health` returns 200. `GET /status` is plain text: the command, when it finished, the exit code, and the last 300 log lines with connection strings redacted. A refusal because the target is not empty is exit code 1 **in that page**, and the process does not exit, so Orchard does not restart-loop. A later restart does not run a successful command again. Set `MIGRATE_RERUN=1` to force one more run (for example after a failed first attempt on a still-empty database).
+
+When Orchard's **App command** job step exists, point it at this same app and run the same subcommands (`initial-load`, `verify`, `copy-storage`, `manifest-check`, `roles`, …) that way instead of redeploying with a new `MIGRATE_COMMAND`.
+
+`MIGRATE_ARGS` is an optional extra, split on spaces, for flags such as `--out /tmp/backup` or `--manifest /tmp/manifest.json`.
 
 The job dumps schema `public` only (`--no-owner --no-acl`), in a read-only
 session. It keeps `pgcrypto` and `uuid-ossp` if the dump uses them, and drops
