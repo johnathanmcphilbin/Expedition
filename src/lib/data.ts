@@ -230,14 +230,17 @@ export const checkpoints: Checkpoint[] = [
 /**
  * Grants in the shop, claimable as often as they like. Not stops on the
  * trail, so they have their own keys. They choose the hours, at GRANT_RATE
- * per hour; `needsNote` ones must say what the money is for.
+ * per hour unless the grant sets its own `rate`; `needsNote` ones must say
+ * what the money is for.
  */
 export const GRANT_RATE = 5;
-export type Grant = { key: string; name: string; blurb: string; image?: string; hours?: number; value?: number; needsNote?: boolean };
+export type Grant = { key: string; name: string; blurb: string; image?: string; hours?: number; value?: number; rate?: number; needsNote?: boolean };
 export const grants: Grant[] = [
 	{ key: 'hardware', name: 'Hardware grant', blurb: 'Parts to finish your build. Put in an hour for every $5 they will cost, and tell us what you need.', needsNote: true },
 	{ key: '3d-printing', name: '3D printing grant', blurb: 'For filament, prints or a printing service for your project.' },
-	{ key: 'souvenir', name: 'Souvenir grant', blurb: 'Spending money for the Galway Christmas market, or anything else you want to bring home.' }
+	{ key: 'souvenir', name: 'Souvenir grant', blurb: 'Spending money for the Galway Christmas market, or anything else you want to bring home.' },
+	{ key: 'winter-clothes', name: 'Winter clothes grant', blurb: 'A coat, boots, gloves or anything else to keep you warm in Galway in December.' },
+	{ key: 'ai-credits', name: 'AI credits grant', blurb: 'Credits for an AI tool or API you use while building.', rate: 6 }
 ];
 
 /**
@@ -255,9 +258,13 @@ export const CHALLENGE: { key: string; prize: string; spend: number; spots: numb
 /** A drop's claim key: its own, else its hour tier. */
 export const dropKey = (d: Drop) => d.key ?? String(d.hours);
 
-/** What one shop claim is worth in USD: its catalogue value, else GRANT_RATE per hour. */
+/** A grant's USD per hour: its own rate, else GRANT_RATE. */
+export const grantRate = (g: Grant) => g.rate ?? GRANT_RATE;
+
+/** What one shop claim is worth in USD: its catalogue value, else its grant rate per hour. */
 export function shopValue(rewardKey: string, hoursCost: number): number {
-	return drops.find((d) => dropKey(d) === rewardKey)?.value ?? grants.find((g) => g.key === rewardKey)?.value ?? hoursCost * GRANT_RATE;
+	const grant = grants.find((g) => g.key === rewardKey);
+	return drops.find((d) => dropKey(d) === rewardKey)?.value ?? grant?.value ?? hoursCost * (grant ? grantRate(grant) : GRANT_RATE);
 }
 
 /** `value` is the grant amount in USD — only shown when someone asks for it. */

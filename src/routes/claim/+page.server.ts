@@ -2,7 +2,7 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireUser } from '$lib/server/guards';
 import { getBalance, claimReward, listOwnClaims, challengeStatus, awardChallenge } from '$lib/server/queries';
-import { drops, dropKey, grants, GRANT_RATE, money, CHALLENGE } from '$lib/data';
+import { drops, dropKey, grants, grantRate, money, CHALLENGE } from '$lib/data';
 import { text, ValidationError } from '$lib/server/validate';
 import { notifyClaim } from '$lib/server/notify';
 
@@ -69,7 +69,7 @@ export const actions: Actions = {
 					if (!Number.isInteger(hours) || hours < 1 || hours > 200) return fail(400, { message: 'Pick a whole number of hours, at least 1.' });
 				}
 				if (grant.needsNote && !note) return fail(400, { message: "Say what you're building and what you need." });
-				const name = grant.hours ? grant.name : `${grant.name} (${money(hours * GRANT_RATE)})`;
+				const name = grant.hours ? grant.name : `${grant.name} (${money(hours * grantRate(grant))})`;
 				const result = await claimReward({ userId: user.id, rewardKey: grant.key, rewardName: name, hoursCost: hours, note });
 				if (!result.ok) return fail(409, { message: result.message });
 				await notifyClaim({ name: user.display_name, reward: name, hours, note });

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import GrantAmount from '$lib/components/GrantAmount.svelte';
-	import { money, GRANT_RATE, grants } from '$lib/data';
+	import { money, GRANT_RATE, grants, grantRate } from '$lib/data';
 	import '$lib/styles/app.css';
 	import { enhance } from '$app/forms';
 	import Footer from '$lib/components/Footer.svelte';
@@ -135,7 +135,7 @@
 		</div>
 
 		<p class="section-label" style="margin-top:2.5rem">Grants</p>
-		<p class="hint" style="margin-bottom:1rem">You choose how much, at {money(GRANT_RATE)} an hour, and can claim these more than once.</p>
+		<p class="hint" style="margin-bottom:1rem">You choose how much, at {money(GRANT_RATE)} an hour unless it says otherwise, and can claim these more than once.</p>
 		<div class="drops">
 			{#each data.grants as g (g.key)}
 				{@const need = g.hours ?? 1}
@@ -143,7 +143,7 @@
 				<div class="drop" class:locked={!affordable && !g.claimed}>
 					{#if g.image}<img class="drop-img" src={g.image} alt={g.name} loading="lazy" />{/if}
 					<div class="drop-head">
-						<span class="drop-hours">{g.hours ? `${g.hours}h` : `${money(GRANT_RATE)}/h`}</span>
+						<span class="drop-hours">{g.hours ? `${g.hours}h` : `${money(grantRate(g))}/h`}</span>
 						<span class="drop-value">Grant</span>
 					</div>
 					<p class="drop-name">{g.name}</p>
@@ -167,7 +167,7 @@
 									Hours
 									<input name="hours" type="number" min="1" step="1" max={Math.floor(available)} bind:value={hoursFor[g.key]} required />
 								</label>
-								<p class="drop-extra">A {money((hoursFor[g.key] ?? 1) * GRANT_RATE)} grant.</p>
+								<p class="drop-extra">A {money((hoursFor[g.key] ?? 1) * grantRate(g))} grant.</p>
 								{#if g.needsNote}
 									<input name="note" type="text" maxlength="500" placeholder="What you're building and what you need" required />
 								{:else}
