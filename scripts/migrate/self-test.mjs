@@ -55,9 +55,15 @@ const fake = http.createServer((req, res) => {
 		});
 		req.on('end', () => {
 			const prefix = JSON.parse(body || '{}').prefix || '';
-			const rows = prefix === '' ? [{ name: 'user', id: null }] : [{ name: 'a.png', id: 'obj', metadata: { mimetype: 'image/png', size: bytes.length } }];
+			const file = { name: 'a.png', id: 'obj', metadata: { mimetype: 'image/png', size: bytes.length } };
+			// Root returns the folder and the same object by its full path.
+			// The folder walk returns it again. That is one object, listed twice.
+			let rows = [];
+			if (prefix === '') {
+				rows = [{ name: 'user', id: null }, { name: 'user/a.png', id: 'flat', metadata: file.metadata }];
+			} else if (prefix.startsWith('user')) rows = [file];
 			res.writeHead(200, { 'content-type': 'application/json' });
-			res.end(JSON.stringify(prefix.startsWith('user') ? rows : prefix === '' ? [{ name: 'user', id: null }] : []));
+			res.end(JSON.stringify(rows));
 		});
 		return;
 	}
@@ -113,12 +119,56 @@ const again = await run('node', ['scripts/migrate/restore-target.mjs', '--dump',
 check('second restore without --fresh-target is refused', again.code !== 0, again.out.slice(-200));
 
 const copied = await run('node', ['scripts/migrate/copy-storage.mjs'], env);
-check('copy storage', copied.code === 0, copied.out.slice(-200));
+check(
+	'copy storage',
+	copied.code === 0 &&
+		copied.out.includes('rows at start 0') &&
+		copied.out.includes('inserted 1') &&
+		copied.out.includes('already stored 0') &&
+		copied.out.includes('duplicate listings 1'),
+	copied.out.slice(-500)
+);
 const copiedAgain = await run('node', ['scripts/migrate/copy-storage.mjs'], env);
-check('copy storage is idempotent', copiedAgain.code === 0 && copiedAgain.out.includes('0 inserted'), copiedAgain.out.slice(-200));
+check(
+	'copy storage is idempotent',
+	copiedAgain.code === 0 && copiedAgain.out.includes('inserted 0') && copiedAgain.out.includes('already stored 1'),
+	copiedAgain.out.slice(-500)
+);
 
 const verified = await run('node', ['scripts/migrate/verify.mjs'], env);
-check('verify matches', verified.code === 0, verified.out.slice(-300));
+check(
+	'verify matches',
+	verified.code === 0 &&
+		verified.out.includes('table files: TARGET-ONLY') &&
+		!verified.out.includes('table files: MATCH') &&
+		verified.out.includes('files checkpoint-images: MATCH') &&
+		verified.out.includes('files submission-screenshots: MATCH') &&
+		verified.out.includes('files submission-evidence: MATCH') &&
+		verified.out.includes('files total: MATCH') &&
+		verified.out.includes('verify: OVERALL MATCH'),
+	verified.out.slice(-800)
+);
+const skippedFiles = await run('node', ['scripts/migrate/verify.mjs'], {
+	...env,
+	SUPABASE_URL: '',
+	SUPABASE_SERVICE_ROLE_KEY: ''
+});
+check('verify without storage creds prints SKIP', skippedFiles.code === 0 && skippedFiles.out.includes('files: SKIP'), skippedFiles.out.slice(-300));
+
+const extraDb = new pg.Client({ connectionString: dstUrl });
+await extraDb.connect();
+await extraDb.query('create table public.orchard_extra (id int)');
+await extraDb.end();
+const extra = await run('node', ['scripts/migrate/verify.mjs'], env);
+check(
+	'unexpected target table is TARGET-ONLY and fails',
+	extra.code !== 0 && extra.out.includes('table orchard_extra: TARGET-ONLY') && !extra.out.includes('table orchard_extra: MATCH'),
+	extra.out.slice(-500)
+);
+const dropExtra = new pg.Client({ connectionString: dstUrl });
+await dropExtra.connect();
+await dropExtra.query('drop table public.orchard_extra');
+await dropExtra.end();
 
 const dst = new pg.Client({ connectionString: dstUrl });
 await dst.connect();

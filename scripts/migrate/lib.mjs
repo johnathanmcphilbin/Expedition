@@ -323,6 +323,9 @@ export function createSourceStorage({ supabaseUrl, serviceRoleKey }) {
 
 	async function listBucket(bucket) {
 		const found = [];
+		const seen = new Set();
+		let listed = 0;
+		let duplicateListings = 0;
 		async function walk(prefix) {
 			let offset = 0;
 			for (;;) {
@@ -336,8 +339,21 @@ export function createSourceStorage({ supabaseUrl, serviceRoleKey }) {
 				if (!Array.isArray(rows) || rows.length === 0) break;
 				for (const row of rows) {
 					const name = `${prefix || ''}${row.name}`;
+					// id == null is a folder. The list is one level, so walk it.
+					// A file is sometimes also returned on a parent page under its
+					// full path. Keep one path. copy-storage used to insert the
+					// first sighting and then count the second as unchanged.
 					if (row.id == null) await walk(`${name.replace(/\/$/, '')}/`);
-					else found.push({ bucket, path: name.replace(/^\/+/, ''), metadata: row.metadata ?? null });
+					else {
+						const objectPath = name.replace(/^\/+/, '');
+						listed++;
+						if (seen.has(objectPath)) {
+							duplicateListings++;
+							continue;
+						}
+						seen.add(objectPath);
+						found.push({ bucket, path: objectPath, metadata: row.metadata ?? null });
+					}
 				}
 				if (rows.length < 1000) break;
 				offset += rows.length;
@@ -345,19 +361,52 @@ export function createSourceStorage({ supabaseUrl, serviceRoleKey }) {
 		}
 		await walk('');
 		found.sort((a, b) => a.path.localeCompare(b.path));
+		found.listed = listed;
+		found.duplicateListings = duplicateListings;
 		return found;
 	}
 
-	async function download(bucket, path) {
-		const encoded = path.split('/').map(encodeURIComponent).join('/');
+	async function readObject(bucket, objectPath, { keepBytes }) {
+		const encoded = objectPath.split('/').map(encodeURIComponent).join('/');
 		const response = await request('GET', `/storage/v1/object/${encodeURIComponent(bucket)}/${encoded}`);
-		const bytes = Buffer.from(await response.arrayBuffer());
-		return {
-			bytes,
-			contentType: response.headers.get('content-type'),
-			size: bytes.length,
-			md5: md5Buffer(bytes)
+		if (!response.body) throw new Error(`storage download ${bucket}/${objectPath} had no body`);
+		const sha = createHash('sha256');
+		const md5 = keepBytes ? createHash('md5') : null;
+		const chunks = keepBytes ? [] : null;
+		let size = 0;
+		const reader = response.body.getReader();
+		try {
+			for (;;) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				size += value.byteLength;
+				sha.update(value);
+				if (keepBytes) {
+					md5.update(value);
+					chunks.push(Buffer.from(value));
+				}
+			}
+		} finally {
+			reader.releaseLock();
+		}
+		const out = {
+			size,
+			sha256: sha.digest('hex'),
+			contentType: response.headers.get('content-type')
 		};
+		if (keepBytes) {
+			out.bytes = Buffer.concat(chunks, size);
+			out.md5 = md5.digest('hex');
+		}
+		return out;
+	}
+
+	function hashObject(bucket, objectPath) {
+		return readObject(bucket, objectPath, { keepBytes: false });
+	}
+
+	function download(bucket, objectPath) {
+		return readObject(bucket, objectPath, { keepBytes: true });
 	}
 
 	async function listAll() {
@@ -366,7 +415,13 @@ export function createSourceStorage({ supabaseUrl, serviceRoleKey }) {
 		return objects;
 	}
 
-	return { listBucket, listAll, download };
+	return { listBucket, listAll, download, hashObject };
+}
+
+/** Same content type copy-storage stores: object metadata, then the response header. */
+export function contentTypeOf(metadataType, headerType) {
+	const raw = metadataType || headerType || 'application/octet-stream';
+	return String(raw).split(';')[0].trim() || 'application/octet-stream';
 }
 
 export async function tableNames(client) {
@@ -457,11 +512,16 @@ export async function countTriggers(client) {
 }
 
 export async function databaseSnapshot(client) {
-	const names = (await tableNames(client)).filter((name) => name !== FILES_TABLE);
+	const allNames = await tableNames(client);
+	// public.files holds every storage object as bytea. Fingerprinting it with
+	// (t)::text would pull those bytes through the query. It is named in
+	// tableNames and reported as TARGET-ONLY instead.
+	const names = allNames.filter((name) => name !== FILES_TABLE);
 	const tables = [];
 	for (const name of names) tables.push(await fingerprintTableUnordered(client, name));
 	return {
 		tables,
+		tableNames: allNames,
 		sequences: await fingerprintSequences(client),
 		functions: await countFunctions(client),
 		triggers: await countTriggers(client)
@@ -521,7 +581,7 @@ function pairLine(label, same, detail) {
 	return `${label}: ${same ? 'MATCH' : 'MISMATCH'}${detail ? ` ${detail}` : ''}`;
 }
 
-/** Human summary. mismatches is the list of MISMATCH lines. */
+/** Human summary. mismatches is the list of lines that fail verify. */
 export function diffCatalog(source, target) {
 	const lines = [];
 	const mismatches = [];
@@ -529,6 +589,10 @@ export function diffCatalog(source, target) {
 		const line = pairLine(label, same, detail);
 		lines.push(line);
 		if (!same) mismatches.push(line);
+	};
+	const pushRaw = (line, fails) => {
+		lines.push(line);
+		if (fails) mismatches.push(line);
 	};
 	const targetTables = new Map(target.tables.map((row) => [row.name, row]));
 	const sourceTables = new Map(source.tables.map((row) => [row.name, row]));
@@ -541,8 +605,17 @@ export function diffCatalog(source, target) {
 		const same = row.count === other.count && row.md5 === other.md5;
 		push(`table ${name}`, same, `count ${row.count} md5 ${row.md5}`);
 	}
-	for (const name of targetTables.keys()) {
-		if (!sourceTables.has(name)) push(`table ${name}`, false, 'present on target only');
+	const sourceNames = new Set(source.tableNames ?? source.tables.map((row) => row.name));
+	const targetNames = [...(target.tableNames ?? target.tables.map((row) => row.name))].sort();
+	for (const name of targetNames) {
+		if (sourceNames.has(name)) continue;
+		// files is created by copy-storage. It is not a source table. Any other
+		// name here is unexpected and fails verify, and it is never called MATCH.
+		const expected = name === FILES_TABLE;
+		pushRaw(
+			expected ? `table ${name}: TARGET-ONLY` : `table ${name}: TARGET-ONLY (not on source; fails verify)`,
+			!expected
+		);
 	}
 	const targetSeq = new Map(target.sequences.map((row) => [row.name, row]));
 	const sourceSeq = new Map(source.sequences.map((row) => [row.name, row]));
@@ -551,8 +624,8 @@ export function diffCatalog(source, target) {
 		const same = other && String(row.last_value) === String(other.last_value) && row.is_called === other.is_called;
 		push(`sequence ${name}`, !!same, `last_value ${row.last_value} is_called ${row.is_called}`);
 	}
-	for (const name of targetSeq.keys()) {
-		if (!sourceSeq.has(name)) push(`sequence ${name}`, false, 'present on target only');
+	for (const name of [...targetSeq.keys()].sort()) {
+		if (!sourceSeq.has(name)) pushRaw(`sequence ${name}: TARGET-ONLY (not on source; fails verify)`, true);
 	}
 	push(
 		'functions',
@@ -568,7 +641,6 @@ export function diffCatalog(source, target) {
 	push('views', viewKey(source.views) === viewKey(target.views), `count ${source.views.length} -> ${target.views.length}`);
 	const enumKey = (rows) => rows.map((row) => `${row.name}:${row.labels}`).join('|');
 	push('enums', enumKey(source.enums) === enumKey(target.enums), `count ${source.enums.length} -> ${target.enums.length}`);
-	lines.push(mismatches.length ? 'OVERALL: MISMATCH' : 'OVERALL: MATCH');
 	return { lines, mismatches };
 }
 
@@ -619,8 +691,9 @@ export function diffSnapshots(source, target) {
 export async function targetFileRows(client) {
 	const { rows: exists } = await client.query(`select to_regclass('public.files') as reg`);
 	if (!exists[0].reg) return [];
+	// sha256(bytea) runs in Postgres. Node only receives the hex digest.
 	const { rows } = await client.query(`
-		select bucket, path, size::bigint as size, md5(bytes) as md5
+		select bucket, path, size::bigint as size, encode(sha256(bytes), 'hex') as sha256, content_type
 		from public.files
 		order by bucket, path
 	`);
@@ -628,8 +701,69 @@ export async function targetFileRows(client) {
 		bucket: row.bucket,
 		path: row.path,
 		size: Number(row.size),
-		md5: row.md5
+		sha256: row.sha256,
+		content_type: row.content_type
 	}));
+}
+
+/**
+ * Compare streamed storage objects to public.files.
+ * listings is the per-bucket { bucket, listed, duplicateListings } from listBucket.
+ * Returns one MATCH/MISMATCH line per bucket, a total line, and the path differences.
+ */
+export function diffStoredFiles(sourceFiles, targetFiles, listings = []) {
+	const lines = [];
+	const mismatches = [];
+	const key = (row) => `${row.bucket}\0${row.path}`;
+	const listedBy = new Map(listings.map((row) => [row.bucket, row]));
+	const buckets = [...BUCKETS];
+	for (const row of [...sourceFiles, ...targetFiles]) {
+		if (!buckets.includes(row.bucket)) buckets.push(row.bucket);
+	}
+	let sourceCount = 0;
+	let targetCount = 0;
+	for (const bucket of buckets) {
+		const src = sourceFiles.filter((row) => row.bucket === bucket);
+		const dst = targetFiles.filter((row) => row.bucket === bucket);
+		const problems = [];
+		const srcMap = new Map();
+		for (const row of src) {
+			const id = key(row);
+			if (srcMap.has(id)) problems.push(`file ${bucket}/${row.path}: duplicate source path`);
+			srcMap.set(id, row);
+		}
+		const dstMap = new Map();
+		for (const row of dst) {
+			const id = key(row);
+			if (dstMap.has(id)) problems.push(`file ${bucket}/${row.path}: duplicate target path`);
+			dstMap.set(id, row);
+		}
+		for (const row of src) {
+			const other = dstMap.get(key(row));
+			if (!other) {
+				problems.push(`file ${bucket}/${row.path}: missing on target`);
+				continue;
+			}
+			if (row.size !== other.size) problems.push(`file ${bucket}/${row.path}: size ${row.size} != ${other.size}`);
+			if (row.sha256 !== other.sha256) problems.push(`file ${bucket}/${row.path}: sha256 ${row.sha256} != ${other.sha256}`);
+			if (row.content_type !== other.content_type) {
+				problems.push(`file ${bucket}/${row.path}: content_type ${row.content_type} != ${other.content_type}`);
+			}
+		}
+		for (const row of dst) {
+			if (!srcMap.has(key(row))) problems.push(`file ${bucket}/${row.path}: extra on target`);
+		}
+		const note = listedBy.get(bucket);
+		const listed = note ? ` (listed ${note.listed}, duplicate listings ${note.duplicateListings})` : '';
+		const same = problems.length === 0;
+		sourceCount += srcMap.size;
+		targetCount += dstMap.size;
+		lines.push(`files ${bucket}: ${same ? 'MATCH' : 'MISMATCH'} count ${srcMap.size} target ${dstMap.size}${listed}`);
+		mismatches.push(...problems);
+	}
+	const sameTotal = mismatches.length === 0;
+	lines.push(`files total: ${sameTotal ? 'MATCH' : 'MISMATCH'} count ${sourceCount} target ${targetCount}`);
+	return { lines, mismatches };
 }
 
 export function diffFiles(sourceFiles, targetFiles) {

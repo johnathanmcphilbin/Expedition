@@ -32,6 +32,10 @@ async function main() {
 		const snap = await catalogSnapshot(target);
 		console.log('target tables (count, order-independent md5):');
 		for (const row of snap.tables) console.log(`  ${row.name}: count ${row.count} md5 ${row.md5}`);
+		const fingerprinted = new Set(snap.tables.map((row) => row.name));
+		for (const name of snap.tableNames) {
+			if (!fingerprinted.has(name)) console.log(`  ${name}: TARGET-ONLY (not fingerprinted; bytea is not hashed here)`);
+		}
 		console.log('target sequences:');
 		for (const row of snap.sequences) {
 			console.log(`  ${row.name}: last_value ${row.last_value} is_called ${row.is_called}`);

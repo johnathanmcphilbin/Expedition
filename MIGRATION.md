@@ -275,7 +275,7 @@ The Orchard app user `u_ysws_expedition_expedition` owns the database and has ne
 
 `control_tower_expedition_ro` cannot be created by this user either. `readonly-role` still writes the SQL, and applying it prints a warning and skips. An Orchard admin, or a second user Orchard provides, has to create that read-only role.
 
-After `initial-load`, set `MIGRATE_COMMAND=post-load` (or run an App command of `post-load` once that step exists). It runs `roles.sql` and prints the target's table counts, order-independent md5s, and sequence `last_value`s. It does not open the source and does not reload data. `MIGRATE_COMMAND=verify` compares source and target (read-only on the source) and prints `MATCH` or `MISMATCH` for each table, sequence, and for functions, triggers, views, and enums.
+After `initial-load`, set `MIGRATE_COMMAND=post-load` (or run an App command of `post-load` once that step exists). It runs `roles.sql` and prints the target's table counts, order-independent md5s, and sequence `last_value`s. It does not open the source and does not reload data. `MIGRATE_COMMAND=verify` compares source and target (read-only on the source) and prints `MATCH` or `MISMATCH` for each shared table, sequence, and for functions, triggers, views, and enums. A table that exists only on the target is `TARGET-ONLY`, not `MATCH`. `public.files` is the expected one. Any other target-only table fails the run.
 
 The 340 restored statements from the live run were committed before `roles.sql` started. Restore is one transaction that commits, then `roles.sql` is a second session. Its permission error did not roll the data back. The rows are in `expedition`. Confirm with `post-load` or `verify`.
 
@@ -305,12 +305,27 @@ A request with no JWT must not return rows.
 ### 5. Copy Storage
 
 Migrate job: `copy-storage`. It creates `public.files` if needed and upserts
-every object. Re-running it only writes objects whose size or md5 changed.
+every distinct object. The last lines look like this:
+
+```
+files: rows at start 0, rows at end 110, unique 110, inserted 110, updated 0, already stored 0, concurrent 0, duplicate listings 37
+```
+
+`already stored` means the row was there before this process started and its size, sha256, and content_type matched. `concurrent` means it was not there at the start but matched when this process reached it, so another copy-storage wrote it. `duplicate listings` means the storage list returned that path more than once; it is stored once. A first run into an empty table has `already stored 0`. The old `unchanged` counter incremented for a duplicate listing and for a row another pod had just inserted, and it did not record the row count at the start, so a non-zero `unchanged` on an empty table did not say which of those happened.
+
+Re-running it only writes objects whose size, sha256, or content_type changed. Hashing streams. The bytes of one object are buffered only while that object is inserted or updated.
 
 ### 6. Verify
 
-Migrate job: `verify`. It must print `verify: OK, zero mismatches` and exit 0.
-If it does not, stop. Do not switch the app over.
+Migrate job: `verify`. With `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` set it
+lists all three buckets (read-only), streams each object to a sha256, and
+compares count, size, sha256, and content_type with `public.files`. It prints
+`MATCH` or `MISMATCH` for each bucket and for `files total`. Without those
+credentials it prints `files: SKIP`. Tables that exist only on the target are
+`TARGET-ONLY`. `files` is expected and does not by itself fail the run. Any
+other target-only table is named and does. The job must print
+`verify: OVERALL MATCH` and exit 0. If it does not, stop. Do not switch the
+app over.
 
 ### 7. Read-only role for control tower
 
@@ -337,7 +352,7 @@ While the freeze is on:
 3. `copy-storage` (this is the storage delta; it is idempotent).
 4. `roles` once more so `public.files` is granted.
 5. Restart PostgREST so it reloads the schema.
-6. `verify`. **Zero mismatches, or you do not continue.**
+6. `verify`. **`verify: OVERALL MATCH`, or you do not continue.**
 
 Rollback of this step: the app is still on Supabase. The freeze is still on.
 Orchard can be restored again from `backups/final` or abandoned. Supabase was

@@ -5,6 +5,7 @@
  *
  * Both database connections are read-only. Storage access is list and download.
  * public.files is compared to Storage objects (it does not exist on the source).
+ * Each object is streamed into sha256. The bytes are not kept.
  *
  *   node scripts/migrate/verify.mjs
  *
@@ -14,10 +15,10 @@
 import {
 	BUCKETS,
 	catalogSnapshot,
+	contentTypeOf,
 	createSourceStorage,
 	diffCatalog,
-	diffFiles,
-	md5Buffer,
+	diffStoredFiles,
 	openReadOnly,
 	parseArgs,
 	serviceRoleFrom,
@@ -29,17 +30,27 @@ import {
 
 export async function sourceFileSnapshot(storage) {
 	const files = [];
+	const listings = [];
 	for (const bucket of BUCKETS) {
-		for (const object of await storage.listBucket(bucket)) {
-			const downloaded = await storage.download(bucket, object.path);
-			if (md5Buffer(downloaded.bytes) !== downloaded.md5) {
-				throw new Error(`md5 mismatch downloading ${bucket}/${object.path}`);
-			}
-			files.push({ bucket, path: object.path, size: downloaded.size, md5: downloaded.md5 });
+		const objects = await storage.listBucket(bucket);
+		listings.push({
+			bucket,
+			listed: objects.listed,
+			duplicateListings: objects.duplicateListings
+		});
+		for (const object of objects) {
+			const hashed = await storage.hashObject(bucket, object.path);
+			files.push({
+				bucket,
+				path: object.path,
+				size: hashed.size,
+				sha256: hashed.sha256,
+				content_type: contentTypeOf(object.metadata?.mimetype, hashed.contentType)
+			});
 		}
 	}
 	files.sort((a, b) => a.bucket.localeCompare(b.bucket) || a.path.localeCompare(b.path));
-	return files;
+	return { files, listings };
 }
 
 export async function verifyPair({ sourceUrl, targetUrl, supabaseUrl, serviceRoleKey }) {
@@ -50,19 +61,25 @@ export async function verifyPair({ sourceUrl, targetUrl, supabaseUrl, serviceRol
 		const targetSnap = await catalogSnapshot(target);
 		const compared = diffCatalog(sourceSnap, targetSnap);
 		const mismatches = [...compared.mismatches];
-		let files = [];
-		if (supabaseUrl && serviceRoleKey) {
+		let fileLines = [];
+		let fileDetails = [];
+		const filesCompared = Boolean(supabaseUrl && serviceRoleKey);
+		if (filesCompared) {
 			const storage = createSourceStorage({ supabaseUrl, serviceRoleKey });
-			files = await sourceFileSnapshot(storage);
+			const snapshot = await sourceFileSnapshot(storage);
 			const targetFiles = await targetFileRows(target);
-			mismatches.push(...diffFiles(files, targetFiles));
+			const fileDiff = diffStoredFiles(snapshot.files, targetFiles, snapshot.listings);
+			fileLines = fileDiff.lines;
+			fileDetails = fileDiff.mismatches;
+			mismatches.push(...fileDiff.mismatches);
 		}
 		return {
 			ok: mismatches.length === 0,
 			mismatches,
 			lines: compared.lines,
-			filesCompared: Boolean(supabaseUrl && serviceRoleKey),
-			snapshot: { ...sourceSnap, files }
+			filesCompared,
+			fileLines,
+			fileDetails
 		};
 	} finally {
 		await source.end();
@@ -74,14 +91,18 @@ function printReport(result) {
 	for (const line of result.lines) console.log(line);
 	if (!result.filesCompared) {
 		console.log('files: SKIP no storage credentials (database objects were compared; nothing was reloaded)');
+	} else {
+		for (const line of result.fileLines) console.log(line);
+		for (const line of result.fileDetails) console.log(`  ${line}`);
 	}
 	if (result.ok) {
 		console.log('verify: OVERALL MATCH');
 		return;
 	}
 	console.error(`verify: OVERALL MISMATCH (${result.mismatches.length})`);
+	const printed = new Set([...(result.lines ?? []), ...(result.fileLines ?? []), ...(result.fileDetails ?? [])]);
 	for (const line of result.mismatches) {
-		if (!result.lines.includes(line)) console.error(`  ${line}`);
+		if (!printed.has(line)) console.error(`  ${line}`);
 	}
 }
 

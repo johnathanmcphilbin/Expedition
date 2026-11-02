@@ -59,7 +59,9 @@ try {
 	const manifest = [];
 	for (const bucket of BUCKETS) {
 		const objects = await storage.listBucket(bucket);
-		console.log(`${bucket}: ${objects.length} objects`);
+		console.log(
+			`${bucket}: listed ${objects.listed}, unique ${objects.length}, duplicate listings ${objects.duplicateListings}`
+		);
 		for (const object of objects) {
 			const file = await storage.download(bucket, object.path);
 			const rel = path.join(bucket, object.path);
