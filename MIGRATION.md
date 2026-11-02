@@ -143,11 +143,18 @@ locks `pg_dump` needs. `verify`'s own queries are plain reads inside `BEGIN
 READ ONLY`, so they are fine even if that URL is transaction-pooled; `pg_dump`
 is not.
 
-`pg_restore` has the same session requirement. The in-cluster pooler may reject
-it. For the final restore during the freeze, if `restore` fails against
-`DATABASE_URL`, turn on the database's public TLS endpoint for that window,
-point `TARGET_DATABASE_URL` at it, restore, then turn public TLS off again.
-PostgREST keeps using the private pooler.
+`initial-load` does not use `pg_restore`. It applies the cleaned SQL as one
+transaction on `DATABASE_URL`. Orchard's transaction-mode pooler keeps that
+server connection until commit, so a separate session endpoint is not required
+for this job. If the pooler rejects the transaction (statement timeout, or a
+statement that cannot run in a transaction), the job rolls back and the public
+schema stays empty. Point `DATABASE_URL` at the optional public TLS endpoint
+for that one run, then point PostgREST back at the private pooler.
+
+The older `restore` command still uses `pg_restore` and may need that session
+endpoint. Prefer `initial-load` for the first load. Import from URL cannot be
+used: it fails on `CREATE EXTENSION supabase_vault`, which Orchard's Postgres 17
+does not ship.
 
 ## Env vars
 
@@ -183,12 +190,15 @@ change production env vars until the runbook says so.
 Commands (the container's first argument):
 
 ```
+initial-load
 verify
 copy-storage
 backup --out /backups/initial
 restore --dump /backups/initial/public.dump --fresh-target
 readonly-role --out /backups/control_tower_expedition_ro.sql
 roles
+manifest-emit --out /backups/manifest.json
+manifest-check --manifest /backups/manifest.json
 decommission --confirm-decommission --project-ref ulmowedmbobncmcriszs
 ```
 
@@ -212,21 +222,41 @@ not delete them.
 
 Check `SHA256SUMS` against the files after the copy.
 
-### 2. Load `expedition-main` with Import from URL
+### 2. Load `expedition-main` with the migrate job (`initial-load`)
 
-On the Orchard database `expedition-main` (create it if it is not there yet),
-use **Import from URL**. Orchard pulls from the Supabase **session** pooler
-URL on first boot. That is the bulk load. It may also import `auth`,
-`storage`, `supabase_vault`, `pg_stat_statements`, and the roles `anon`,
-`authenticated`, and `service_role`. Leave them. The app does not use them.
+Orchard **Import from URL** failed on this database. Its `pg_restore` stops on
+`CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault` because that
+extension is not installed (`supabase_vault.control` is absent). Do not retry
+Import from URL.
 
-If the import errors on `supabase_vault` or `pg_stat_statements` because those
-extensions are not installed on Orchard, the app does not need them. Fall back
-to the migrate job's `restore` of the `public.dump` from step 1 (session
-connection to the target; see the pooler note above). `--fresh-target` only if
-a partial import left objects in `public`.
+Create an empty database named `expedition-main` if it is not there yet. Build
+an app in the Orchard project `expedition` from this branch:
 
-`public.files` is not in the source dump. The storage copy creates it.
+| Setting | Value |
+| --- | --- |
+| Dockerfile | `deploy/migrate/Dockerfile` (build context is the repository root) |
+| Command | `initial-load` |
+| `DATABASE_URL` | **Variables → Use a resource** on `expedition-main`. This is the target. |
+| `SOURCE_DATABASE_URL` | Secret. Supabase **session** connection, port 5432 (`db.ulmowedmbobncmcriszs.supabase.co` or the session pooler). Not the transaction pooler on 6543. |
+
+The job dumps schema `public` only (`--no-owner --no-acl`), in a read-only
+session. It keeps `pgcrypto` and `uuid-ossp` if the dump uses them, and drops
+`supabase_vault`, `pg_graphql`, `pg_stat_statements`, and any statement aimed
+at `auth`, `storage`, `realtime`, `vault`, or `graphql`. Foreign keys and
+`auth.uid()` defaults are stripped and logged. Anything that cannot be
+rewritten is dropped and listed as `DROP`. The log is the list of what did
+not land.
+
+It refuses to run if `public` already has tables, views, sequences, or
+functions. A failed load rolls back. Fix the error and run it again on the
+still-empty database.
+
+Then it applies `deploy/postgrest/roles.sql` and prints every table's count
+and md5 and every sequence's `last_value`. Table data and sequences must
+match the source. Function or trigger counts may differ only by the objects
+the log says were dropped. Storage files are not in this step.
+
+`public.files` is not on the source. Step 5 copies Storage into it.
 
 ### 3. Roles
 

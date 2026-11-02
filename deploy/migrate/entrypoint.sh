@@ -25,6 +25,15 @@ case "$cmd" in
 	restore)
 		exec node scripts/migrate/restore-target.mjs "$@"
 		;;
+	initial-load)
+		exec node scripts/migrate/initial-load.mjs "$@"
+		;;
+	manifest-emit)
+		exec node scripts/migrate/manifest.mjs emit "$@"
+		;;
+	manifest-check)
+		exec node scripts/migrate/manifest.mjs check "$@"
+		;;
 	readonly-role)
 		exec node scripts/migrate/readonly-role.mjs "$@"
 		;;
@@ -62,7 +71,7 @@ case "$cmd" in
 		exec node scripts/migrate/decommission-supabase.mjs "$@"
 		;;
 	*)
-		echo "Usage: verify | copy-storage | backup | restore | readonly-role | roles | decommission" >&2
+		echo "Usage: initial-load | verify | copy-storage | backup | restore | readonly-role | roles | manifest-emit | manifest-check | decommission" >&2
 		exit 2
 		;;
 esac

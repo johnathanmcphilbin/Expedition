@@ -389,6 +389,33 @@ export async function fingerprintTable(client, table) {
 	return { name: table, count: count.rows[0].n.toString(), md5: hash.rows[0].md5 };
 }
 
+/** md5 of each row, aggregated in hash order so heap order does not matter. */
+export async function fingerprintTableUnordered(client, table) {
+	const ident = `public.${quoteIdent(table)}`;
+	const count = await client.query(`select count(*)::bigint as n from ${ident}`);
+	const hash = await client.query(
+		`select md5(coalesce(string_agg(h, '' order by h), '')) as md5
+		 from (select md5((t)::text) as h from ${ident} as t) s`
+	);
+	return { name: table, count: count.rows[0].n.toString(), md5: hash.rows[0].md5 };
+}
+
+export async function fileSha256Manifest(client) {
+	const { rows: exists } = await client.query(`select to_regclass('public.files') as reg`);
+	if (!exists[0]?.reg) return [];
+	const { rows } = await client.query(`
+		select bucket, path, size::bigint as size, encode(sha256(bytes), 'hex') as sha256
+		from public.files
+		order by bucket, path
+	`);
+	return rows.map((row) => ({
+		bucket: row.bucket,
+		path: row.path,
+		size: Number(row.size),
+		sha256: row.sha256
+	}));
+}
+
 export async function fingerprintSequences(client) {
 	const { rows } = await client.query(`
 		select c.relname as name
