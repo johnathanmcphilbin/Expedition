@@ -1,4 +1,4 @@
-import { db } from './supabase';
+import { db } from './db';
 import type { ConnectedProject } from './stats';
 
 export type Stage = 'building' | 'waiting' | 'changes' | 'approved' | 'rejected';

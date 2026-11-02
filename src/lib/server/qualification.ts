@@ -1,4 +1,4 @@
-import { db } from './supabase';
+import { db } from './db';
 
 /**
  * Qualification claims: "my approved hours cover half my real trip cost".

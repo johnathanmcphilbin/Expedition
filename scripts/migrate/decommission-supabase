@@ -1,0 +1,5 @@
+#!/bin/sh
+# Direct entry for the one-shot Supabase decommission. Not used by any other script.
+set -eu
+here=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+exec node "$here/decommission-supabase.mjs" "$@"

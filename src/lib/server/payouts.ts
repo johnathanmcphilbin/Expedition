@@ -1,4 +1,4 @@
-import { db } from './supabase';
+import { db } from './db';
 import type { UserRow } from './database.types';
 import { isReviewerOnly } from './guards';
 import { TRAVEL_RATE } from '$lib/data';

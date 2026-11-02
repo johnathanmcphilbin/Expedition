@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { Cookies } from '@sveltejs/kit';
-import { db } from './supabase';
+import { db } from './db';
 import { config } from './env';
 import { env } from '$env/dynamic/private';
 import type { UserRow } from './database.types';
@@ -40,8 +40,9 @@ export async function getReferralConfig(): Promise<ReferralConfig> {
 	return data ? { ...FALLBACK, ...(data as Partial<ReferralConfig>), min_approved_hours: Number(data.min_approved_hours) } : FALLBACK;
 }
 
-// the cookie is signed so a code can't be planted; any server secret will do
-const secret = () => env.REFERRAL_SECRET?.trim() || config.supabase.serviceRoleKey;
+// the cookie is signed so a code can't be planted. Set REFERRAL_SECRET to the
+// previous server secret at cutover so cookies already in browsers still verify.
+const secret = () => env.REFERRAL_SECRET?.trim() || config.postgrest.jwtSecret;
 
 const cookieOpts = (days: number) => ({
 	path: '/',

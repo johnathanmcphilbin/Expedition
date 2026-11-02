@@ -1,5 +1,5 @@
 import { createQuery, Passengers, getFlights } from 'fast-flights-ts';
-import { db } from './supabase';
+import { db } from './db';
 import { EVENT } from '$lib/data';
 
 /**

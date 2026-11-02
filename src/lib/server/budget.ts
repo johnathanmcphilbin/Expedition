@@ -1,4 +1,4 @@
-import { db } from './supabase';
+import { db } from './db';
 import { shopValue, TRAVEL_RATE } from '$lib/data';
 import { BUDGET_PER_HOUR_USD } from './payouts';
 

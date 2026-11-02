@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin } from '$lib/server/guards';
-import { db } from '$lib/server/supabase';
+import { db } from '$lib/server/db';
 import { listFlights, assignFlight, cancelFlight, arrivalFlags, effectiveArrival, type FlightInput } from '$lib/server/flights';
 import { listOrigins } from '$lib/server/origins';
 import { listAllTravelClaims } from '$lib/server/travel-claims';

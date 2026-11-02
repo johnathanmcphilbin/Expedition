@@ -1,6 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { db } from '$lib/server/supabase';
+import { db } from '$lib/server/db';
 import { logAdminAction } from '$lib/server/referrals';
 import { text, uuid, ValidationError } from '$lib/server/validate';
 import { requireOutreach, outreachList, OUTREACH_HOURS, OUTREACH_EUR_PER_HOUR } from '$lib/server/outreach';

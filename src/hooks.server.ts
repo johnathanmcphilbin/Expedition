@@ -1,4 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
+import { writeFrozen } from '$lib/server/maintenance';
 import { readSession } from '$lib/server/session';
 
 /**
@@ -6,8 +8,22 @@ import { readSession } from '$lib/server/session';
  * it on `locals`. This is the single source of identity for every server load
  * function and form action — nothing downstream reads a user id or role from
  * the request body or query string.
+ *
+ * `MAINTENANCE_MODE` freezes writes (everything except GET and HEAD) so a
+ * database cutover can copy a quiet source. Reads, including file downloads,
+ * keep working.
  */
 export const handle: Handle = async ({ event, resolve }) => {
+	if (writeFrozen(event.request.method, env.MAINTENANCE_MODE)) {
+		return new Response('Expedition is in read-only maintenance. Try again shortly.\n', {
+			status: 503,
+			headers: {
+				'content-type': 'text/plain; charset=utf-8',
+				'retry-after': '120',
+				'cache-control': 'no-store'
+			}
+		});
+	}
 	event.locals.user = await readSession(event.cookies);
 	const response = await resolve(event);
 

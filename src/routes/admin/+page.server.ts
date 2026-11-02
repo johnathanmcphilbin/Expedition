@@ -22,7 +22,7 @@ import { countAwaitingModeration } from '$lib/server/checkpoints';
 import { countQueuePending } from '$lib/server/queue';
 import { getActivityStats, getDailyActive, getOverviewStats, getReviewAnalytics } from '$lib/server/stats';
 import { signedHours, text, oneOf, uuid, ValidationError } from '$lib/server/validate';
-import { db } from '$lib/server/supabase';
+import { db } from '$lib/server/db';
 
 // travel moves need a bucket and go through move_travel_hours, not here
 const GRANT_TYPES = ['manual_adjustment', 'reward_claimed'] as const;

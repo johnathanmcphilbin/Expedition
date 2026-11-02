@@ -38,8 +38,17 @@ create trigger checkpoints_touch before update on checkpoints
 
 alter table checkpoints enable row level security;
 
--- Private bucket: the server hands out short-lived links, even for the
--- public log, so nothing is reachable by guessing a path.
-insert into storage.buckets (id, name, public)
-values ('checkpoint-images', 'checkpoint-images', false)
-on conflict (id) do nothing;
+-- Private bucket on Supabase. Plain Postgres has no storage schema; the
+-- bytes live in public.files instead (0046). Kept for databases that still
+-- have the storage schema.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema = 'storage' and table_name = 'buckets'
+  ) then
+    insert into storage.buckets (id, name, public)
+    values ('checkpoint-images', 'checkpoint-images', false)
+    on conflict (id) do nothing;
+  end if;
+end $$;
