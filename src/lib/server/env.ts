@@ -28,6 +28,13 @@ export const config = {
 		},
 		get jwtSecret() {
 			return required('POSTGREST_JWT_SECRET');
+		},
+		/**
+		 * Database role named in the JWT. On Orchard this is the database owner
+		 * (no extra roles can be created). Local setups that ran roles.sql use `expedition`.
+		 */
+		get dbRole() {
+			return env.POSTGREST_DB_ROLE?.trim() || 'expedition';
 		}
 	},
 

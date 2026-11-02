@@ -1,5 +1,8 @@
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { sanitizeDump, splitSql } from '../scripts/migrate/sanitize-dump.mjs';
+import { sanitizeDump, splitSql, streamSanitizeFile } from '../scripts/migrate/sanitize-dump.mjs';
 
 const SAMPLE = `
 SET statement_timeout = 0;
@@ -48,5 +51,16 @@ describe('sanitizeDump', () => {
 			expect.arrayContaining(['supabase_vault', 'pg_stat_statements', 'touch_storage', 'who', 'public'])
 		);
 		expect(changes.some((change) => change.action === 'rewrite' && /foreign key/i.test(change.reason))).toBe(true);
+	});
+
+	it('streams a file into the same statements', async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), 'sanitize-'));
+		const file = path.join(dir, 'dump.sql');
+		await writeFile(file, SAMPLE);
+		const kept: string[] = [];
+		await streamSanitizeFile(file, async (statement: string) => {
+			kept.push(statement);
+		});
+		expect(kept).toEqual(sanitizeDump(SAMPLE).statements);
 	});
 });

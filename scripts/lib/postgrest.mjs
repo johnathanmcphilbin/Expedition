@@ -23,10 +23,10 @@ export function signRoleJwt(secret, role = APP_ROLE, nowSeconds = Math.floor(Dat
 	return `${data}.${sig}`;
 }
 
-export function createPostgrest(url, secret) {
+export function createPostgrest(url, secret, role = process.env.POSTGREST_DB_ROLE || APP_ROLE) {
 	if (!url) throw new Error('Missing POSTGREST_URL');
 	return new PostgrestClient(url.replace(/\/+$/, ''), {
-		headers: { Authorization: `Bearer ${signRoleJwt(secret)}` },
+		headers: { Authorization: `Bearer ${signRoleJwt(secret, role)}` },
 		schema: 'public'
 	});
 }

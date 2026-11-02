@@ -191,6 +191,7 @@ Subcommands. Orchard has no command field, so set `MIGRATE_COMMAND` to one of th
 
 ```
 initial-load
+post-load
 verify
 copy-storage
 backup --out /backups/initial
@@ -270,7 +271,15 @@ the log says were dropped. Storage files are not in this step.
 
 ### 3. Roles
 
-The database user needs to be a superuser (so `expedition` can be `BYPASSRLS`) or have `CREATEROLE` and own schema `public` (so `expedition` can take ownership). Migrate job command `roles`, or from any container that can reach the database:
+The Orchard app user `u_ysws_expedition_expedition` owns the database and has neither `CREATEROLE` nor superuser. `roles.sql` detects that and exits 0 with `SKIP roles:`. It creates nothing and grants nothing. PostgREST connects as that user. Set `POSTGREST_DB_ROLE` and `PGRST_DB_ANON_ROLE` to `u_ysws_expedition_expedition` on the app and on the PostgREST app. The JWT `role` claim is that name. Because no separate anon role exists, a request with no JWT is also the owner, so do not expose PostgREST except to the Expedition app. The append-only trigger on `hour_transactions` still rejects UPDATE and DELETE for the owner.
+
+`control_tower_expedition_ro` cannot be created by this user either. `readonly-role` still writes the SQL, and applying it prints a warning and skips. An Orchard admin, or a second user Orchard provides, has to create that read-only role.
+
+After `initial-load`, set `MIGRATE_COMMAND=post-load` (or run an App command of `post-load` once that step exists). It runs `roles.sql` and prints the target's table counts, order-independent md5s, and sequence `last_value`s. It does not open the source and does not reload data. `MIGRATE_COMMAND=verify` compares source and target (read-only on the source) and prints `MATCH` or `MISMATCH` for each table, sequence, and for functions, triggers, views, and enums.
+
+The 340 restored statements from the live run were committed before `roles.sql` started. Restore is one transaction that commits, then `roles.sql` is a second session. Its permission error did not roll the data back. The rows are in `expedition`. Confirm with `post-load` or `verify`.
+
+Migrate job command `roles`, or from any container that can reach the database:
 
 ```
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f deploy/postgrest/roles.sql

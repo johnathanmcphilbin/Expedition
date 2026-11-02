@@ -311,3 +311,112 @@ export function sanitizeDump(raw) {
 	}
 	return { sql: `${kept.filter(Boolean).join(';\n\n')};\n`, statements: kept.filter(Boolean), changes };
 }
+
+/**
+ * Walk a dump file one statement at a time. Only the current statement is kept in memory.
+ * `onStatement` receives each kept statement. Returns the change log.
+ */
+export async function streamSanitizeFile(filePath, onStatement) {
+	const { createReadStream } = await import('node:fs');
+	const changes = [];
+	let carry = '';
+	const state = { dollar: null, inSingle: false, inLine: false, inBlock: false };
+	const emit = async (statement) => {
+		if (!statement || statement.startsWith('\\')) return;
+		const sanitized = sanitizeDump(statement);
+		changes.push(...sanitized.changes);
+		for (const kept of sanitized.statements) await onStatement(kept);
+	};
+	for await (const chunk of createReadStream(filePath, { encoding: 'utf8', highWaterMark: 64 * 1024 })) {
+		carry += chunk;
+		carry = await drain(carry, state, emit);
+	}
+	await emit(carry.trim());
+	return changes;
+}
+
+async function drain(buf, state, emit) {
+	let out = '';
+	let i = 0;
+	while (i < buf.length) {
+		const c = buf[i];
+		const next = buf[i + 1];
+		if (state.dollar) {
+			if (buf.startsWith(state.dollar, i)) {
+				out += state.dollar;
+				i += state.dollar.length;
+				state.dollar = null;
+				continue;
+			}
+			out += c;
+			i++;
+			continue;
+		}
+		if (state.inSingle) {
+			out += c;
+			if (c === "'" && next === "'") {
+				out += next;
+				i += 2;
+				continue;
+			}
+			if (c === "'") state.inSingle = false;
+			i++;
+			continue;
+		}
+		if (state.inLine) {
+			out += c;
+			if (c === '\n') state.inLine = false;
+			i++;
+			continue;
+		}
+		if (state.inBlock) {
+			out += c;
+			if (c === '*' && next === '/') {
+				out += '/';
+				i += 2;
+				state.inBlock = false;
+				continue;
+			}
+			i++;
+			continue;
+		}
+		if (c === '-' && next === '-') {
+			state.inLine = true;
+			out += c;
+			i++;
+			continue;
+		}
+		if (c === '/' && next === '*') {
+			state.inBlock = true;
+			out += c;
+			i++;
+			continue;
+		}
+		if (c === "'") {
+			state.inSingle = true;
+			out += c;
+			i++;
+			continue;
+		}
+		if (c === '$') {
+			const match = buf.slice(i).match(/^\$[A-Za-z0-9_]*\$/);
+			if (match) {
+				state.dollar = match[0];
+				out += state.dollar;
+				i += state.dollar.length;
+				continue;
+			}
+			if (i === buf.length - 1) return out + buf.slice(i);
+		}
+		if (c === ';') {
+			const statement = out.trim();
+			out = '';
+			i++;
+			if (statement) await emit(statement);
+			continue;
+		}
+		out += c;
+		i++;
+	}
+	return out;
+}

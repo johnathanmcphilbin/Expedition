@@ -42,6 +42,19 @@
 
 \set ON_ERROR_STOP on
 
+-- Orchard's app user (for example u_ysws_expedition_expedition) owns the
+-- database and is not a superuser and does not have CREATEROLE. In that case
+-- create no roles and grant nothing. PostgREST connects as this user and the
+-- app JWT uses the same name (POSTGREST_DB_ROLE). The append-only trigger on
+-- hour_transactions still fires for the table owner.
+SELECT CASE WHEN rolsuper OR rolcreaterole THEN '1' ELSE '0' END AS can_create_roles
+FROM pg_roles WHERE rolname = current_user
+\gset
+SELECT current_user AS orchard_user
+\gset
+
+\if :can_create_roles
+
 select 'create role anon nologin'
 where not exists (select 1 from pg_roles where rolname = 'anon')
 \gexec
@@ -211,3 +224,10 @@ alter default privileges in schema public grant execute on functions to expediti
 -- mode, so PostgREST runs with db-channel-enabled off and will not see this;
 -- restart the PostgREST app after schema changes.
 notify pgrst, 'reload schema';
+
+\else
+\echo SKIP roles: :orchard_user has neither CREATEROLE nor superuser.
+\echo No roles were created and no grants were attempted.
+\echo Set POSTGREST_DB_ROLE and PGRST_DB_ANON_ROLE to :orchard_user so PostgREST uses this login directly.
+\echo hour_transactions stays append-only because the trigger fires for the table owner.
+\endif

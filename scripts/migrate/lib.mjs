@@ -459,13 +459,117 @@ export async function countTriggers(client) {
 export async function databaseSnapshot(client) {
 	const names = (await tableNames(client)).filter((name) => name !== FILES_TABLE);
 	const tables = [];
-	for (const name of names) tables.push(await fingerprintTable(client, name));
+	for (const name of names) tables.push(await fingerprintTableUnordered(client, name));
 	return {
 		tables,
 		sequences: await fingerprintSequences(client),
 		functions: await countFunctions(client),
 		triggers: await countTriggers(client)
 	};
+}
+
+/** Tables, sequences, and the definitions of functions, triggers, views, and enums. */
+export async function catalogSnapshot(client) {
+	const base = await databaseSnapshot(client);
+	const functions = await client.query(`
+		select count(*)::int as n,
+		       md5(coalesce(string_agg(h, '' order by h), '')) as md5
+		from (
+			select md5(p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')') as h
+			from pg_proc p
+			join pg_namespace n on n.oid = p.pronamespace
+			where n.nspname = 'public' and p.prokind = 'f' ${NOT_EXTENSION_PROC}
+		) s
+	`);
+	const triggers = await client.query(`
+		select count(*)::int as n,
+		       md5(coalesce(string_agg(h, '' order by h), '')) as md5
+		from (
+			select md5(n.nspname || '.' || c.relname || ':' || tg.tgname) as h
+			from pg_trigger tg
+			join pg_class c on c.oid = tg.tgrelid
+			join pg_namespace n on n.oid = c.relnamespace
+			where n.nspname = 'public' and not tg.tgisinternal ${NOT_EXTENSION_CLASS}
+		) s
+	`);
+	const views = await client.query(`
+		select c.relname as name, md5(pg_get_viewdef(c.oid, true)) as md5
+		from pg_class c
+		join pg_namespace n on n.oid = c.relnamespace
+		where n.nspname = 'public' and c.relkind = 'v' ${NOT_EXTENSION_CLASS}
+		order by 1
+	`);
+	const enums = await client.query(`
+		select t.typname as name, string_agg(e.enumlabel, ',' order by e.enumsortorder) as labels
+		from pg_type t
+		join pg_namespace n on n.oid = t.typnamespace
+		join pg_enum e on e.enumtypid = t.oid
+		where n.nspname = 'public'
+		group by t.typname
+		order by 1
+	`);
+	return {
+		...base,
+		functionSet: functions.rows[0],
+		triggerSet: triggers.rows[0],
+		views: views.rows,
+		enums: enums.rows
+	};
+}
+
+function pairLine(label, same, detail) {
+	return `${label}: ${same ? 'MATCH' : 'MISMATCH'}${detail ? ` ${detail}` : ''}`;
+}
+
+/** Human summary. mismatches is the list of MISMATCH lines. */
+export function diffCatalog(source, target) {
+	const lines = [];
+	const mismatches = [];
+	const push = (label, same, detail) => {
+		const line = pairLine(label, same, detail);
+		lines.push(line);
+		if (!same) mismatches.push(line);
+	};
+	const targetTables = new Map(target.tables.map((row) => [row.name, row]));
+	const sourceTables = new Map(source.tables.map((row) => [row.name, row]));
+	for (const [name, row] of sourceTables) {
+		const other = targetTables.get(name);
+		if (!other) {
+			push(`table ${name}`, false, 'missing on target');
+			continue;
+		}
+		const same = row.count === other.count && row.md5 === other.md5;
+		push(`table ${name}`, same, `count ${row.count} md5 ${row.md5}`);
+	}
+	for (const name of targetTables.keys()) {
+		if (!sourceTables.has(name)) push(`table ${name}`, false, 'present on target only');
+	}
+	const targetSeq = new Map(target.sequences.map((row) => [row.name, row]));
+	const sourceSeq = new Map(source.sequences.map((row) => [row.name, row]));
+	for (const [name, row] of sourceSeq) {
+		const other = targetSeq.get(name);
+		const same = other && String(row.last_value) === String(other.last_value) && row.is_called === other.is_called;
+		push(`sequence ${name}`, !!same, `last_value ${row.last_value} is_called ${row.is_called}`);
+	}
+	for (const name of targetSeq.keys()) {
+		if (!sourceSeq.has(name)) push(`sequence ${name}`, false, 'present on target only');
+	}
+	push(
+		'functions',
+		source.functionSet.n === target.functionSet.n && source.functionSet.md5 === target.functionSet.md5,
+		`count ${source.functionSet.n} -> ${target.functionSet.n}`
+	);
+	push(
+		'triggers',
+		source.triggerSet.n === target.triggerSet.n && source.triggerSet.md5 === target.triggerSet.md5,
+		`count ${source.triggerSet.n} -> ${target.triggerSet.n}`
+	);
+	const viewKey = (rows) => rows.map((row) => `${row.name}:${row.md5}`).join('|');
+	push('views', viewKey(source.views) === viewKey(target.views), `count ${source.views.length} -> ${target.views.length}`);
+	const enumKey = (rows) => rows.map((row) => `${row.name}:${row.labels}`).join('|');
+	push('enums', enumKey(source.enums) === enumKey(target.enums), `count ${source.enums.length} -> ${target.enums.length}`);
+	lines.push(mismatches.length ? 'OVERALL: MISMATCH' : 'OVERALL: MATCH');
+	return { lines, mismatches };
 }
 
 export function diffSnapshots(source, target) {

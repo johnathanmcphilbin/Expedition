@@ -12,7 +12,14 @@ if [ -z "${PGRST_DB_URI:-}" ] && [ -n "${DATABASE_URL:-}" ]; then
 fi
 
 export PGRST_DB_SCHEMAS="${PGRST_DB_SCHEMAS:-public}"
-export PGRST_DB_ANON_ROLE="${PGRST_DB_ANON_ROLE:-expedition_anon}"
+# Orchard cannot CREATE ROLE. POSTGREST_DB_ROLE is the database owner
+# (u_ysws_expedition_expedition). PostgREST connects as that user and the JWT
+# role claim is the same name. A request with no JWT is also that user.
+if [ -n "${POSTGREST_DB_ROLE:-}" ]; then
+	export PGRST_DB_ANON_ROLE="${PGRST_DB_ANON_ROLE:-$POSTGREST_DB_ROLE}"
+else
+	export PGRST_DB_ANON_ROLE="${PGRST_DB_ANON_ROLE:-expedition_anon}"
+fi
 # The in-cluster pooler (pg-<db>-pooler-rw....:5432) is transaction mode.
 # Prepared statements and LISTEN/NOTIFY do not survive that. Restart PostgREST
 # after DDL instead of relying on NOTIFY pgrst.

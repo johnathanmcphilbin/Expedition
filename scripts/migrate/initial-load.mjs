@@ -16,7 +16,7 @@
  *
  * Nothing here writes to Supabase. The source session is read-only.
  */
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,7 +36,7 @@ import {
 	sourceUrlFrom,
 	targetUrlFrom
 } from './lib.mjs';
-import { sanitizeDump } from './sanitize-dump.mjs';
+import { streamSanitizeFile } from './sanitize-dump.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const rolesSql = path.resolve(here, '../../deploy/postgrest/roles.sql');
@@ -45,30 +45,32 @@ function preview(sql) {
 	return sql.replace(/\s+/g, ' ').slice(0, 160);
 }
 
-async function execRestore(targetUrl, statements) {
+async function execRestore(targetUrl, dumpPath) {
 	const client = new pg.Client({
 		connectionString: targetUrl,
 		application_name: 'expedition-initial-load',
 		statement_timeout: 0
 	});
 	await client.connect();
+	let n = 0;
 	try {
 		// One transaction pins a single server connection on Orchard's
-		// transaction-mode pooler, so the load is all-or-nothing.
+		// transaction-mode pooler, so the load is all-or-nothing. roles.sql
+		// runs later, in a different session, and cannot roll this back.
 		await client.query('begin');
-		let n = 0;
-		for (const statement of statements) {
+		const changes = await streamSanitizeFile(dumpPath, async (statement) => {
 			try {
 				await client.query(statement);
 			} catch (error) {
 				await client.query('rollback').catch(() => {});
-				throw new Error(`restore failed (${n + 1}/${statements.length}): ${error.message}\n  ${preview(statement)}`);
+				throw new Error(`restore failed at statement ${n + 1}: ${error.message}\n  ${preview(statement)}`);
 			}
 			n++;
-			if (n % 200 === 0) console.log(`  restored ${n}/${statements.length} statements`);
-		}
+			if (n % 200 === 0) console.log(`  restored ${n} statements`);
+		});
 		await client.query('commit');
-		console.log(`restored ${statements.length} statements`);
+		console.log(`COMMIT done. ${n} statements are stored. A later roles.sql failure does not undo them.`);
+		return changes;
 	} finally {
 		await client.end();
 	}
@@ -139,7 +141,6 @@ async function main() {
 
 	const dir = await mkdtemp(path.join(tmpdir(), 'expedition-initial-'));
 	const dumpPath = path.join(dir, 'public.sql');
-	const cleanPath = path.join(dir, 'public.cleaned.sql');
 	console.log('pg_dump schema public (read-only, --no-owner --no-acl, inserts)');
 	await run(
 		'pg_dump',
@@ -156,14 +157,9 @@ async function main() {
 		libpqEnv(sourceUrl, readOnlyPgEnv())
 	);
 
-	const raw = await readFile(dumpPath, 'utf8');
-	const sanitized = sanitizeDump(raw);
-	await writeFile(cleanPath, sanitized.sql);
-	printReport(sanitized.changes);
-	console.log(`cleaned dump: ${cleanPath}`);
-
-	console.log('restoring into the empty Orchard database');
-	await execRestore(targetUrl, sanitized.statements);
+	console.log('restoring into the empty Orchard database (streaming; the dump is not held in memory)');
+	const changes = await execRestore(targetUrl, dumpPath);
+	printReport(changes);
 
 	console.log('applying deploy/postgrest/roles.sql');
 	const roleArgs = ['-v', 'ON_ERROR_STOP=1', '-f', rolesSql];
@@ -186,7 +182,7 @@ async function main() {
 		await targetDb.end();
 	}
 
-	const dropped = sanitized.changes.some((change) => change.action === 'drop' && change.kind !== 'set' && change.kind !== 'meta' && change.kind !== 'schema');
+	const dropped = changes.some((change) => change.action === 'drop' && change.kind !== 'set' && change.kind !== 'meta' && change.kind !== 'schema');
 	const dataMismatches = mismatches.filter((line) => !line.startsWith('functions:') && !line.startsWith('triggers:'));
 	const structureMismatches = mismatches.filter((line) => line.startsWith('functions:') || line.startsWith('triggers:'));
 	if (dataMismatches.length) {

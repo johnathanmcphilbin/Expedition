@@ -13,10 +13,10 @@
  */
 import {
 	BUCKETS,
+	catalogSnapshot,
 	createSourceStorage,
-	databaseSnapshot,
+	diffCatalog,
 	diffFiles,
-	diffSnapshots,
 	md5Buffer,
 	openReadOnly,
 	parseArgs,
@@ -46,17 +46,23 @@ export async function verifyPair({ sourceUrl, targetUrl, supabaseUrl, serviceRol
 	const source = await openReadOnly(sourceUrl, 'source');
 	const target = await openReadOnly(targetUrl, 'target');
 	try {
-		const sourceSnap = await databaseSnapshot(source);
-		const targetSnap = await databaseSnapshot(target);
-		const mismatches = diffSnapshots(sourceSnap, targetSnap);
-		const storage = createSourceStorage({ supabaseUrl, serviceRoleKey });
-		const sourceFiles = await sourceFileSnapshot(storage);
-		const targetFiles = await targetFileRows(target);
-		mismatches.push(...diffFiles(sourceFiles, targetFiles));
+		const sourceSnap = await catalogSnapshot(source);
+		const targetSnap = await catalogSnapshot(target);
+		const compared = diffCatalog(sourceSnap, targetSnap);
+		const mismatches = [...compared.mismatches];
+		let files = [];
+		if (supabaseUrl && serviceRoleKey) {
+			const storage = createSourceStorage({ supabaseUrl, serviceRoleKey });
+			files = await sourceFileSnapshot(storage);
+			const targetFiles = await targetFileRows(target);
+			mismatches.push(...diffFiles(files, targetFiles));
+		}
 		return {
 			ok: mismatches.length === 0,
 			mismatches,
-			snapshot: { ...sourceSnap, files: sourceFiles }
+			lines: compared.lines,
+			filesCompared: Boolean(supabaseUrl && serviceRoleKey),
+			snapshot: { ...sourceSnap, files }
 		};
 	} finally {
 		await source.end();
@@ -65,17 +71,18 @@ export async function verifyPair({ sourceUrl, targetUrl, supabaseUrl, serviceRol
 }
 
 function printReport(result) {
-	const tables = result.snapshot.tables.length;
-	const files = result.snapshot.files.length;
-	console.log(
-		`source: ${tables} tables, ${result.snapshot.sequences.length} sequences, ${result.snapshot.functions} functions, ${result.snapshot.triggers} triggers, ${files} files`
-	);
+	for (const line of result.lines) console.log(line);
+	if (!result.filesCompared) {
+		console.log('files: SKIP no storage credentials (database objects were compared; nothing was reloaded)');
+	}
 	if (result.ok) {
-		console.log('verify: OK, zero mismatches');
+		console.log('verify: OVERALL MATCH');
 		return;
 	}
-	console.error(`verify: ${result.mismatches.length} mismatch(es)`);
-	for (const line of result.mismatches) console.error(`  ${line}`);
+	console.error(`verify: OVERALL MISMATCH (${result.mismatches.length})`);
+	for (const line of result.mismatches) {
+		if (!result.lines.includes(line)) console.error(`  ${line}`);
+	}
 }
 
 const isMain = process.argv[1] && process.argv[1].endsWith('verify.mjs');

@@ -62,11 +62,20 @@ export async function generateReadonlyRoleSql(source) {
 		});
 
 	return `-- Recreate ${ROLE} on the TARGET from the source's information_schema.column_privileges.
--- Generated ${new Date().toISOString()}. Apply on the target only:
---   psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -f this-file.sql
+-- Generated ${new Date().toISOString()}. Apply on the target only.
+-- Orchard's app user cannot create roles. This file then exits 0 without changes.
+-- An Orchard admin, or a second user Orchard provides, has to run it.
 -- Do not run this against the source.
 
 \\set ON_ERROR_STOP on
+
+SELECT CASE WHEN rolsuper OR rolcreaterole THEN '1' ELSE '0' END AS can_create_roles
+FROM pg_roles WHERE rolname = current_user
+\\gset
+SELECT current_user AS orchard_user
+\\gset
+
+\\if :can_create_roles
 
 select 'create role ${ROLE} nologin'
 where not exists (select 1 from pg_roles where rolname = '${ROLE}')
@@ -75,6 +84,11 @@ where not exists (select 1 from pg_roles where rolname = '${ROLE}')
 grant usage on schema public to ${quoteIdent(ROLE)};
 
 ${grants.join('\n')}
+
+\\else
+\\echo WARNING: :orchard_user cannot create ${ROLE} (no CREATEROLE, not superuser).
+\\echo Skipping. An Orchard admin or an Orchard-provided second user must create this read-only role.
+\\endif
 `;
 }
 
@@ -92,6 +106,9 @@ if (isMain) {
 		const sql = await generateReadonlyRoleSql(source);
 		await writeFile(out, sql);
 		console.log(`wrote ${out}`);
+		console.log(
+			'WARNING: Orchard app user u_ysws_expedition_expedition cannot create control_tower_expedition_ro. Applying the file there skips with a warning. An Orchard admin or a second Orchard user has to create it.'
+		);
 	} catch (error) {
 		console.error(error.message || error);
 		process.exit(1);

@@ -17,6 +17,7 @@ const ROOT = existsSync('/app/package.json') ? '/app' : process.cwd();
 
 const COMMANDS = new Set([
 	'initial-load',
+	'post-load',
 	'verify',
 	'copy-storage',
 	'backup',
@@ -53,6 +54,8 @@ function commandLine(command, args) {
 			return ['node', ['scripts/migrate/restore-target.mjs', ...args]];
 		case 'initial-load':
 			return ['node', ['scripts/migrate/initial-load.mjs', ...args]];
+		case 'post-load':
+			return ['node', ['scripts/migrate/post-load.mjs', ...args]];
 		case 'manifest-emit':
 			return ['node', ['scripts/migrate/manifest.mjs', 'emit', ...args]];
 		case 'manifest-check':

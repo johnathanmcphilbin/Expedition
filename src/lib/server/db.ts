@@ -15,7 +15,7 @@ let client: PostgrestClient<Database> | null = null;
 let refreshAt = 0;
 
 function clientFor(secret: string, url: string): PostgrestClient<Database> {
-	const token = signRoleJwt(secret);
+	const token = signRoleJwt(secret, config.postgrest.dbRole);
 	return new PostgrestClient<Database>(url, {
 		headers: { Authorization: `Bearer ${token}` },
 		schema: 'public'
@@ -35,7 +35,7 @@ export function db(): PostgrestClient<Database> {
 export function postgrestFetch(path: string, init: RequestInit = {}): Promise<Response> {
 	const headers = new Headers(init.headers);
 	const secret = config.postgrest.jwtSecret;
-	headers.set('Authorization', `Bearer ${signRoleJwt(secret)}`);
+	headers.set('Authorization', `Bearer ${signRoleJwt(secret, config.postgrest.dbRole)}`);
 	const url = `${config.postgrest.url}${path.startsWith('/') ? '' : '/'}${path}`;
 	return fetch(url, { ...init, headers });
 }
