@@ -73,7 +73,17 @@ create trigger submission_queue_touch before update on submission_queue
 
 alter table submission_queue enable row level security;
 
--- Private bucket: only the server (service role) reads or writes it.
-insert into storage.buckets (id, name, public)
-values ('submission-screenshots', 'submission-screenshots', false)
-on conflict (id) do nothing;
+-- Private bucket on Supabase. Plain Postgres has no storage schema; the
+-- bytes live in public.files instead (0046). Kept for databases that still
+-- have the storage schema.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema = 'storage' and table_name = 'buckets'
+  ) then
+    insert into storage.buckets (id, name, public)
+    values ('submission-screenshots', 'submission-screenshots', false)
+    on conflict (id) do nothing;
+  end if;
+end $$;

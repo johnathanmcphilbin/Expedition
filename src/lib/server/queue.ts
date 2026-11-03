@@ -1,7 +1,8 @@
 import { isReviewerOnly, reviewerName } from './guards';
 import { resumeHeld } from './claims';
 import { recordOrigin } from './origins';
-import { db } from './supabase';
+import { db } from './db';
+import { downloadObject, fileUrl, removeObjects, uploadObject } from './files';
 import { createSubmission, writeReviewToAirtable, saveJustifications, type Justifications } from './airtable';
 import { getOrCreateReview } from './queries';
 import { submitReview } from './review';
@@ -39,9 +40,7 @@ export async function queueSubmission(
 	const ext = (screenshot.name.match(/\.(\w{2,5})$/)?.[1] ?? 'png').toLowerCase();
 	const path = `${userId}/${crypto.randomUUID()}.${ext}`;
 
-	const up = await db()
-		.storage.from(BUCKET)
-		.upload(path, await screenshot.arrayBuffer(), { contentType: screenshot.type, upsert: false });
+	const up = await uploadObject(BUCKET, path, await screenshot.arrayBuffer(), screenshot.type || 'application/octet-stream');
 	if (up.error) throw new Error(`Couldn't store the screenshot: ${up.error.message}`);
 
 	const { data, error } = await db()
@@ -60,7 +59,7 @@ export async function queueSubmission(
 		.select('*')
 		.single();
 	if (error) {
-		await db().storage.from(BUCKET).remove([path]);
+		await removeObjects(BUCKET, [path]);
 		throw new Error(`Couldn't save the submission: ${error.message}`);
 	}
 	// nearest airport for travel planning; never blocks the submission
@@ -114,11 +113,9 @@ export async function getQueued(id: string): Promise<QueuedSubmissionRow | null>
 	return (data as QueuedSubmissionRow | null) ?? null;
 }
 
-/** A short-lived link so the reviewer can see the screenshot. */
-export async function screenshotUrl(path: string | null): Promise<string | null> {
-	if (!path) return null;
-	const { data } = await db().storage.from(BUCKET).createSignedUrl(path, 60 * 60);
-	return data?.signedUrl ?? null;
+/** A same-origin link so the reviewer can see the screenshot. Access is checked when it is fetched. */
+export function screenshotUrl(path: string | null): string | null {
+	return fileUrl(BUCKET, path);
 }
 
 /** A reviewer's edits to what was submitted. Not allowed once it's been sent. */
@@ -235,8 +232,8 @@ async function sendLocked(
 		if (!q.screenshot_path || !q.birthday || !q.address_line1 || !q.city || !q.state || !q.country || !q.zip) {
 			return { ok: false, message: 'This submission is missing its screenshot or address details.' };
 		}
-		const file = await db().storage.from(BUCKET).download(q.screenshot_path);
-		if (file.error || !file.data) {
+		const file = await downloadObject(BUCKET, q.screenshot_path);
+		if (!file) {
 			return { ok: false, message: "Couldn't load the screenshot to send it. Try again." };
 		}
 		try {
@@ -263,8 +260,8 @@ async function sendLocked(
 					improve: q.improve
 				},
 				{
-					bytes: await file.data.arrayBuffer(),
-					contentType: q.screenshot_type ?? 'image/png',
+					bytes: file.bytes.buffer.slice(file.bytes.byteOffset, file.bytes.byteOffset + file.bytes.byteLength) as ArrayBuffer,
+					contentType: file.contentType || q.screenshot_type || 'image/png',
 					filename: q.screenshot_name ?? 'screenshot.png'
 				},
 				q.justifications ?? {}
@@ -363,7 +360,7 @@ async function sendLocked(
 			...(q.library_opt_in ? {} : { screenshot_path: null })
 		})
 		.eq('id', q.id);
-	if (q.screenshot_path && !q.library_opt_in) await db().storage.from(BUCKET).remove([q.screenshot_path]);
+	if (q.screenshot_path && !q.library_opt_in) await removeObjects(BUCKET, [q.screenshot_path]);
 
 	return { ok: true, airtableRecordId: recordId, airtableError };
 }
@@ -388,11 +385,10 @@ export async function listLibraryProjects(limit = 120): Promise<
 		return [];
 	}
 	const rows = data ?? [];
-	const paths = rows.map((r) => r.screenshot_path).filter((p): p is string => !!p);
 	const urls = new Map<string, string>();
-	if (paths.length) {
-		const { data: signed } = await db().storage.from(BUCKET).createSignedUrls(paths, 60 * 60);
-		for (const s of signed ?? []) if (s.path && s.signedUrl) urls.set(s.path, s.signedUrl);
+	for (const p of rows.map((r) => r.screenshot_path)) {
+		const url = fileUrl(BUCKET, p);
+		if (p && url) urls.set(p, url);
 	}
 	return rows.map((r) => ({
 		id: r.id,
@@ -436,7 +432,7 @@ export async function purgeStalePersonalData(days = 30): Promise<void> {
 		})
 		.in('id', ids);
 	const paths = data.map((r) => r.screenshot_path).filter((p): p is string => !!p);
-	if (paths.length) await db().storage.from(BUCKET).remove(paths);
+	if (paths.length) await removeObjects(BUCKET, paths);
 }
 
 /**
@@ -494,9 +490,7 @@ export async function resubmitQueued(
 	if (screenshot) {
 		const ext = (screenshot.name.match(/\.(\w{2,5})$/)?.[1] ?? 'png').toLowerCase();
 		const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-		const up = await db()
-			.storage.from(BUCKET)
-			.upload(path, await screenshot.arrayBuffer(), { contentType: screenshot.type, upsert: false });
+		const up = await uploadObject(BUCKET, path, await screenshot.arrayBuffer(), screenshot.type || 'application/octet-stream');
 		if (up.error) throw new Error(`Couldn't store the screenshot: ${up.error.message}`);
 		shot = { screenshot_path: path, screenshot_type: screenshot.type, screenshot_name: screenshot.name || `screenshot.${ext}` };
 	}
@@ -530,11 +524,11 @@ export async function resubmitQueued(
 		.eq('status', 'changes_requested')
 		.select('id');
 	if (error) {
-		if (shot) await db().storage.from(BUCKET).remove([shot.screenshot_path]);
+		if (shot) await removeObjects(BUCKET, [shot.screenshot_path]);
 		throw new Error(`Couldn't resubmit: ${error.message}`);
 	}
 	if (!data?.length) return false;
-	if (shot && row.screenshot_path) await db().storage.from(BUCKET).remove([row.screenshot_path]);
+	if (shot && row.screenshot_path) await removeObjects(BUCKET, [row.screenshot_path]);
 	// back to the reviewer who asked for the changes
 	await resumeHeld('new', id).catch((e) => console.error('resumeHeld', e));
 	// its wait for a reviewer starts again now (best effort: only for the stats)

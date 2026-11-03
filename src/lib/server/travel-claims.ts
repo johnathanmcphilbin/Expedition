@@ -1,4 +1,4 @@
-import { db } from './supabase';
+import { db } from './db';
 import { TRAVEL_RATE } from '$lib/data';
 import type { TravelBucket } from './database.types';
 

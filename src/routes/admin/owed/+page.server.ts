@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin } from '$lib/server/guards';
-import { db } from '$lib/server/supabase';
+import { db } from '$lib/server/db';
 import { listAllTravelBuckets, listAllClaims, challengeStatus } from '$lib/server/queries';
 import { listAllTravelClaims, decideTravelClaim, payTravelClaim, createTravelClaim, BUCKETS } from '$lib/server/travel-claims';
 import { reviewerPay, markReviewerPaid, BUDGET_PER_HOUR_USD } from '$lib/server/payouts';

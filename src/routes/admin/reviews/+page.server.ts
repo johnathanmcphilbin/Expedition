@@ -7,7 +7,7 @@ import { claim, release, clearClaim, holdForChanges, claimProblem, listClaims, C
 import { logDecision, reviewStats } from '$lib/server/review-stats';
 import { payForReview, reviewEarnings, REVIEW_PAY_USD, BIG_REVIEW_PAY_USD, BIG_PROJECT_HOURS } from '$lib/server/payouts';
 import type { UserRow, SubmissionReviewRow, QueuedSubmissionRow } from '$lib/server/database.types';
-import { db } from '$lib/server/supabase';
+import { db } from '$lib/server/db';
 import {
 	listAllHackClubSubmissions,
 	listAllReviewsWithSubmissions,

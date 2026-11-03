@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { db } from './supabase';
+import { db } from './db';
 import { CHALLENGE } from '$lib/data';
 import type {
 	MailingSignupRow,

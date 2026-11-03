@@ -1,4 +1,4 @@
-import { db } from './supabase';
+import { db } from './db';
 import { reviewerName } from './guards';
 import type { UserRow } from './database.types';
 import { getVisits } from './plausible';

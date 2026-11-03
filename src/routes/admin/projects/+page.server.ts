@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { requireAdmin } from '$lib/server/guards';
-import { db } from '$lib/server/supabase';
+import { db } from '$lib/server/db';
 import { getConnectedProjects } from '$lib/server/stats';
 import { unlockedCount } from '$lib/server/checkpoints';
 import { projectStages, stageKey, type Stage } from '$lib/server/project-stages';

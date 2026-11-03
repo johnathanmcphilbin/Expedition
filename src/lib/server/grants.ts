@@ -1,4 +1,4 @@
-import { db } from './supabase';
+import { db } from './db';
 
 /**
  * Travel grant requests. Someone who qualifies and has banked hours asks for

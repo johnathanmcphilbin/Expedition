@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { db } from './supabase';
+import { db } from './db';
 import { requireUser } from './guards';
 import { getConnectedProjects } from './stats';
 import { projectStages, stageKey } from './project-stages';

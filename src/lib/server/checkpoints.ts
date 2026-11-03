@@ -1,4 +1,5 @@
-import { db } from './supabase';
+import { db } from './db';
+import { fileUrl, removeObjects, uploadObject } from './files';
 import type { CheckpointRow, CheckpointVisibility } from './database.types';
 
 /**
@@ -16,14 +17,8 @@ export function unlockedCount(trackedHours: number): number {
 	return Math.floor(trackedHours / CHECKPOINT_EVERY_HOURS);
 }
 
-async function withImages(rows: CheckpointRow[]): Promise<CheckpointWithImage[]> {
-	const paths = rows.map((r) => r.image_path).filter((p): p is string => !!p);
-	const urls = new Map<string, string>();
-	if (paths.length) {
-		const { data } = await db().storage.from(BUCKET).createSignedUrls(paths, 60 * 60);
-		for (const d of data ?? []) if (d.path && d.signedUrl) urls.set(d.path, d.signedUrl);
-	}
-	return rows.map((r) => ({ ...r, image_url: r.image_path ? (urls.get(r.image_path) ?? null) : null }));
+function withImages(rows: CheckpointRow[]): CheckpointWithImage[] {
+	return rows.map((r) => ({ ...r, image_url: fileUrl(BUCKET, r.image_path) }));
 }
 
 /** Everything one participant has posted, newest first. Empty if the table isn't there yet. */
@@ -70,9 +65,7 @@ export async function postCheckpoint(params: {
 	if (params.image) {
 		const ext = (params.image.name.match(/\.(\w{2,5})$/)?.[1] ?? 'jpg').toLowerCase();
 		imagePath = `${params.userId}/${crypto.randomUUID()}.${ext}`;
-		const up = await db()
-			.storage.from(BUCKET)
-			.upload(imagePath, await params.image.arrayBuffer(), { contentType: params.image.type, upsert: false });
+		const up = await uploadObject(BUCKET, imagePath, await params.image.arrayBuffer(), params.image.type || 'application/octet-stream');
 		if (up.error) {
 			console.error('postCheckpoint upload', up.error.message);
 			return { ok: false, message: "Couldn't upload your screenshot. Try again." };
@@ -91,7 +84,7 @@ export async function postCheckpoint(params: {
 		visibility: params.share ? 'waiting' : 'private'
 	});
 	if (error) {
-		if (imagePath) await db().storage.from(BUCKET).remove([imagePath]);
+		if (imagePath) await removeObjects(BUCKET, [imagePath]);
 		if (error.code === '23505') return { ok: false, message: "You've already posted that checkpoint." };
 		console.error('postCheckpoint insert', error.message);
 		return { ok: false, message: "Couldn't save your checkpoint. Try again." };
@@ -125,7 +118,7 @@ export async function listForModeration(): Promise<
 		return [];
 	}
 	const rows = (data ?? []) as unknown as (CheckpointRow & { users: { display_name: string | null } | null })[];
-	const withImg = await withImages(rows.map(({ users: _u, ...r }) => r));
+	const withImg = withImages(rows.map(({ users: _u, ...r }) => r));
 	return withImg.map((r, i) => ({ ...r, owner_name: rows[i].users?.display_name ?? null }));
 }
 
@@ -167,7 +160,7 @@ export async function listPublicCheckpoints(limit = 60): Promise<
 		return [];
 	}
 	const rows = (data ?? []) as unknown as (CheckpointRow & { users: { display_name: string | null } | null })[];
-	const withImg = await withImages(rows.map(({ users: _u, ...r }) => r));
+	const withImg = withImages(rows.map(({ users: _u, ...r }) => r));
 	return withImg.map((r, i) => ({
 		id: r.id,
 		first_name: (rows[i].users?.display_name ?? 'A builder').split(' ')[0],

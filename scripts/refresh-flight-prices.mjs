@@ -3,15 +3,15 @@
 // machine. Run with: npm run fares
 // The live site reuses these and keeps showing them even if its own refresh
 // gets refused, so running this every day or two keeps prices up.
-import { createClient } from '@supabase/supabase-js';
 import { createQuery, Passengers, getFlights } from 'fast-flights-ts';
+import { createPostgrest } from './lib/postgrest.mjs';
 
 const OUT = '2026-12-04';
 const HOME = '2026-12-06';
 const DESTINATIONS = ['DUB', 'SNN'];
 const PAUSE_MS = 4000; // be gentle: one search every few seconds
 
-const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const db = createPostgrest(process.env.POSTGREST_URL, process.env.POSTGREST_JWT_SECRET);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fmt = (w) => {
 	if (!w?.date) return null;

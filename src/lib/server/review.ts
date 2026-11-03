@@ -1,4 +1,4 @@
-import { db } from './supabase';
+import { db } from './db';
 import type { SubmissionStatus } from './database.types';
 
 /**

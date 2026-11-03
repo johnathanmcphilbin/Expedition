@@ -1,4 +1,4 @@
-import { db } from './supabase';
+import { db } from './db';
 import type { TripFlightRow, UserRow } from './database.types';
 import { EVENT } from '$lib/data';
 

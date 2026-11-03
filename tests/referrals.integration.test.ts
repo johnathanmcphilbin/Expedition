@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import type { Cookies } from '@sveltejs/kit';
-import { db } from '$lib/server/supabase';
+import { db } from '$lib/server/db';
 import { handleJoin, attachReferralOnSignup } from '$lib/server/referrals';
 import { signRef } from '$lib/referrals/core';
 import type { UserRow } from '$lib/server/database.types';
@@ -16,7 +16,7 @@ const RUN = process.env.RUN_DB_TESTS === '1';
 const d = RUN ? describe : describe.skip;
 
 const tag = randomBytes(3).toString('hex');
-const SECRET = () => process.env.REFERRAL_SECRET?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const SECRET = () => process.env.REFERRAL_SECRET?.trim() || process.env.POSTGREST_JWT_SECRET!;
 
 class Jar {
 	store = new Map<string, string>();

@@ -1,6 +1,6 @@
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import type { Cookies } from '@sveltejs/kit';
-import { db } from './supabase';
+import { db } from './db';
 import type { UserRow } from './database.types';
 
 /**

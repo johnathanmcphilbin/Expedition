@@ -1,5 +1,5 @@
 /**
- * Hand-written types mirroring supabase/migrations/.
+ * Hand-written types mirroring the SQL migrations.
  * Keep in sync when you add a migration.
  */
 
@@ -458,6 +458,14 @@ export interface Database {
 				reversed_at: string | null;
 			}>;
 			admin_actions: Table<{ id: number; admin_id: string | null; action: string; target: string | null; note: string | null; created_at: string }>;
+			files: Table<{
+				bucket: string;
+				path: string;
+				content_type: string | null;
+				size: number;
+				bytes: string;
+				created_at: string;
+			}>;
 		};
 		Views: {
 			user_hour_balances: { Row: HourBalanceRow; Relationships: [] };

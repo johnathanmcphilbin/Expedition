@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireAdmin } from '$lib/server/guards';
-import { db } from '$lib/server/supabase';
+import { db } from '$lib/server/db';
 import { listAllClaims, fulfilClaim, cancelClaim, challengeStatus } from '$lib/server/queries';
 import { getShippingAddress } from '$lib/server/airtable';
 import { text, uuid, ValidationError } from '$lib/server/validate';

@@ -1,4 +1,4 @@
-import { db } from './supabase';
+import { db } from './db';
 import type { TravelOriginRow } from './database.types';
 import { locate, nearestAirport } from './geo';
 import { getLocality } from './airtable';

@@ -18,12 +18,23 @@ function required(name: string): string {
 }
 
 export const config = {
-	supabase: {
+	/**
+	 * PostgREST in front of the Expedition Postgres database.
+	 * `POSTGREST_JWT_SECRET` is the same raw string as PostgREST's `PGRST_JWT_SECRET`.
+	 */
+	postgrest: {
 		get url() {
-			return required('SUPABASE_URL');
+			return required('POSTGREST_URL').replace(/\/+$/, '');
 		},
-		get serviceRoleKey() {
-			return required('SUPABASE_SERVICE_ROLE_KEY');
+		get jwtSecret() {
+			return required('POSTGREST_JWT_SECRET');
+		},
+		/**
+		 * Database role named in the JWT. On Orchard this is the database owner
+		 * (no extra roles can be created). Local setups that ran roles.sql use `expedition`.
+		 */
+		get dbRole() {
+			return env.POSTGREST_DB_ROLE?.trim() || 'expedition';
 		}
 	},
 

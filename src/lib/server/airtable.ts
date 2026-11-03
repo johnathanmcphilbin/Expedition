@@ -1,5 +1,5 @@
 import { config } from './env';
-import { db } from './supabase';
+import { db } from './db';
 import type { HackClubSubmissionRow, SubmissionReviewRow } from './database.types';
 
 /**

@@ -1,8 +1,9 @@
 # Expedition backend
 
-SvelteKit server routes + Supabase Postgres, reviewing submissions that live
-in Hack Club's own Airtable. Identity is **Hack Club Auth**. Supabase Auth is
-not used.
+SvelteKit server routes + Postgres, reached through PostgREST. Submissions
+that matter live in Hack Club's own Airtable. Identity is **Hack Club Auth**.
+There is no Supabase Auth, and after cutover the app does not talk to Supabase
+at all. Moving the existing database is described in `MIGRATION.md`.
 
 ## Local setup
 
@@ -16,8 +17,10 @@ cp .env.example .env
 
 | Variable | Where it comes from |
 | --- | --- |
-| `SUPABASE_URL` | Supabase → Project Settings → Data API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Same page. **Server-only, bypasses RLS.** |
+| `POSTGREST_URL` | Base URL of the PostgREST app. **Server-only.** |
+| `POSTGREST_JWT_SECRET` | Same raw secret as PostgREST `PGRST_JWT_SECRET`. **Server-only.** The app signs a JWT with role `POSTGREST_DB_ROLE` (default `expedition`). On Orchard this may be derived from the database password instead of pasted; see `MIGRATION.md`. |
+| `REFERRAL_SECRET` | Optional. Signs the referral cookie. Set to the previous server secret at cutover so existing cookies keep working. |
+| `MAINTENANCE_MODE` | Optional. `1` freezes writes (non-GET/HEAD return 503) for the cutover. |
 | `HCA_CLIENT_ID` / `HCA_CLIENT_SECRET` | OAuth client on `auth.hackclub.com` |
 | `HACKATIME_CLIENT_ID` / `HACKATIME_CLIENT_SECRET` | OAuth client on `hackatime.hackclub.com` |
 | `AIRTABLE_API_KEY` | Personal access token on base `appGcYrt3CFYab05y` — `data.records:read`, `data.records:write`, `schema.bases:read`. Create at [airtable.com/create/tokens](https://airtable.com/create/tokens). |
@@ -47,8 +50,18 @@ Hackatime scopes: `profile read`. **Never request `admin`.**
 
 ### 2. Database
 
-Run the migrations in order against your Supabase project (SQL Editor, or
-`psql`/`supabase db push`):
+For a local Postgres, replay the migrations (they skip Supabase Storage when
+that schema is absent) and then apply `deploy/postgrest/roles.sql`. Point
+PostgREST at the database and set `POSTGREST_URL` / `POSTGREST_JWT_SECRET`.
+The production cutover does **not** replay these files; it imports the live
+database. See `MIGRATION.md`.
+
+```
+scripts/dev/apply-repo-migrations.sh "$DATABASE_URL"
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f deploy/postgrest/roles.sql
+```
+
+The migration files, in order, are:
 
 ```
 supabase/migrations/0001_init.sql
@@ -86,20 +99,21 @@ npm run dev
 ## Architecture
 
 ```
-Browser ──▶ SvelteKit server (trusted) ──▶ Supabase (service role)
-                    │                            ▲
-                    ├── auth.hackclub.com         │  cache
-                    │       identity              │
-                    ├── hackatime.hackclub.com     │
-                    │       coding-time evidence   │
-                    └── api.airtable.com ──────────┘
+Browser ──▶ SvelteKit server (trusted) ──▶ PostgREST ──▶ Postgres
+                    │                         (JWT role expedition)
+                    ├── auth.hackclub.com
+                    │       identity
+                    ├── hackatime.hackclub.com
+                    │       coding-time evidence
+                    └── api.airtable.com
                             Hack Club's Unified YSWS —
                             THE submission, read + reviews written back
 ```
 
-The browser never talks to Supabase or Airtable directly. There is no
+The browser never talks to PostgREST or Airtable directly. There is no
 client-side key of any kind — all reads and writes go through server load
-functions and form actions.
+functions and form actions. File bytes live in `public.files` and are streamed
+from `/files/...` after the same access check the old signed URLs implied.
 
 ### There is exactly one submission
 
@@ -256,10 +270,13 @@ pretending the whole save failed.
 
 ### RLS
 
-Every table has RLS enabled with **zero policies**. The anon and publishable
-keys can therefore read and write nothing. Only the service-role key used by
-the server (which bypasses RLS) has access. If a publishable key is ever
-exposed, it grants nothing — this fails closed.
+Every table has RLS enabled with **zero policies**. PostgREST is started with
+`PGRST_DB_ANON_ROLE` unset, so a request with no JWT is rejected with 401
+before it reaches the database. The app's JWT switches to `expedition` (or,
+on Orchard, the database owner), which bypasses RLS when that role can
+(`BYPASSRLS` on a superuser-run setup, otherwise ownership of the public
+objects). The append-only trigger on `hour_transactions` still fires for that
+role. See `deploy/postgrest/roles.sql` and `MIGRATION.md`.
 
 ### Hackatime
 
@@ -306,9 +323,9 @@ ever been recorded through them.
   before deploying.
 - **Hackatime token refresh.** Refresh tokens are stored but not yet used; an
   expired connection currently needs reconnecting from the dashboard.
-- **Token encryption at rest.** Hackatime tokens rely on Supabase's disk
-  encryption plus service-role-only access. Application-level encryption would
-  need a key-management decision.
+- **Token encryption at rest.** Hackatime tokens rely on disk encryption plus
+  the server-only database role. Application-level encryption would need a
+  key-management decision.
 - **Project matching is best-effort.** Hack Club's `Justification - Hackatime
   Project Name(s) + Date Range(s)` field is free text, not a structured
   reference — the dashboard's "submitted" status and the admin panel's
