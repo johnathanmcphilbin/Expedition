@@ -21,97 +21,218 @@ const EXTENSION_REWRITES = [
 	[/extensions\.gen_salt\s*\(/gi, 'gen_salt(']
 ];
 
+/**
+ * Split SQL on semicolons that are outside quotes, comments, dollar bodies,
+ * and COPY ... FROM stdin data. '' inside a string is one quote. E'...' and
+ * U&'...' treat a backslash as an escape. A quote or backslash at the end of
+ * a chunk is not decided until the next byte arrives.
+ */
+export function createSqlScanner() {
+	const st = {
+		mode: 'code',
+		escape: false,
+		dollar: '',
+		block: 0,
+		acc: '',
+		buf: ''
+	};
+
+	function startsMeta(text, index) {
+		if (text[index] !== '\\') return false;
+		return index === 0 || text[index - 1] === '\n';
+	}
+
+	function push(chunk, flush = false) {
+		st.buf += chunk;
+		const statements = [];
+		const s = st.buf;
+		let i = 0;
+		const hold = (from) => {
+			st.buf = s.slice(from);
+			i = s.length + 1;
+		};
+		while (i < s.length) {
+			const c = s[i];
+			const next = s[i + 1];
+			const atEnd = i === s.length - 1;
+
+			if (st.mode === 'copy') {
+				st.acc += c;
+				if (c === '\n' && /\n\\\.(\r)?\n$/.test(st.acc)) {
+					const statement = st.acc.trim();
+					st.acc = '';
+					st.mode = 'code';
+					if (statement) statements.push(statement);
+				} else if (atEnd && /\n\\\.?\r?$/.test(st.acc)) {
+					const keep = st.acc.match(/\n\\\.?\r?$/)[0];
+					st.acc = st.acc.slice(0, -keep.length);
+					hold(i - keep.length + 1);
+				}
+				i++;
+				continue;
+			}
+			if (st.mode === 'line') {
+				st.acc += c;
+				if (c === '\n') st.mode = 'code';
+				i++;
+				continue;
+			}
+			if (st.mode === 'block') {
+				st.acc += c;
+				if (c === '/' && next === '*') {
+					st.block++;
+					st.acc += next;
+					i += 2;
+					continue;
+				}
+				if (c === '*' && next === '/') {
+					st.acc += '/';
+					i += 2;
+					st.block--;
+					if (st.block === 0) st.mode = 'code';
+					continue;
+				}
+				if (c === '*' && atEnd) {
+					st.acc = st.acc.slice(0, -1);
+					hold(i);
+					continue;
+				}
+				i++;
+				continue;
+			}
+			if (st.mode === 'dollar') {
+				const rest = s.slice(i);
+				if (rest.startsWith(st.dollar)) {
+					st.acc += st.dollar;
+					i += st.dollar.length;
+					st.mode = 'code';
+					st.dollar = '';
+					continue;
+				}
+				if (st.dollar.startsWith(rest)) {
+					hold(i);
+					continue;
+				}
+				st.acc += c;
+				i++;
+				continue;
+			}
+			if (st.mode === 'sq') {
+				if (st.escape && c === '\\') {
+					if (atEnd) {
+						hold(i);
+						continue;
+					}
+					st.acc += c + next;
+					i += 2;
+					continue;
+				}
+				if (c === "'") {
+					if (atEnd) {
+						hold(i);
+						continue;
+					}
+					if (next === "'") {
+						st.acc += "''";
+						i += 2;
+						continue;
+					}
+					st.acc += c;
+					st.mode = 'code';
+					st.escape = false;
+					i++;
+					continue;
+				}
+				st.acc += c;
+				i++;
+				continue;
+			}
+
+			if (c === '-' && next === '-') {
+				st.mode = 'line';
+				st.acc += c;
+				i++;
+				continue;
+			}
+			if (c === '-' && atEnd) {
+				hold(i);
+				continue;
+			}
+			if (c === '/' && next === '*') {
+				st.mode = 'block';
+				st.block = 1;
+				st.acc += c;
+				i++;
+				continue;
+			}
+			if (c === '/' && atEnd) {
+				hold(i);
+				continue;
+			}
+			if (startsMeta(s, i)) {
+				const nl = s.indexOf('\n', i);
+				if (nl === -1) {
+					hold(i);
+					continue;
+				}
+				i = nl + 1;
+				continue;
+			}
+			if (c === "'") {
+				const prior = st.acc;
+				st.escape = /(?:^|[^A-Za-z0-9_])[Ee]$/.test(prior) || /(?:^|[^A-Za-z0-9_])[Uu]&$/.test(prior);
+				st.mode = 'sq';
+				st.acc += c;
+				i++;
+				continue;
+			}
+			if (c === '$') {
+				const rest = s.slice(i);
+				const match = rest.match(/^\$[A-Za-z0-9_]*\$/);
+				if (match) {
+					st.mode = 'dollar';
+					st.dollar = match[0];
+					st.acc += st.dollar;
+					i += st.dollar.length;
+					continue;
+				}
+				if (/^\$[A-Za-z0-9_]*$/.test(rest)) {
+					hold(i);
+					continue;
+				}
+			}
+			if (c === ';') {
+				const statement = st.acc.trim();
+				st.acc = '';
+				i++;
+				if (/^\s*COPY\b/i.test(statement) && /\bFROM\s+stdin\s*$/i.test(statement)) {
+					st.mode = 'copy';
+					st.acc = `${statement};\n`;
+					continue;
+				}
+				if (statement) statements.push(statement);
+				continue;
+			}
+			st.acc += c;
+			i++;
+		}
+		if (i <= s.length) st.buf = '';
+		if (flush) {
+			st.acc += st.buf;
+			st.buf = '';
+			const tail = st.acc.trim();
+			st.acc = '';
+			if (tail) statements.push(tail);
+		}
+		return statements;
+	}
+
+	return { push };
+}
+
 /** Split SQL on semicolons that are not inside quotes, comments, or dollar bodies. */
 export function splitSql(sql) {
-	const statements = [];
-	let current = '';
-	let i = 0;
-	let dollar = null;
-	let inSingle = false;
-	let inLine = false;
-	let inBlock = false;
-	while (i < sql.length) {
-		const c = sql[i];
-		const next = sql[i + 1];
-		if (dollar) {
-			if (sql.startsWith(dollar, i)) {
-				current += dollar;
-				i += dollar.length;
-				dollar = null;
-				continue;
-			}
-			current += c;
-			i++;
-			continue;
-		}
-		if (inSingle) {
-			current += c;
-			if (c === "'" && next === "'") {
-				current += next;
-				i += 2;
-				continue;
-			}
-			if (c === "'") inSingle = false;
-			i++;
-			continue;
-		}
-		if (inLine) {
-			current += c;
-			if (c === '\n') inLine = false;
-			i++;
-			continue;
-		}
-		if (inBlock) {
-			current += c;
-			if (c === '*' && next === '/') {
-				current += '/';
-				i += 2;
-				inBlock = false;
-				continue;
-			}
-			i++;
-			continue;
-		}
-		if (c === '-' && next === '-') {
-			inLine = true;
-			current += c;
-			i++;
-			continue;
-		}
-		if (c === '/' && next === '*') {
-			inBlock = true;
-			current += c;
-			i++;
-			continue;
-		}
-		if (c === "'") {
-			inSingle = true;
-			current += c;
-			i++;
-			continue;
-		}
-		if (c === '$') {
-			const match = sql.slice(i).match(/^\$[A-Za-z0-9_]*\$/);
-			if (match) {
-				dollar = match[0];
-				current += dollar;
-				i += dollar.length;
-				continue;
-			}
-		}
-		if (c === ';') {
-			const statement = current.trim();
-			if (statement) statements.push(statement);
-			current = '';
-			i++;
-			continue;
-		}
-		current += c;
-		i++;
-	}
-	const tail = current.trim();
-	if (tail) statements.push(tail);
-	return statements;
+	return createSqlScanner().push(sql, true);
 }
 
 function extensionName(sql) {
@@ -210,11 +331,7 @@ function stripLeadingComments(sql) {
 export function sanitizeDump(raw) {
 	const changes = [];
 	const kept = [];
-	const withoutMeta = raw
-		.split('\n')
-		.filter((line) => !line.startsWith('\\'))
-		.join('\n');
-	for (const original of splitSql(withoutMeta)) {
+	for (const original of splitSql(raw)) {
 		const preview = original.replace(/\s+/g, ' ').slice(0, 180);
 		if (original.startsWith('\\')) {
 			changes.push({ action: 'drop', kind: 'meta', name: null, reason: 'psql meta-command', preview });
@@ -319,8 +436,7 @@ export function sanitizeDump(raw) {
 export async function streamSanitizeFile(filePath, onStatement) {
 	const { createReadStream } = await import('node:fs');
 	const changes = [];
-	let carry = '';
-	const state = { dollar: null, inSingle: false, inLine: false, inBlock: false };
+	const scan = createSqlScanner();
 	const emit = async (statement) => {
 		if (!statement || statement.startsWith('\\')) return;
 		const sanitized = sanitizeDump(statement);
@@ -328,95 +444,8 @@ export async function streamSanitizeFile(filePath, onStatement) {
 		for (const kept of sanitized.statements) await onStatement(kept);
 	};
 	for await (const chunk of createReadStream(filePath, { encoding: 'utf8', highWaterMark: 64 * 1024 })) {
-		carry += chunk;
-		carry = await drain(carry, state, emit);
+		for (const statement of scan.push(chunk, false)) await emit(statement);
 	}
-	await emit(carry.trim());
+	for (const statement of scan.push('', true)) await emit(statement);
 	return changes;
-}
-
-async function drain(buf, state, emit) {
-	let out = '';
-	let i = 0;
-	while (i < buf.length) {
-		const c = buf[i];
-		const next = buf[i + 1];
-		if (state.dollar) {
-			if (buf.startsWith(state.dollar, i)) {
-				out += state.dollar;
-				i += state.dollar.length;
-				state.dollar = null;
-				continue;
-			}
-			out += c;
-			i++;
-			continue;
-		}
-		if (state.inSingle) {
-			out += c;
-			if (c === "'" && next === "'") {
-				out += next;
-				i += 2;
-				continue;
-			}
-			if (c === "'") state.inSingle = false;
-			i++;
-			continue;
-		}
-		if (state.inLine) {
-			out += c;
-			if (c === '\n') state.inLine = false;
-			i++;
-			continue;
-		}
-		if (state.inBlock) {
-			out += c;
-			if (c === '*' && next === '/') {
-				out += '/';
-				i += 2;
-				state.inBlock = false;
-				continue;
-			}
-			i++;
-			continue;
-		}
-		if (c === '-' && next === '-') {
-			state.inLine = true;
-			out += c;
-			i++;
-			continue;
-		}
-		if (c === '/' && next === '*') {
-			state.inBlock = true;
-			out += c;
-			i++;
-			continue;
-		}
-		if (c === "'") {
-			state.inSingle = true;
-			out += c;
-			i++;
-			continue;
-		}
-		if (c === '$') {
-			const match = buf.slice(i).match(/^\$[A-Za-z0-9_]*\$/);
-			if (match) {
-				state.dollar = match[0];
-				out += state.dollar;
-				i += state.dollar.length;
-				continue;
-			}
-			if (i === buf.length - 1) return out + buf.slice(i);
-		}
-		if (c === ';') {
-			const statement = out.trim();
-			out = '';
-			i++;
-			if (statement) await emit(statement);
-			continue;
-		}
-		out += c;
-		i++;
-	}
-	return out;
 }
