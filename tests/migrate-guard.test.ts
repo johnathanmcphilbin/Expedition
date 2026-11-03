@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { assertStorageRead } from '../scripts/migrate/lib.mjs';
 import { runOrchardTests } from '../scripts/migrate/run-orchard-tests.mjs';
+import { finalSync } from '../scripts/migrate/final-sync.mjs';
 
 describe('orchard test command', () => {
 	it('refuses a Supabase URL before opening a connection', async () => {
@@ -10,6 +11,19 @@ describe('orchard test command', () => {
 			runOrchardTests({
 				POSTGREST_URL: 'https://ulmowedmbobncmcriszs.supabase.co',
 				DATABASE_URL: 'postgres://user:password@127.0.0.1:5432/expedition'
+			})
+		).rejects.toThrow(/Supabase/);
+	});
+});
+
+describe('final-sync target guard', () => {
+	it('refuses to drop a Supabase host before connecting', async () => {
+		await expect(
+			finalSync({
+				sourceUrl: 'postgres://user:password@127.0.0.1:1/src',
+				targetUrl: 'postgres://user:password@db.ulmowedmbobncmcriszs.supabase.co:5432/postgres',
+				supabaseUrl: 'https://example.invalid',
+				serviceRoleKey: 'key'
 			})
 		).rejects.toThrow(/Supabase/);
 	});

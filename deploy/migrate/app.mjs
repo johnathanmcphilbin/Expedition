@@ -27,10 +27,11 @@ const COMMANDS = new Set([
 	'manifest-emit',
 	'manifest-check',
 	'test',
+	'final-sync',
 	'decommission'
 ]);
 
-const DESTRUCTIVE = new Set(['decommission', 'restore']);
+const DESTRUCTIVE = new Set(['decommission', 'restore', 'final-sync']);
 
 function redact(text) {
 	return text
@@ -72,6 +73,8 @@ function commandLine(command, args) {
 		}
 		case 'test':
 			return ['node', ['scripts/migrate/run-orchard-tests.mjs', ...args]];
+		case 'final-sync':
+			return ['node', ['scripts/migrate/final-sync.mjs', ...args]];
 		case 'decommission':
 			return ['sh', ['deploy/migrate/decommission-prep.sh', ...args]];
 		default:

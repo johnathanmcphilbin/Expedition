@@ -160,17 +160,32 @@ does not ship.
 
 ## Env vars
 
-**Vercel (the app), after cutover**
+**Vercel (the app), after the switch**
+
+`MAINTENANCE_MODE=1` is checked in `src/hooks.server.ts` before the session is
+read. `GET` and `HEAD` (pages and `/files/...`) run. `POST`, `PUT`, `PATCH`,
+and `DELETE` return `503` and never reach PostgREST.
+
+Set these. An explicit `POSTGREST_JWT_SECRET` is required on Vercel because
+that app has no `DATABASE_URL` and cannot derive one.
 
 | Name | Value |
 | --- | --- |
-| `POSTGREST_URL` | Public HTTPS URL of the PostgREST app |
-| `POSTGREST_JWT_SECRET` | Same raw string as `PGRST_JWT_SECRET`. Not JSON. At cutover, set this explicitly (the derived Orchard secret is not printed). |
-| `REFERRAL_SECRET` | The previous server secret, so existing referral cookies survive |
-| `MAINTENANCE_MODE` | `1` only during the freeze |
+| `POSTGREST_URL` | Public HTTPS origin of the PostgREST app. No path. |
+| `POSTGREST_JWT_SECRET` | The same explicit secret as PostgREST `PGRST_JWT_SECRET`. 32+ characters, not JSON. |
+| `POSTGREST_DB_ROLE` | `u_ysws_expedition_expedition` |
+| `REFERRAL_SECRET` | The previous server secret, so referral cookies already in browsers still verify |
+| `MAINTENANCE_MODE` | `1` for the freeze. Unset it (or `0`) only after `final-sync: OK` and a PostgREST restart |
+| `APP_ORIGIN` | `https://expedition.hackclub.com` |
+| `HCA_CLIENT_ID` | Keep the existing Hack Club Auth client id |
+| `HCA_CLIENT_SECRET` | Keep the existing Hack Club Auth client secret |
+| `HACKATIME_CLIENT_ID` | Keep |
+| `HACKATIME_CLIENT_SECRET` | Keep |
+| `AIRTABLE_API_KEY` | Keep. Reviews still write Hack Club's Airtable. There is no Slack API token; Slack ids come from Hack Club Auth. |
 
-Remove `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from the app. Do not
-change production env vars until the runbook says so.
+Optional, keep if they are set today: `HCA_SCOPE`, `HCA_REDIRECT_URI`, `RESEND_API_KEY`, `NOTIFY_EMAIL`, `NOTIFY_FROM`, `PLAUSIBLE_API_KEY`, `PLAUSIBLE_SITE_ID`.
+
+Remove: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and any other `SUPABASE_*` variable. Do not remove them until the deployment that is going out is this branch. The current `main` deployment still needs them.
 
 **PostgREST app on Orchard**
 
@@ -211,6 +226,7 @@ roles
 manifest-emit --out /backups/manifest.json
 manifest-check --manifest /backups/manifest.json
 test
+final-sync
 decommission --confirm-decommission --project-ref ulmowedmbobncmcriszs
 ```
 
@@ -383,42 +399,52 @@ app over.
 source and writes SQL. Apply that file to the **target** only. If the source
 role has no column grants, the script exits non-zero instead of inventing any.
 
-### 8. Freeze writes
+### 8. Explicit JWT, then merge with the freeze already on
 
-Set `MAINTENANCE_MODE=1` on Vercel. Wait a minute so in-flight POSTs finish.
-Do not run `npm run fares` against Supabase. Do not edit data in the Supabase
-dashboard. From here until the app points at Orchard, Supabase should receive
-no new writes.
+Vercel deploys `main` when this branch is merged. Do not merge until the
+environment below is saved, and do not remove `SUPABASE_*` until that merge.
+Changing only the env on the current `main` deployment must keep `SUPABASE_*`,
+because that code still talks to Supabase. `MAINTENANCE_MODE` on the old code
+does nothing if that code does not read it.
 
-Rollback of this step: unset `MAINTENANCE_MODE`. Nothing else has changed.
+1. Pick a secret (32+ characters, not JSON). Set `PGRST_JWT_SECRET` on the PostgREST app to that value and restart it. Leave `PGRST_DB_ANON_ROLE` unset. A request with no JWT must stay `401`. The derived fallback is not used while `PGRST_JWT_SECRET` is set.
+2. On the migrate app set `POSTGREST_JWT_SECRET` to that same value. Set `POSTGREST_URL` to the in-cluster PostgREST address. Keep `DATABASE_URL` bound to `expedition`. Set `SOURCE_DATABASE_URL` (Supabase session, port 5432), `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY`. Do not set `MIGRATE_COMMAND=final-sync` yet.
+3. On Vercel, add the variables in the table above, including `MAINTENANCE_MODE=1` and `POSTGREST_DB_ROLE=u_ysws_expedition_expedition`. Keep `SUPABASE_*` in the Vercel project until the new deployment is the one that is live, so a rollback to `main` still has them.
+4. Merge. The production deploy comes up on PostgREST with writes refused (`503` for every method except `GET` and `HEAD`). Wait until that deployment is ready and old instances have drained. Do not edit Supabase. Do not run `npm run fares` against Supabase.
 
-### 9. Final backup, copy, verify
+### 9. `final-sync`
 
-While the freeze is on:
+Set `MIGRATE_COMMAND=final-sync` on the migrate app and restart it. It is not
+re-run on the next restart unless `MIGRATE_RERUN=1`.
 
-1. `backup --out /backups/final`. Keep it next to the first backup.
-2. Load the delta. Prefer `restore --dump /backups/final/public.dump --fresh-target` over a session connection to `expedition-main`, then `roles` again (grants do not survive `DROP SCHEMA`). If you would rather not drop `public`, do not pass `--fresh-target`; a second restore into a populated database is refused on purpose.
-3. `copy-storage` (this is the storage delta; it is idempotent).
-4. `roles` once more so `public.files` is granted.
-5. Restart PostgREST so it reloads the schema.
-6. `verify`. **`verify: OVERALL MATCH`, or you do not continue.**
+It dumps schema `public` read-only with the same flags and filter as
+`initial-load`, and keeps the file at `$MIGRATE_STATE_DIR/final-sync/public.sql`.
+It does not drop anything if that dump or the filter fails. The replace is one
+transaction on `DATABASE_URL` only: terminate other sessions (PostgREST's),
+`DROP SCHEMA public CASCADE`, restore the filtered SQL, commit. A statement
+error rolls that back, so `public` is not left empty. Then it creates
+`public.files`, runs `post-load`, copies storage (list and download only), and
+runs `verify`.
 
-Rollback of this step: the app is still on Supabase. The freeze is still on.
-Orchard can be restored again from `backups/final` or abandoned. Supabase was
-only read.
+`GET /status` must show `final-sync: OK` and `exit_code: 0`. Anything else is
+`final-sync: FAILED`. Restart the PostgREST app after a replace, including a
+successful one, so it reconnects and reloads the schema.
 
-### 10. Point Vercel at PostgREST
+Supabase is only read. This command refuses a `DATABASE_URL` whose host looks
+like Supabase.
 
-Set `POSTGREST_URL`, `POSTGREST_JWT_SECRET`, and `REFERRAL_SECRET` (the old
-server secret). Remove the Supabase variables. Leave `MAINTENANCE_MODE=1` for
-the smoke test if you want production read-only until smoke passes; the smoke
-test's writes need it off, so turn it off only after the read-only checks, or
-turn it off and smoke immediately.
+### 10. Open writes
 
-Rollback: restore the previous Vercel env (`SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`) and remove the PostgREST ones. Supabase still has
-the data from the final dump. Writes made only on Orchard after this step are
-not in Supabase.
+Unset `MAINTENANCE_MODE` (or set it to `0`) and redeploy Vercel. Remove
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and any other
+`SUPABASE_*` variable on that deploy. Smoke the site. Reads and writes now go
+to Orchard.
+
+Rollback before this step: the freeze is still on and Supabase was not
+written. Revert the merge so Vercel returns to `main`, which still has
+`SUPABASE_*`. Orchard can be abandoned or loaded again. Rollback after this
+step is the same revert, but writes that happened only on Orchard after the
+freeze was lifted are not in Supabase.
 
 ### 11. Smoke test
 
@@ -428,10 +454,11 @@ queued screenshot. One cheap write (then read it back): a mailing signup or an
 admin note, not a ledger edit. Confirm `hour_transactions` still rejects
 UPDATE. Confirm a request with no JWT to PostgREST returns `401`.
 
-### 12. Lift the freeze
+### 12. After the freeze is off
 
-Unset `MAINTENANCE_MODE`. Watch the next real submission and the fare refresh
-(`npm run fares` now needs `POSTGREST_URL` and `POSTGREST_JWT_SECRET`).
+Step 10 already unsets `MAINTENANCE_MODE`. Watch the next real submission and
+the fare refresh (`npm run fares` now needs `POSTGREST_URL` and
+`POSTGREST_JWT_SECRET`).
 
 ### 13. Soak
 

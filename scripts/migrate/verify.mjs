@@ -87,7 +87,7 @@ export async function verifyPair({ sourceUrl, targetUrl, supabaseUrl, serviceRol
 	}
 }
 
-function printReport(result) {
+export function printReport(result) {
 	for (const line of result.lines) console.log(line);
 	if (!result.filesCompared) {
 		console.log('files: SKIP no storage credentials (database objects were compared; nothing was reloaded)');
