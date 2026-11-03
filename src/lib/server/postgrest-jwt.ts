@@ -6,6 +6,49 @@ import { createHmac } from 'node:crypto';
  */
 export const APP_ROLE = 'expedition';
 export const JWT_TTL_SECONDS = 50 * 60;
+/** Message for the derived secret. Keep in sync with scripts/lib/postgrest.mjs. */
+export const JWT_DERIVE_LABEL = 'expedition-postgrest-jwt-v1';
+
+/** Password libpq will send. `URL.password` is still percent-encoded. */
+export function passwordFromDatabaseUrl(connectionString: string): string {
+	let url: URL;
+	try {
+		url = new URL(connectionString);
+	} catch {
+		throw new Error('DATABASE_URL is not a valid URL, so the JWT secret cannot be derived');
+	}
+	if (!url.password) throw new Error('DATABASE_URL has no password, so the JWT secret cannot be derived');
+	let password: string;
+	try {
+		password = decodeURIComponent(url.password);
+	} catch {
+		throw new Error('DATABASE_URL password is not valid percent-encoding');
+	}
+	if (!password) throw new Error('DATABASE_URL has no password, so the JWT secret cannot be derived');
+	return password;
+}
+
+/** Hex HMAC-SHA256 of JWT_DERIVE_LABEL, keyed with the database password. */
+export function deriveJwtSecret(connectionString: string): string {
+	const password = passwordFromDatabaseUrl(connectionString);
+	return createHmac('sha256', password).update(JWT_DERIVE_LABEL).digest('hex');
+}
+
+/**
+ * An explicit POSTGREST_JWT_SECRET or PGRST_JWT_SECRET wins.
+ * Otherwise derive from DATABASE_URL or PGRST_DB_URI.
+ */
+export function resolveJwtSecret(env: NodeJS.ProcessEnv = process.env): string {
+	const appSecret = env.POSTGREST_JWT_SECRET;
+	const postgrestSecret = env.PGRST_JWT_SECRET;
+	if (appSecret && postgrestSecret && appSecret !== postgrestSecret) {
+		throw new Error('POSTGREST_JWT_SECRET and PGRST_JWT_SECRET are both set and differ');
+	}
+	if (appSecret || postgrestSecret) return appSecret || postgrestSecret;
+	const url = env.DATABASE_URL || env.PGRST_DB_URI;
+	if (!url) throw new Error('POSTGREST_JWT_SECRET is unset and DATABASE_URL is missing');
+	return deriveJwtSecret(url);
+}
 
 export function signRoleJwt(
 	secret: string,

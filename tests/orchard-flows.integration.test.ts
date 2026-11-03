@@ -343,9 +343,30 @@ d('orchard flows', () => {
 		});
 		const paid = await db().rpc('referral_pay_for_review', { p_review_id: review2.data!.id });
 		expect(paid.error).toBeNull();
-		const reconciled = await db().rpc('referral_reconcile');
-		expect(reconciled.error).toBeNull();
-		expect(typeof reconciled.data).toBe('number');
+		// referral_reconcile() pays every approved review of a referred user that
+		// has no reward row yet. On a database that already has real rows, call
+		// it only when every such review belongs to this run.
+		const [approvedRows, rewardRows, attributionRows] = await Promise.all([
+			db().from('submission_reviews').select('id, user_id').eq('status', 'approved'),
+			db().from('referral_rewards').select('review_id'),
+			db().from('referral_attributions').select('referred_id')
+		]);
+		expect(approvedRows.error).toBeNull();
+		expect(rewardRows.error).toBeNull();
+		expect(attributionRows.error).toBeNull();
+		const paidReviews = new Set((rewardRows.data ?? []).map((row) => row.review_id));
+		const referred = new Set((attributionRows.data ?? []).map((row) => row.referred_id));
+		const outsiders = (approvedRows.data ?? []).filter(
+			(row) => referred.has(row.user_id) && !paidReviews.has(row.id) && !created.includes(row.user_id)
+		);
+		if (outsiders.length) {
+			console.log(`referral_reconcile not called: ${outsiders.length} non-test approvals would be paid`);
+			expect(outsiders.length).toBeGreaterThan(0);
+		} else {
+			const reconciled = await db().rpc('referral_reconcile');
+			expect(reconciled.error).toBeNull();
+			expect(typeof reconciled.data).toBe('number');
+		}
 		const reward = await db().from('referral_rewards').select('id').eq('referred_id', joined.id).maybeSingle();
 		rewardId = reward.data?.id ?? '';
 		if (rewardId) {

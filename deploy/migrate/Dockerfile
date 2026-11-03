@@ -3,7 +3,7 @@
 #   docker build -f deploy/migrate/Dockerfile .
 #
 # Orchard's deploy form has no container command. It sets PORT=3000 and env.
-# Set MIGRATE_COMMAND (initial-load, verify, copy-storage, manifest-check, ...)
+# Set MIGRATE_COMMAND (initial-load, verify, copy-storage, test, ...)
 # to run that step once; the process then stays up and serves /health and /status.
 # Bind expedition-main with Variables -> Use a resource (DATABASE_URL).
 # SOURCE_DATABASE_URL is a secret (Supabase session connection) for initial-load,
@@ -23,9 +23,15 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# vitest and the SvelteKit server imports are devDependencies. Orchard may set
+# NODE_ENV=production during the build; still install them so MIGRATE_COMMAND=test works.
+RUN npm ci --include=dev
 
 COPY scripts scripts
+COPY src src
+COPY tests/orchard-flows.integration.test.ts tests/orchard-flows.integration.test.ts
+COPY tests/env-shim.ts tests/env-shim.ts
+COPY vitest.config.ts vitest.config.ts
 COPY supabase/migrations supabase/migrations
 COPY deploy/postgrest/roles.sql deploy/postgrest/roles.sql
 COPY deploy/migrate/app.mjs deploy/migrate/app.mjs

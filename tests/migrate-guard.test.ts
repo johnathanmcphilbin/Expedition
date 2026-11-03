@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { assertStorageRead } from '../scripts/migrate/lib.mjs';
+import { runOrchardTests } from '../scripts/migrate/run-orchard-tests.mjs';
+
+describe('orchard test command', () => {
+	it('refuses a Supabase URL before opening a connection', async () => {
+		await expect(
+			runOrchardTests({
+				POSTGREST_URL: 'https://ulmowedmbobncmcriszs.supabase.co',
+				DATABASE_URL: 'postgres://user:password@127.0.0.1:5432/expedition'
+			})
+		).rejects.toThrow(/Supabase/);
+	});
+});
 
 describe('source storage allow-list', () => {
 	it('allows list and download only', () => {

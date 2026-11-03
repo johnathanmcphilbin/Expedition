@@ -87,12 +87,14 @@ skip triggers, so `hour_transactions` stays append-only.
   and functions. Owners bypass RLS. `SECURITY DEFINER` functions then run as
   `expedition`. Extension-owned objects are not reassigned.
 
-`expedition_anon` receives no grants. PostgREST uses it for requests with no
-JWT (`PGRST_DB_ANON_ROLE`). It is created by this file so it does not depend on
-being an admin of an imported Supabase `anon` role. `authenticated` and
-`service_role` are revoked on schema `public` when an import created them and
-this user is allowed to revoke; otherwise they are left as they are and
-PostgREST does not use them.
+`expedition_anon` receives no grants when `roles.sql` is allowed to create it.
+The PostgREST image does **not** set `PGRST_DB_ANON_ROLE`. With that variable
+unset, PostgREST 16 rejects every request that has no valid JWT with `401`
+(`PGRST302`, anonymous access is disabled). Do not set `PGRST_DB_ANON_ROLE` to
+the database owner: that user bypasses RLS, so a missing JWT would be a full
+read and write. `authenticated` and `service_role` are revoked on schema
+`public` when an import created them and this user is allowed to revoke;
+otherwise they are left as they are and PostgREST does not use them.
 
 An import may also bring schemas `auth` and `storage`, and extensions
 `supabase_vault` and `pg_stat_statements`. The setup SQL does not create those
@@ -129,8 +131,8 @@ defaults to:
 - `PGRST_DB_CHANNEL_ENABLED=false` (`LISTEN`/`NOTIFY` does not either; restart PostgREST after DDL)
 
 The JWT still works: each request is one transaction, and PostgREST `SET ROLE`s
-inside it. The connection user (the bound `DATABASE_URL` user) is granted
-`anon` and `expedition` by `roles.sql`.
+inside it to the JWT `role` claim. On Orchard that claim is the database owner
+(`POSTGREST_DB_ROLE`). A request with no JWT is not given a role at all.
 
 `verify` and `copy-storage` use `DATABASE_URL` as the target. They read source
 Storage over HTTPS (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`: list and
@@ -163,7 +165,7 @@ does not ship.
 | Name | Value |
 | --- | --- |
 | `POSTGREST_URL` | Public HTTPS URL of the PostgREST app |
-| `POSTGREST_JWT_SECRET` | Same raw 32+ character string as `PGRST_JWT_SECRET`. Not JSON. |
+| `POSTGREST_JWT_SECRET` | Same raw string as `PGRST_JWT_SECRET`. Not JSON. At cutover, set this explicitly (the derived Orchard secret is not printed). |
 | `REFERRAL_SECRET` | The previous server secret, so existing referral cookies survive |
 | `MAINTENANCE_MODE` | `1` only during the freeze |
 
@@ -172,11 +174,19 @@ change production env vars until the runbook says so.
 
 **PostgREST app on Orchard**
 
+Dockerfile `deploy/postgrest/Dockerfile`, build context the repository root. Do not set a container command. Orchard sets `PORT=3000`.
+
 | Name | Value |
 | --- | --- |
-| `DATABASE_URL` | Bound from `expedition-main` (Use a resource). Do not type the pooler URL by hand unless the binding is unavailable. |
-| `PGRST_JWT_SECRET` | Same secret as the app |
-| Leave the prepared-statement and channel defaults | `false` / `false` |
+| `DATABASE_URL` | **Variables → Use a resource** on the loaded database (`expedition`). Do not paste the pooler URL. |
+| `PGRST_JWT_SECRET` | Leave **unset**. The entrypoint derives it as hex HMAC-SHA256, keyed with the `DATABASE_URL` password, over the string `expedition-postgrest-jwt-v1`. The same function runs in the migrate image. Set it only when you also set `POSTGREST_JWT_SECRET` to that exact value (explicit always wins). It is never logged. |
+| `POSTGREST_JWT_SECRET` | Leave unset, unless you set `PGRST_JWT_SECRET` to the same value. |
+| `PGRST_DB_ANON_ROLE` | **Do not set.** The entrypoint unsets it if it is present. Anonymous requests get `401`. |
+| `POSTGREST_DB_ROLE` | Not read by PostgREST. The JWT from the app carries the role. |
+| `PGRST_DB_PREPARED_STATEMENTS` | Leave unset. The image sets `false`. Safe on the transaction pooler and on a direct connection. |
+| `PGRST_DB_CHANNEL_ENABLED` | Leave unset. The image sets `false`. |
+| `PGRST_JWT_SECRET_IS_BASE64` | Leave unset. The image sets `false` (the derived value is hex text, not base64). |
+| `PORT` | Set by Orchard (`3000`). Do not override. |
 
 **Migrate job**
 
@@ -200,6 +210,7 @@ readonly-role --out /backups/control_tower_expedition_ro.sql
 roles
 manifest-emit --out /backups/manifest.json
 manifest-check --manifest /backups/manifest.json
+test
 decommission --confirm-decommission --project-ref ulmowedmbobncmcriszs
 ```
 
@@ -271,7 +282,7 @@ the log says were dropped. Storage files are not in this step.
 
 ### 3. Roles
 
-The Orchard app user `u_ysws_expedition_expedition` owns the database and has neither `CREATEROLE` nor superuser. `roles.sql` detects that and exits 0 with `SKIP roles:`. It creates nothing and grants nothing. PostgREST connects as that user. Set `POSTGREST_DB_ROLE` and `PGRST_DB_ANON_ROLE` to `u_ysws_expedition_expedition` on the app and on the PostgREST app. The JWT `role` claim is that name. Because no separate anon role exists, a request with no JWT is also the owner, so do not expose PostgREST except to the Expedition app. The append-only trigger on `hour_transactions` still rejects UPDATE and DELETE for the owner.
+The Orchard app user `u_ysws_expedition_expedition` owns the database and has neither `CREATEROLE` nor superuser. `roles.sql` detects that and exits 0 with `SKIP roles:`. It creates nothing and grants nothing. PostgREST connects as that user. Set `POSTGREST_DB_ROLE` to `u_ysws_expedition_expedition` on the Vercel app and on the migrate test run so the JWT `role` claim is that login. Do **not** set `PGRST_DB_ANON_ROLE`. With it unset, a request with no JWT is `401`, not the owner. The append-only trigger on `hour_transactions` still rejects UPDATE and DELETE for the owner.
 
 `control_tower_expedition_ro` cannot be created by this user either. `readonly-role` still writes the SQL, and applying it prints a warning and skips. An Orchard admin, or a second user Orchard provides, has to create that read-only role.
 
@@ -285,22 +296,60 @@ Migrate job command `roles`, or from any container that can reach the database:
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f deploy/postgrest/roles.sql
 ```
 
-Re-run it after the files table exists; it is idempotent. PostgREST's no-JWT role is `expedition_anon`.
+Re-run it after the files table exists; it is idempotent. PostgREST has no no-JWT role: `PGRST_DB_ANON_ROLE` stays unset and those requests return `401`.
 
 ### 4. Deploy PostgREST
 
 Build `deploy/postgrest/Dockerfile` as an app in the same Orchard project.
-Bind `expedition-main`. Set `PGRST_JWT_SECRET`. Give the app a public HTTPS
-URL. Restart it after any later DDL (the pooler will not deliver `NOTIFY`).
+Build context is the repository root. Bind the loaded database (`expedition`)
+with **Variables → Use a resource**. Leave `PGRST_JWT_SECRET` and
+`PGRST_DB_ANON_ROLE` unset. Give the app a public HTTPS URL. Restart it after
+any later DDL (the pooler will not deliver `NOTIFY`).
 
-Smoke from a machine that can reach that URL, with a JWT signed the same way
-as `scripts/lib/postgrest.mjs` (`role` = `expedition`):
+| Setting | Value |
+| --- | --- |
+| Dockerfile path | `deploy/postgrest/Dockerfile` |
+| Build from repo root | yes |
+| `DATABASE_URL` | **Variables → Use a resource** on `expedition` |
+| `PGRST_JWT_SECRET` | unset (derived) |
+| `PGRST_DB_ANON_ROLE` | unset |
+| `PORT` | Set by Orchard (`3000`) |
+
+From any HTTPS client:
 
 ```
-curl -s -H "Authorization: Bearer $JWT" "$POSTGREST_URL/users?select=id&limit=1"
+curl -sS -D - "$POSTGREST_URL/users?select=id&limit=1"
 ```
 
-A request with no JWT must not return rows.
+That must be `401` and the body must not be a row array. A request with a JWT
+signed the same way as `scripts/lib/postgrest.mjs`, `role` =
+`u_ysws_expedition_expedition`, returns rows.
+
+### 4b. Run the flow tests on Orchard
+
+Redeploy the migrate app (or set the command and restart) with the test env.
+It does not open `SOURCE_DATABASE_URL` or Supabase. It writes only rows tagged
+`orchard-test-` through `POSTGREST_URL`, then deletes those rows. Ledger rows
+cannot be deleted; a paid test user stays, still tagged `orchard-test-`.
+`referral_reconcile()` is not called when it would pay a non-test approval.
+
+| Setting | Value |
+| --- | --- |
+| Dockerfile path | `deploy/migrate/Dockerfile` |
+| Build from repo root | yes |
+| `DATABASE_URL` | **Variables → Use a resource** on `expedition` (same binding as PostgREST) |
+| `MIGRATE_COMMAND` | `test` |
+| `POSTGREST_URL` | Public HTTPS origin of the PostgREST app, no path |
+| `POSTGREST_JWT_SECRET` | unset, so it derives the same secret as PostgREST |
+| `POSTGREST_DB_ROLE` | unset. The test uses `current_user`, which is the owner. Set `u_ysws_expedition_expedition` if you want it explicit. |
+| `SOURCE_DATABASE_URL` | unset for this run |
+| `SUPABASE_URL` | unset for this run |
+| `SUPABASE_SERVICE_ROLE_KEY` | unset for this run |
+| `PORT` | Set by Orchard (`3000`) |
+
+`GET /health` is `200`. `GET /status` shows one `PASS` or `FAIL` line per test, then `tests: N passed, M failed`, then the exit code. A successful run is not repeated unless `MIGRATE_RERUN=1`. Nothing on Supabase is deleted or written.
+
+The suite runs inside the migrate process and loads the server modules (including the airport data used when a submission is queued). Locally that process peaked near 200MB RSS, which is above 128MB. If Orchard kills the pod during `test`, raise that app's memory for this run. The secret and the database password are not written to the log.
 
 ### 5. Copy Storage
 
@@ -377,7 +426,7 @@ Signed out: the public log and library load images from `/files/...`.
 Signed in: dashboard, a checkpoint image the user owns, a reviewer opening a
 queued screenshot. One cheap write (then read it back): a mailing signup or an
 admin note, not a ledger edit. Confirm `hour_transactions` still rejects
-UPDATE. Confirm a request with no JWT to PostgREST returns nothing.
+UPDATE. Confirm a request with no JWT to PostgREST returns `401`.
 
 ### 12. Lift the freeze
 

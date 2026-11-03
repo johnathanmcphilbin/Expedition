@@ -1,10 +1,12 @@
 # PostgREST for Hack Club Orchard.
-# Orchard builds this image from the repository and injects environment variables.
-# Required at runtime:
-#   PGRST_DB_URI        postgres://authenticator:PASSWORD@HOST:5432/DB?sslmode=require
-#   PGRST_JWT_SECRET    same raw string as the app's POSTGREST_JWT_SECRET (32+ chars, not JSON)
-# Optional:
-#   PORT                mapped to PGRST_SERVER_PORT when the platform assigns one
+# Build context is the repository root:
+#   docker build -f deploy/postgrest/Dockerfile .
+#
+# Runtime:
+#   DATABASE_URL        bound with Variables -> Use a resource
+#   PGRST_JWT_SECRET    optional. When unset, derived from the DATABASE_URL password.
+# Do not set PGRST_DB_ANON_ROLE. Anonymous requests then get 401.
+# PORT is mapped to PGRST_SERVER_PORT when the platform assigns one.
 #
 # The image only serves PostgREST. It does not contain database data.
 
@@ -13,7 +15,7 @@ FROM debian:bookworm-slim
 ARG POSTGREST_VERSION=16.5
 
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ca-certificates curl xz-utils \
+	&& apt-get install -y --no-install-recommends ca-certificates curl xz-utils openssl \
 	&& curl -fsSL -o /tmp/postgrest.tar.xz \
 		"https://github.com/PostgREST/postgrest/releases/download/v${POSTGREST_VERSION}/postgrest-v${POSTGREST_VERSION}-linux-static-x86-64.tar.xz" \
 	&& tar -xJf /tmp/postgrest.tar.xz -C /usr/local/bin \
@@ -21,10 +23,12 @@ RUN apt-get update \
 	&& apt-get purge -y curl xz-utils \
 	&& apt-get autoremove -y \
 	&& rm -rf /var/lib/apt/lists/* \
-	&& command -v postgrest
+	&& command -v postgrest \
+	&& command -v openssl
 
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod 755 /entrypoint.sh
+COPY deploy/postgrest/entrypoint.sh /entrypoint.sh
+COPY deploy/postgrest/derive-jwt-secret.sh /usr/local/bin/derive-jwt-secret.sh
+RUN chmod 755 /entrypoint.sh /usr/local/bin/derive-jwt-secret.sh
 
 USER nobody
 EXPOSE 3000

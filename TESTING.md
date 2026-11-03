@@ -11,6 +11,13 @@ use hackclub ids prefixed `orchard-test-` and display names prefixed
 `[orchard-test]`. Cleanup deletes those rows on that database. Ledger rows
 cannot be deleted: `hour_transactions` is append-only, so a test user who was
 paid keeps that user and those ledger rows, still marked `orchard-test-`.
+`referral_reconcile()` is skipped when a non-test approval would be paid.
+
+On Orchard, run it from the migrate app instead of a laptop. Set
+`MIGRATE_COMMAND=test` and `POSTGREST_URL` to the PostgREST app. Leave
+`POSTGREST_JWT_SECRET` unset so it derives the same secret PostgREST derived
+from `DATABASE_URL`. The command also requires a request with no JWT to return
+`401`. See `MIGRATION.md`.
 
 ## App flows
 
@@ -25,8 +32,9 @@ REFERRAL_SECRET=<any staging secret> \
 npm test -- tests/orchard-flows.integration.test.ts
 ```
 
-`POSTGREST_JWT_SECRET` must be at least 32 characters and must not be JSON.
-The JWT role is `expedition`, which `deploy/postgrest/roles.sql` created.
+`POSTGREST_JWT_SECRET` must be at least 32 characters and must not be JSON
+when you set it. The JWT role is `POSTGREST_DB_ROLE`, or `expedition` when
+that is unset. On Orchard the role is the database owner.
 
 The file covers sign-in (`upsertUser` plus session create/read/destroy),
 profile update without a role change, project connect/update/disconnect,

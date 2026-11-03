@@ -13,7 +13,8 @@
 --     -v authenticator_password="$AUTHENTICATOR_PASSWORD" \
 --     -f deploy/postgrest/roles.sql
 --
--- The app JWT's role claim is `expedition`.
+-- The app JWT's role claim is `expedition` when this file can create that role,
+-- and the database owner (POSTGREST_DB_ROLE) when it cannot.
 --
 -- Why this role can see rows when every table has RLS and no policies:
 --   * If the role running this file is a superuser, `expedition` is created
@@ -28,11 +29,10 @@
 --     are not reassigned.
 --
 -- PostgREST connects as the user in DATABASE_URL (the Orchard resource binding)
--- and SET ROLE to the JWT role. This file grants `expedition_anon` and
--- `expedition` to that user. `expedition_anon` is what a request with no JWT
--- becomes (PGRST_DB_ANON_ROLE), and it is granted nothing. It is a role this
--- file creates, so it still works when an imported Supabase `anon` role exists
--- and this user is not allowed to administer it.
+-- and SET ROLE to the JWT role. This file grants `expedition` to that user
+-- when it is allowed to. `expedition_anon` is created with no grants for a
+-- local database where roles can be created, but the PostgREST image does not
+-- set PGRST_DB_ANON_ROLE. A request with no JWT is rejected with 401.
 --
 -- An Import from URL may also bring Supabase-only objects: schemas `auth` and
 -- `storage`, extensions `supabase_vault` and `pg_stat_statements`, and roles
@@ -59,8 +59,8 @@ select 'create role anon nologin'
 where not exists (select 1 from pg_roles where rolname = 'anon')
 \gexec
 
--- The role PostgREST uses when a request has no JWT. Created here so we can
--- always grant it, even if an imported `anon` belongs to someone else.
+-- Kept so an older database still has the role. The PostgREST image does not
+-- use it: PGRST_DB_ANON_ROLE stays unset and anonymous requests get 401.
 select 'create role expedition_anon nologin'
 where not exists (select 1 from pg_roles where rolname = 'expedition_anon')
 \gexec
@@ -228,6 +228,7 @@ notify pgrst, 'reload schema';
 \else
 \echo SKIP roles: :orchard_user has neither CREATEROLE nor superuser.
 \echo No roles were created and no grants were attempted.
-\echo Set POSTGREST_DB_ROLE and PGRST_DB_ANON_ROLE to :orchard_user so PostgREST uses this login directly.
+\echo Do not set PGRST_DB_ANON_ROLE. Leave it unset so a request with no JWT returns 401.
+\echo Set POSTGREST_DB_ROLE to :orchard_user so the app JWT role claim is this login.
 \echo hour_transactions stays append-only because the trigger fires for the table owner.
 \endif

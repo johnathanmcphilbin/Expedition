@@ -18,7 +18,7 @@ cp .env.example .env
 | Variable | Where it comes from |
 | --- | --- |
 | `POSTGREST_URL` | Base URL of the PostgREST app. **Server-only.** |
-| `POSTGREST_JWT_SECRET` | Same raw secret as PostgREST `PGRST_JWT_SECRET`. **Server-only.** The app signs a JWT with role `expedition`. |
+| `POSTGREST_JWT_SECRET` | Same raw secret as PostgREST `PGRST_JWT_SECRET`. **Server-only.** The app signs a JWT with role `POSTGREST_DB_ROLE` (default `expedition`). On Orchard this may be derived from the database password instead of pasted; see `MIGRATION.md`. |
 | `REFERRAL_SECRET` | Optional. Signs the referral cookie. Set to the previous server secret at cutover so existing cookies keep working. |
 | `MAINTENANCE_MODE` | Optional. `1` freezes writes (non-GET/HEAD return 503) for the cutover. |
 | `HCA_CLIENT_ID` / `HCA_CLIENT_SECRET` | OAuth client on `auth.hackclub.com` |
@@ -270,12 +270,13 @@ pretending the whole save failed.
 
 ### RLS
 
-Every table has RLS enabled with **zero policies**. PostgREST's `anon` role
-(a request with no JWT) is granted nothing. The app's JWT switches to
-`expedition`, which bypasses RLS when the database role can (`BYPASSRLS` on a
-superuser-run setup, otherwise ownership of the public objects). The
-append-only trigger on `hour_transactions` still fires for that role. See
-`deploy/postgrest/roles.sql`.
+Every table has RLS enabled with **zero policies**. PostgREST is started with
+`PGRST_DB_ANON_ROLE` unset, so a request with no JWT is rejected with 401
+before it reaches the database. The app's JWT switches to `expedition` (or,
+on Orchard, the database owner), which bypasses RLS when that role can
+(`BYPASSRLS` on a superuser-run setup, otherwise ownership of the public
+objects). The append-only trigger on `hour_transactions` still fires for that
+role. See `deploy/postgrest/roles.sql` and `MIGRATION.md`.
 
 ### Hackatime
 

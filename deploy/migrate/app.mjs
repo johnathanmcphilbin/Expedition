@@ -26,6 +26,7 @@ const COMMANDS = new Set([
 	'roles',
 	'manifest-emit',
 	'manifest-check',
+	'test',
 	'decommission'
 ]);
 
@@ -69,6 +70,8 @@ function commandLine(command, args) {
 			}
 			return ['psql', [...psqlArgs, ...args]];
 		}
+		case 'test':
+			return ['node', ['scripts/migrate/run-orchard-tests.mjs', ...args]];
 		case 'decommission':
 			return ['sh', ['deploy/migrate/decommission-prep.sh', ...args]];
 		default:
@@ -76,9 +79,9 @@ function commandLine(command, args) {
 	}
 }
 
-function run(bin, args) {
+function run(bin, args, env = process.env) {
 	return new Promise((resolve) => {
-		const child = spawn(bin, args, { cwd: ROOT, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+		const child = spawn(bin, args, { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
 		const log = createWriteStreamSafe();
 		const onData = (chunk) => {
 			process.stdout.write(chunk);
@@ -198,8 +201,15 @@ async function main() {
 	await writeFile(path.join(STATE, 'output.log'), '');
 	await writeFile(path.join(STATE, 'command'), command);
 	const spec = commandLine(command, extraArgs());
+	const env = { ...process.env };
+	if (command === 'test') {
+		// The flow suite loads Vitest and the server modules in this child.
+		// Cap the heap so a leak fails the run instead of growing without bound.
+		const heap = '--max-old-space-size=110';
+		env.NODE_OPTIONS = env.NODE_OPTIONS ? `${env.NODE_OPTIONS} ${heap}` : heap;
+	}
 	console.log(`running ${command} once`);
-	const code = await run(spec[0], spec[1]);
+	const code = await run(spec[0], spec[1], env);
 	const when = new Date().toISOString();
 	await writeFile(path.join(STATE, 'exit_code'), String(code));
 	await writeFile(path.join(STATE, 'finished'), when);
