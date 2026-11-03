@@ -19,6 +19,8 @@
  *
  * Nothing in this file writes to or deletes from Supabase.
  */
+import { createWriteStream } from 'node:fs';
+import { once } from 'node:events';
 import { mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -98,52 +100,55 @@ async function preflight(dumpPath) {
 	return statements;
 }
 
-async function replacePublic(targetUrl, dumpPath) {
+async function terminateOtherSessions(targetUrl) {
 	const client = new pg.Client({
 		connectionString: targetUrl,
-		application_name: 'expedition-final-sync',
-		statement_timeout: 0
+		application_name: 'expedition-final-sync'
 	});
 	await client.connect();
 	try {
-		try {
-			const killed = await client.query(`
-				select count(*) filter (where pg_terminate_backend(pid))::int as n
-				from pg_stat_activity
-				where datname = current_database()
-				  and pid <> pg_backend_pid()
-				  and backend_type = 'client backend'
-			`);
-			console.log(
-				`terminated ${killed.rows[0].n} other sessions on the target. Restart PostgREST after final-sync so it reconnects.`
-			);
-		} catch (error) {
-			console.log(`could not terminate other sessions (${error.message}). The drop waits up to the lock timeout.`);
-		}
-		await client.query('begin');
-		await client.query(`set local lock_timeout = '20s'`);
-		console.log('final-sync: (b) dropping schema public on the target and restoring the filtered dump');
-		await client.query('drop schema if exists public cascade');
-		await client.query('create schema public');
-		await client.query('set search_path to public');
-		let n = 0;
-		await streamSanitizeFile(dumpPath, async (statement) => {
-			try {
-				await client.query(statement);
-			} catch (error) {
-				throw new Error(`restore failed at statement ${n + 1}: ${error.message}`);
-			}
-			n++;
-			if (n % 200 === 0) console.log(`  restored ${n} statements`);
-		});
-		await client.query('commit');
-		console.log(`COMMIT replace done. ${n} statements are stored. A later failure does not undo them.`);
+		const killed = await client.query(`
+			select count(*) filter (where pg_terminate_backend(pid))::int as n
+			from pg_stat_activity
+			where datname = current_database()
+			  and pid <> pg_backend_pid()
+			  and backend_type = 'client backend'
+		`);
+		console.log(
+			`terminated ${killed.rows[0].n} other sessions on the target. Restart PostgREST after final-sync so it reconnects.`
+		);
 	} catch (error) {
-		await client.query('rollback').catch(() => {});
-		throw error;
+		console.log(`could not terminate other sessions (${error.message}). The drop waits up to the lock timeout.`);
 	} finally {
 		await client.end();
 	}
+}
+
+/** Filtered dump, with the schema replace in the same file. psql -1 runs it as one transaction. */
+async function writeReplaceScript(dumpPath, scriptPath) {
+	const stream = createWriteStream(scriptPath);
+	const write = async (text) => {
+		if (!stream.write(text)) await once(stream, 'drain');
+	};
+	await write("SET lock_timeout = '20s';\nDROP SCHEMA IF EXISTS public CASCADE;\nCREATE SCHEMA public;\nSET search_path TO public;\n");
+	let n = 0;
+	await streamSanitizeFile(dumpPath, async (statement) => {
+		const suffix = statement.includes('\n\\.') ? '\n' : ';\n';
+		await write(statement + suffix);
+		n++;
+		if (n % 200 === 0) console.log(`  filtered ${n} statements`);
+	});
+	stream.end();
+	await once(stream, 'finish');
+	console.log(`filtered restore script kept at ${scriptPath} (${n} statements)`);
+}
+
+async function replacePublic(targetUrl, scriptPath) {
+	await terminateOtherSessions(targetUrl);
+	console.log('final-sync: (b) dropping schema public on the target and restoring the filtered dump');
+	console.log('psql -1 (one transaction; a statement error rolls the drop back)');
+	await run('psql', ['-1', '-v', 'ON_ERROR_STOP=1', '-f', scriptPath], libpqEnv(targetUrl));
+	console.log('COMMIT replace done. A later failure does not undo the restored schema.');
 }
 
 async function postLoad(targetUrl) {
@@ -191,7 +196,9 @@ export async function finalSync({ sourceUrl, targetUrl, supabaseUrl, serviceRole
 
 	let replaced = false;
 	try {
-		await replacePublic(targetUrl, dumpPath);
+			const scriptPath = path.join(dir, 'replace.sql');
+		await writeReplaceScript(dumpPath, scriptPath);
+		await replacePublic(targetUrl, scriptPath);
 	} catch (error) {
 		console.error(error.message || error);
 		console.error('final-sync: replace rolled back. The previous public schema is still there.');
