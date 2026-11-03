@@ -1,8 +1,8 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { requireUser } from '$lib/server/guards';
-import { getBalance, claimReward, listOwnClaims, challengeStatus, awardChallenge } from '$lib/server/queries';
-import { drops, dropKey, grants, grantRate, money, CHALLENGE } from '$lib/data';
+import { getBalance, claimReward, listOwnClaims, challengeStatus, awardChallenge, poolStatus } from '$lib/server/queries';
+import { drops, dropKey, grants, grantRate, money, CHALLENGE, POOL } from '$lib/data';
 import { text, ValidationError } from '$lib/server/validate';
 import { notifyClaim } from '$lib/server/notify';
 
@@ -15,7 +15,7 @@ import { notifyClaim } from '$lib/server/notify';
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const user = requireUser(locals, '/claim');
 
-	const [balance, claims, challenge] = await Promise.all([getBalance(user.id), listOwnClaims(user.id), challengeStatus(user.id)]);
+	const [balance, claims, challenge, pool] = await Promise.all([getBalance(user.id), listOwnClaims(user.id), challengeStatus(user.id), poolStatus(user.id)]);
 
 	// how many of each drop they've claimed; buying one again is fine
 	const taken = new Map<string, number>();
@@ -38,6 +38,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		})),
 		grants: grants.map((g) => ({ ...g, claimed: taken.get(g.key) ?? 0 })),
 		challenge,
+		pool,
 		flash: url.searchParams.get('claimed')
 	};
 };
@@ -57,6 +58,21 @@ export const actions: Actions = {
 		try {
 			const key = text(form.get('reward_key'), 'Reward', { max: 20, required: true })!;
 			const note = text(form.get('note'), 'Note', { max: 500 });
+
+			// hours into the collective pot, never past the goal
+			if (POOL && key === POOL.key) {
+				const hours = Number(form.get('hours'));
+				if (!Number.isInteger(hours) || hours < 1) return fail(400, { message: 'Pick a whole number of hours, at least 1.' });
+				const status = await poolStatus(user.id);
+				const left = POOL.goal - (status?.raised ?? 0);
+				if (left <= 0) return fail(409, { message: `It's already at ${POOL.goal}h. Thanks!` });
+				if (hours > left) return fail(400, { message: `Only ${Math.ceil(left)}h left to reach the goal.` });
+				const name = `${POOL.name} (${hours}h)`;
+				const result = await claimReward({ userId: user.id, rewardKey: POOL.key, rewardName: name, hoursCost: hours, note });
+				if (!result.ok) return fail(409, { message: result.message });
+				await notifyClaim({ name: user.display_name, reward: name, hours, note });
+				return { success: true, claimed: name, pooled: hours, wonChallenge: await checkChallenge(user) };
+			}
 
 			// a grant: a set price, or hours they choose; the rate is ours
 			const grant = grants.find((g) => g.key === key);

@@ -255,6 +255,18 @@ export const CHALLENGE: { key: string; prize: string; spend: number; spots: numb
 	since: '2026-10-21T00:00:00Z'
 };
 
+/**
+ * A collective challenge: everyone chips hours into one pot, and when it
+ * reaches `goal` the thing happens. Hours put in are gone like any claim,
+ * but buy nothing we pay for. Set to null when there isn't one.
+ */
+export const POOL: { key: string; name: string; blurb: string; goal: number } | null = {
+	key: 'pool-makeup',
+	name: "Do Johnathan's makeup",
+	blurb: 'Hit 100 hours between all of you and you get to do his makeup however you want, for one day of the event.',
+	goal: 100
+};
+
 /** A drop's claim key: its own, else its hour tier. */
 export const dropKey = (d: Drop) => d.key ?? String(d.hours);
 
@@ -263,6 +275,7 @@ export const grantRate = (g: Grant) => g.rate ?? GRANT_RATE;
 
 /** What one shop claim is worth in USD: its catalogue value, else its grant rate per hour. */
 export function shopValue(rewardKey: string, hoursCost: number): number {
+	if (rewardKey === POOL?.key) return 0;
 	const grant = grants.find((g) => g.key === rewardKey);
 	return drops.find((d) => dropKey(d) === rewardKey)?.value ?? grant?.value ?? hoursCost * (grant ? grantRate(grant) : GRANT_RATE);
 }

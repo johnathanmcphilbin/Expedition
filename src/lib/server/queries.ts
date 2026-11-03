@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { db } from './db';
-import { CHALLENGE } from '$lib/data';
+import { CHALLENGE, POOL } from '$lib/data';
 import type {
 	MailingSignupRow,
 	RewardClaimRow,
@@ -361,6 +361,17 @@ export async function claimReward(params: {
 }
 
 // ------------------------------------------------------------ challenge ----
+
+/** The collective pot: hours everyone has put in, and how many of those are theirs. */
+export async function poolStatus(userId: string) {
+	const pool = POOL;
+	if (!pool) return null;
+	const { data, error: e } = await db().from('reward_claims').select('user_id, hours_cost').eq('reward_key', pool.key).neq('status', 'cancelled');
+	if (e) throw new Error(e.message);
+	const rows = data ?? [];
+	const sum = (rs: typeof rows) => Math.round(rs.reduce((t, r) => t + Number(r.hours_cost), 0) * 100) / 100;
+	return { ...pool, raised: sum(rows), mine: sum(rows.filter((r) => r.user_id === userId)), people: new Set(rows.map((r) => r.user_id)).size };
+}
 
 /** Spots taken, and (for a participant) hours spent since it started and whether they won. */
 export async function challengeStatus(userId: string | null) {

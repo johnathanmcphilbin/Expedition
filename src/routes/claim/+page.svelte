@@ -11,6 +11,7 @@
 	let claiming = $state<string | null>(null);
 	// hours typed into each grant, starting at 1
 	let hoursFor = $state<Record<string, number>>(Object.fromEntries(grants.map((g) => [g.key, 1])));
+	let poolHours = $state(1);
 	const available = $derived(Number(data.balance.hours_available));
 	const fmtH = (n: number) => `${n.toFixed(2).replace(/\.?0+$/, '')}h`;
 
@@ -75,7 +76,12 @@
 			</div>
 		{/if}
 
-		{#if form?.success}
+		{#if form?.success && 'pooled' in form}
+			<p class="notice">
+				You put {form.pooled}h towards {data.pool?.name ?? 'the challenge'}. Thanks!
+				{#if form.wonChallenge && data.challenge}You also won {data.challenge.prize}, shipped free.{/if}
+			</p>
+		{:else if form?.success}
 			<p class="notice">
 				Claimed {form.claimed}. We'll be in touch about getting it to you.
 				{#if form.wonChallenge && data.challenge}You also won {data.challenge.prize}, shipped free.{/if}
@@ -187,6 +193,47 @@
 			{/each}
 		</div>
 
+		{#if data.pool}
+			{@const p = data.pool}
+			{@const left = Math.max(0, p.goal - p.raised)}
+			<p class="section-label" style="margin-top:2.5rem">Collective challenge</p>
+			<div class="pool" class:won={left === 0}>
+				<p class="drop-name">{p.name}</p>
+				<p class="drop-extra">{p.blurb}</p>
+				<div class="pool-bar" role="progressbar" aria-valuemin="0" aria-valuemax={p.goal} aria-valuenow={p.raised}>
+					<span style="width:{Math.min(100, (p.raised / p.goal) * 100)}%"></span>
+				</div>
+				<p class="drop-head">
+					<span class="drop-hours">{fmtH(p.raised)} of {p.goal}h</span>
+					<span>{p.people} {p.people === 1 ? 'person' : 'people'}{p.mine ? `, ${fmtH(p.mine)} from you` : ''}</span>
+				</p>
+				{#if left === 0}
+					<p class="drop-state">Done! It's happening.</p>
+				{:else if available >= 1}
+					<form
+						method="POST"
+						action="?/claim"
+						use:enhance={() => {
+							claiming = p.key;
+							return async ({ update }) => {
+								await update();
+								claiming = null;
+							};
+						}}>
+						<input type="hidden" name="reward_key" value={p.key} />
+						<label class="grant-hours">
+							Hours
+							<input name="hours" type="number" min="1" step="1" max={Math.min(Math.floor(available), Math.ceil(left))} bind:value={poolHours} required />
+						</label>
+						<button class="btn" type="submit" disabled={claiming === p.key}>Put in {poolHours}h</button>
+					</form>
+					<p class="hint">Hours you put in are spent, and don't come back if it falls short.</p>
+				{:else}
+					<p class="drop-state">You need at least 1h available to chip in</p>
+				{/if}
+			</div>
+		{/if}
+
 		{#if data.claims.length}
 			<p class="section-label" style="margin-top:2.5rem">Your claims</p>
 			<div class="row-list">
@@ -208,6 +255,31 @@
 <Footer />
 
 <style>
+	.pool {
+		border: 1.5px solid var(--navy);
+		padding: 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.pool.won {
+		background: var(--paper-soft);
+	}
+	.pool form {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: end;
+		gap: 0.6rem;
+	}
+	.pool-bar {
+		height: 0.75rem;
+		border: 1.5px solid var(--navy);
+	}
+	.pool-bar span {
+		display: block;
+		height: 100%;
+		background: var(--navy);
+	}
 	.drops {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
