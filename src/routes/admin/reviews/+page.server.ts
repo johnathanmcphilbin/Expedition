@@ -5,7 +5,7 @@ import { lapsesFor, LAPSE_FIELD, type Lapse } from '$lib/server/lapse';
 import { referredBy } from '$lib/server/referrals';
 import { claim, release, clearClaim, holdForChanges, claimProblem, listClaims, CLAIM_HOURS, RESUBMIT_HOURS, MAX_CLAIMS } from '$lib/server/claims';
 import { logDecision, reviewStats } from '$lib/server/review-stats';
-import { payForReview, reviewEarnings, REVIEW_PAY_USD, BIG_REVIEW_PAY_USD, BIG_PROJECT_HOURS } from '$lib/server/payouts';
+import { payForReview, reviewEarnings, APPROVE_PAY_USD, SEND_BACK_PAY_USD } from '$lib/server/payouts';
 import type { UserRow, SubmissionReviewRow, QueuedSubmissionRow } from '$lib/server/database.types';
 import { db } from '$lib/server/db';
 import {
@@ -440,10 +440,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		airtableError: url.searchParams.get('airtable_error'),
 		reviewerName: reviewerName(viewer),
 		earnings: isReviewerOnly(viewer)
-			? { ...(await reviewEarnings(viewer.id)), per: REVIEW_PAY_USD, cash: viewer.review_pay === 'cash' }
+			? { ...(await reviewEarnings(viewer.id)), approve: APPROVE_PAY_USD, sendBack: SEND_BACK_PAY_USD, cash: viewer.review_pay === 'cash' }
 			: null,
-		// everyone sees which submissions pay the big-project rate
-		bigPay: { per: REVIEW_PAY_USD, big: BIG_REVIEW_PAY_USD, hours: BIG_PROJECT_HOURS },
 		filter: validFilter,
 		// reviewers and admins alike: the queue, how reviewing's going, the leaderboard
 		stats:
@@ -880,7 +878,7 @@ export const actions: Actions = {
 				if (result.airtableError) {
 					// approved and credited, but Hack Club's fields didn't take: open it
 					// so the error and the resend button are right there
-					await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at, decision === 'approve' ? (trackedHours ?? approvedHours) : null).catch((e) =>
+					await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at, decision === 'approve').catch((e) =>
 						console.error('payForReview', e)
 					);
 					redirect(
@@ -907,7 +905,7 @@ export const actions: Actions = {
 
 			if (decision === 'draft') return { saved: true };
 			// non-admin reviewers earn hours for each submission they decide
-			await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at, decision === 'approve' ? (trackedHours ?? approvedHours) : null).catch((e) =>
+			await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at, decision === 'approve').catch((e) =>
 				console.error('payForReview', e)
 			);
 		} catch (e) {
@@ -1054,7 +1052,7 @@ export const actions: Actions = {
 					hackatimeProject,
 					review.status === 'pending' || review.status === 'in_review',
 					review.updated_at,
-					status === 'approved' ? (submittedHours ?? approvedHours) : null
+					status === 'approved'
 				).catch((e) => console.error('payForReview', e));
 			}
 

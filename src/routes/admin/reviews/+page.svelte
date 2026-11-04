@@ -273,7 +273,7 @@
 
 		{#if !data.isAdmin}
 			<p class="shadow-note">Hi {data.reviewerName}! Your decisions are signed "Reviewed by {data.reviewerName}" in the notes and in Hack Club's Additional Justification. Your own projects don't show up here.
-				{#if data.earnings}You earn ${data.earnings.per.toFixed(2)}{data.earnings.cash ? ', paid by an organiser,' : ' in hours'} for each submission you decide, and <strong>${data.bigPay.big.toFixed(2)} when you approve a project with more than {data.bigPay.hours}h tracked</strong>, so the big projects are worth picking up: <strong>{data.earnings.reviews} so far (${data.earnings.usd.toFixed(2)})</strong>.{/if}</p>
+				{#if data.earnings}You earn ${data.earnings.approve.toFixed(2)}{data.earnings.cash ? ', paid by an organiser,' : ' in hours'} for each submission you approve and ${data.earnings.sendBack.toFixed(2)} for each one you send back or reject: <strong>{data.earnings.reviews} so far (${data.earnings.usd.toFixed(2)})</strong>.{/if}</p>
 		{/if}
 
 		{#if data.isAdmin}
@@ -330,7 +330,7 @@
 							{#if item.hardware}<span class="tag tag-hw">Hardware</span>{/if}
 							<span class="tag tag-{item.status}">{STATUS_LABEL[item.status]}</span>
 							{#if item.kind === 'new' && item.status === 'pending'}<span class="tag tag-new">Not sent yet</span>{/if}
-							{#if item.trackedHours !== null && item.trackedHours > data.bigPay.hours && (item.status === 'pending' || item.status === 'in_review')}<span class="tag tag-big" title="Over {data.bigPay.hours}h tracked: approving it pays a reviewer ${data.bigPay.big.toFixed(2)}">${data.bigPay.big.toFixed(2)}</span>{/if}
+							
 							{#if item.claim}<span class="tag tag-claim" class:mine={item.claim.mine}>{item.claim.held ? (item.claim.mine ? 'Held for you' : `Held for ${item.claim.by}`) : item.claim.mine ? 'Yours' : `Claimed by ${item.claim.by}`}</span>{/if}
 							{#if !item.matched}<span class="tag tag-warn">No account</span>{/if}
 							{#if item.gone}<span class="tag tag-warn">Gone from Airtable</span>{/if}
@@ -538,7 +538,6 @@
 									{#if data.queuedDetail.trackedHours !== null}
 										<span class="hint">{data.queuedDetail.trackedHours}h tracked on this project in Hackatime.</span>
 									{/if}
-									<span class="hint big-pay">Projects with more than {data.bigPay.hours}h tracked pay {data.earnings ? 'you' : 'a reviewer'} ${data.bigPay.big.toFixed(2)} instead of ${data.bigPay.per.toFixed(2)} when approved.</span>
 								</div>
 								<div class="field">
 									<label for="participant_feedback">Feedback to them <span class="optional">required, it's the message they get</span></label>
@@ -714,7 +713,6 @@
 											{#if data.detail.review?.submitted_hours != null}{data.detail.review.submitted_hours}h tracked on this project.{/if}
 											{#if data.detail.balance}They've had {data.detail.balance.hours_earned}h approved so far.{/if}
 										</span>
-										<span class="hint big-pay">Projects with more than {data.bigPay.hours}h tracked pay {data.earnings ? 'you' : 'a reviewer'} ${data.bigPay.big.toFixed(2)} instead of ${data.bigPay.per.toFixed(2)} when approved.</span>
 									</div>
 								</div>
 
@@ -878,15 +876,6 @@
 		background: #a34a00;
 		border-color: #a34a00;
 		color: #fff;
-	}
-	.tag.tag-big {
-		border-color: var(--green);
-		color: var(--green-dark);
-	}
-	.big-pay {
-		display: block;
-		color: var(--green-dark);
-		font-weight: 700;
 	}
 	.justify {
 		margin-top: 1.5rem;

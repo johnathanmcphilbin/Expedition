@@ -233,7 +233,7 @@ export type ReviewPayoutRow = {
 	item_key: string;
 	reviewer_id: string;
 	amount: number | null;
-	/** what the review was worth: $2.50 for approving more than 10 hours, else $1.50 */
+	/** what the review was worth: $1.00 for an approval, $0.75 for changes or a rejection (before Nov 4 2026: $2.50 for approving 10h+, else $1.50) */
 	usd: number;
 	paid_at: string;
 	paid_as: 'hours' | 'cash';
