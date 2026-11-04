@@ -270,6 +270,24 @@ export const POOL: { key: string; name: string; blurb: string; goal: number } | 
 /** A drop's claim key: its own, else its hour tier. */
 export const dropKey = (d: Drop) => d.key ?? String(d.hours);
 
+/** Shop catalogue, cheapest first. The finisher prize stays off it. */
+export function shopItems() {
+	return drops
+		.filter((d) => !d.finisher)
+		.sort((a, b) => a.hours - b.hours)
+		.map((d) => ({
+			key: dropKey(d),
+			name: d.name,
+			extra: d.extra ?? null,
+			about: d.about ?? null,
+			image: d.image ?? null,
+			imageBack: d.imageBack ?? null,
+			merch: !!d.merch,
+			hours: d.hours,
+			value: d.value
+		}));
+}
+
 /** A grant's USD per hour: its own rate, else GRANT_RATE. */
 export const grantRate = (g: Grant) => g.rate ?? GRANT_RATE;
 
@@ -291,6 +309,9 @@ export const drops: Drop[] = [
 	{ key: 'travel-backpack', hours: 17, value: 75, name: 'Travel Backpack Grant', about: 'Up to $75 product budget. A backpack for carrying a laptop, clothes and travel essentials.', image: '/drop-backpack.webp', shopOnly: true },
 	{ key: 'rain-jacket', hours: 12, value: 55, name: 'Rain Jacket', about: 'Up to $55 product budget. A practical reward for Irish winter weather.', image: '/drop-raincoat.webp', shopOnly: true },
 	{ key: 'expedition-fleece', hours: 21, value: 105, name: 'Expedition Fleece Jacket', about: 'A Columbia fleece embroidered with the Expedition ship. Warm enough for Galway in December.', image: '/drop-fleece.webp', merch: true, shopOnly: true },
+	// Comfort Colors 1717, front and back, shipped worldwide. Worst case about
+	// $34.44, and 8h at the $4.50 shop rate covers it.
+	{ key: 'expedition-tee', hours: 8, value: 34.44, name: 'Expedition T-Shirt', about: 'Official Expedition YSWS tee, design by Callum, printed front and back.', image: '/drop-tee-front.webp', imageBack: '/drop-tee-back.webp', merch: true, shopOnly: true },
 	{ key: 'laptop', hours: 80, value: 500, name: 'Laptop Grant', about: "Up to $500 product budget. A laptop of your choice, including refurbished options.", image: '/drop-laptop.webp', shopOnly: true },
 	{ key: '3d-printer', hours: 50, value: 300, name: '3D Printer Grant', about: 'Up to $300 product budget. A strong milestone reward for hardware builders. A similar printer you can get locally is fine if needed.', image: '/drop-3dprinter.webp', shopOnly: true },
 	{ hours: 5, value: 25, name: 'Custom Expedition cap', extra: 'Jukebox Expedition stickers', art: 'cap', image: '/drop-cap.webp', merch: true },
