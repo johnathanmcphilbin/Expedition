@@ -94,12 +94,25 @@
 		<div class="drops">
 			{#each data.catalogue as d (d.key)}
 				<div class="drop" class:locked={!d.affordable && !d.claimed} class:done={d.claimed && !d.affordable}>
-					{#if d.image}<img class="drop-img" src={d.image} alt={d.name} loading="lazy" />{/if}
+					{#if d.image && d.imageBack}
+						<a class="drop-pair" href="/claim/{d.key}" aria-label="{d.name}, front and back">
+							<figure>
+								<img src={d.image} alt="{d.name}, front" loading="lazy" />
+								<figcaption>Front</figcaption>
+							</figure>
+							<figure>
+								<img src={d.imageBack} alt="{d.name}, back" loading="lazy" />
+								<figcaption>Back</figcaption>
+							</figure>
+						</a>
+					{:else if d.image}
+						<img class="drop-img" src={d.image} alt={d.name} loading="lazy" />
+					{/if}
 					<div class="drop-head">
 						<span class="drop-hours">{d.hours}h</span>
 						<span class="drop-value">{d.merch ? 'Shipped to you' : 'Grant'}</span>
 					</div>
-					<p class="drop-name">{d.name}</p>
+					<p class="drop-name">{#if d.imageBack}<a href="/claim/{d.key}">{d.name}</a>{:else}{d.name}{/if}</p>
 					{#if d.extra}<p class="drop-extra">+ {d.extra}</p>{/if}
 					{#if d.about}<p class="drop-extra">{d.about}</p>{/if}
 					{#if !d.merch}<GrantAmount reveal="{money(d.value)} grant" />{/if}
@@ -300,6 +313,44 @@
 		width: 100%;
 		object-fit: contain;
 		margin-bottom: 0.4rem;
+	}
+	.drop-pair {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.45rem;
+		margin-bottom: 0.35rem;
+		color: inherit;
+		text-decoration: none;
+	}
+	.drop-pair:focus-visible {
+		outline: 3px solid var(--green);
+		outline-offset: 2px;
+	}
+	.drop-pair figure {
+		margin: 0;
+	}
+	.drop-pair img {
+		height: 110px;
+		width: 100%;
+		object-fit: contain;
+		background: var(--white);
+	}
+	.drop-pair figcaption {
+		margin-top: 0.2rem;
+		text-align: center;
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--muted);
+	}
+	.drop-name a {
+		color: inherit;
+		text-decoration: none;
+	}
+	.drop-name a:hover {
+		color: var(--green-dark);
 	}
 	.drop.done {
 		background: var(--paper-soft);

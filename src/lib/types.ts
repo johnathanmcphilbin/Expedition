@@ -1,7 +1,7 @@
 /**
  * A supply drop on the Expedition route.
- * Hours are the price: 1 verified hour = $5 of value, so `value` is always
- * `hours * 5` and includes shipping. Swap `art` for real photography later.
+ * Hours are the price. `value` is what the program pays, in USD, including
+ * shipping. Trail drops are `hours * 5`. Shop merch can name its real cost.
  */
 export interface Drop {
 	/** claim key; defaults to the hour tier. Needed when two drops share a tier. */
@@ -14,8 +14,10 @@ export interface Drop {
 	art?: 'cap' | 'mouse' | 'charger' | 'earbuds' | 'mic' | 'speaker' | 'camera' | 'keyboard';
 	/** the 40 hour drop, which ends the trail. Not revealed or claimable yet. */
 	finisher?: boolean;
-	/** product photo on a transparent background, under /static */
+	/** product photo, under /static */
 	image?: string;
+	/** second photo, for something printed on both sides */
+	imageBack?: string;
 	/** Expedition merch we ship — every other drop is a grant for the item */
 	merch?: boolean;
 	/** a line about it, shown in the shop */
