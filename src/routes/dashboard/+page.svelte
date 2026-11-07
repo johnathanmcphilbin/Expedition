@@ -13,7 +13,7 @@
 	// projects shows on each of them, and a repeated key crashes the page
 	const needsChanges = $derived.by(() => {
 		const byId = new Map<string, string[]>();
-		for (const p of data.projects) if (p.queued?.status === 'changes_requested') byId.set(p.queued.id, [...(byId.get(p.queued.id) ?? []), p.name]);
+		for (const p of data.projects) if (p.queued?.status === 'changes_requested') byId.set(p.queued.id, [...(byId.get(p.queued.id) ?? []), p.title]);
 		for (const u of data.untracked) if (u.status === 'changes_requested' && !byId.has(u.id)) byId.set(u.id, [u.name]);
 		return [...byId].map(([id, names]) => ({ id, name: names.join(' + ') }));
 	});
@@ -563,7 +563,8 @@
 							{@const stage = stageOf(p)}
 							<li class="project">
 								<div class="p-info">
-									<span class="p-name">{p.name}</span>
+									<span class="p-name">{p.title}</span>
+									{#if p.parts.length > 1}<span class="p-meta">Hackatime: {p.parts.join(', ')}</span>{/if}
 									{#if p.languages.length}<span class="p-meta">{p.languages.join(', ')}</span>{/if}
 									<ol class="stages" aria-label="Where this project is at">
 										<li class="st done">Building</li>

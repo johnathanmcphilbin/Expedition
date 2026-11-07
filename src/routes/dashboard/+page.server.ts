@@ -46,6 +46,10 @@ import type { SubmissionReviewRow } from '$lib/server/database.types';
 
 export type DashboardProject = {
 	name: string;
+	/** what to call it: the submission's own name when it covers several Hackatime projects */
+	title: string;
+	/** the Hackatime projects it covers; more than one once they're submitted together */
+	parts: string[];
 	seconds: number;
 	tracked: string;
 	languages: string[];
@@ -166,6 +170,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			.filter((t) => !t.archived)
 			.map((t) => ({
 				name: t.name,
+				title: t.name,
+				parts: [t.name],
 				seconds: t.totalSeconds,
 				tracked: formatHours(t.totalSeconds),
 				languages: t.languages.slice(0, 3),
@@ -179,9 +185,29 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 		// Anything already submitted or reviewed stays visible even if it was
 		// never connected — hours they've earned shouldn't disappear.
-		projects = all
+		const shown = all
 			.filter((p) => p.connected || p.submitted || p.review || p.queued)
 			.sort((a, b) => connected.indexOf(a.name) - connected.indexOf(b.name) || b.seconds - a.seconds);
+
+		// one submission covering several Hackatime projects is one project:
+		// fold them into the first (most connected/tracked), which keeps the
+		// links, and add up the time
+		const queueTitles = new Map(queued.map((q) => [q.id, q.project_name]));
+		const bySubmission = new Map<string, (typeof all)[number]>();
+		for (const p of shown) {
+			const sub = p.queued ? `q:${p.queued.id}` : p.review ? `r:${p.review.id}` : null;
+			const into = sub ? bySubmission.get(sub) : undefined;
+			if (!into) {
+				if (sub) bySubmission.set(sub, p);
+				projects.push(p);
+				continue;
+			}
+			into.parts.push(p.name);
+			into.seconds += p.seconds;
+			into.tracked = formatHours(into.seconds);
+			into.languages = [...new Set([...into.languages, ...p.languages])].slice(0, 3);
+			into.title = (into.queued && queueTitles.get(into.queued.id)) || into.parts.join(' + ');
+		}
 		others = all
 			.filter((p) => !projects.includes(p))
 			.sort((a, b) => b.seconds - a.seconds)
