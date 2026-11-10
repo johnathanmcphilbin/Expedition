@@ -278,7 +278,7 @@
 		<section class="block" id="travel">
 			<div class="block-head">
 				<h2>Galway travel fund</h2>
-				<a class="text-link" href="/ireland">About Galway →</a>
+				<a class="text-link" href="/galway">About Galway →</a>
 			</div>
 			<p class="hint block-hint">
 				Bank approved hours here at <strong>{money(TRAVEL_RATE)}/hour</strong> towards your trip to Galway

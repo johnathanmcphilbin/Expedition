@@ -319,8 +319,8 @@ ever been recorded through them.
 
 ## Irish student sign-ups
 
-`/ireland` collects sign-ups for the spots held for students in Ireland.
-`/admin/ireland` lists them. The tables are added by
+`/ireland` is only the Irish student sign-up. The Galway event page is
+`/galway`. They do not link to each other. `/admin/ireland` lists the sign-ups. The tables are added by
 `supabase/migrations/0047_ireland_signups.sql` (new tables only). Apply that
 file to the Orchard database. Do not replay the whole migration history onto
 production.

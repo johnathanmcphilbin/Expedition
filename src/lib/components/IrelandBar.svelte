@@ -21,6 +21,7 @@
 		color: var(--cream);
 		text-decoration: none;
 		line-height: 1.3;
+		border-bottom: 4px solid var(--red);
 	}
 	.bar:hover .msg {
 		text-decoration: underline;

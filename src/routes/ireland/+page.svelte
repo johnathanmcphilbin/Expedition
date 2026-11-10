@@ -1,7 +1,5 @@
 <script lang="ts">
 	import '$lib/styles/app.css';
-	import Dublin from '$lib/components/Dublin.svelte';
-	import OceanCrossing from '$lib/components/OceanCrossing.svelte';
 	import Footer from '$lib/components/Footer.svelte';
 	import { COUNTIES } from '$lib/ireland';
 	import type { ActionData, PageData } from './$types';
@@ -26,7 +24,7 @@
 	<section class="signup-section">
 		<div class="wrap">
 		<div class="signup-card">
-			<p class="kicker">Students in Ireland</p>
+			<h1>Irish students</h1>
 			<p class="line">
 				{#if !data.ireland.open}
 					Sign-ups open soon. Places are limited.
@@ -72,7 +70,6 @@
 				<p class="plain">
 					Name, email, age, school and county. GitHub and something you’ve built are optional. Not having them is fine.
 				</p>
-				<p class="plain quiet">Not in Ireland? The travel grant is further down this page.</p>
 				{#if failed && 'message' in failed && failed.message}
 					<p class="error-box">{failed.message}</p>
 				{/if}
@@ -130,8 +127,6 @@
 		</div>
 		</div>
 	</section>
-	<Dublin lead={false} />
-	<OceanCrossing />
 </main>
 <Footer />
 
@@ -139,21 +134,18 @@
 	.signup-section {
 		background: var(--sea);
 		padding-top: calc(90px + clamp(1.5rem, 4vw, 3rem));
-		padding-bottom: clamp(1.5rem, 4vw, 2.5rem);
+		padding-bottom: calc(90px + clamp(2rem, 5vw, 3.5rem));
+	}
+	h1 {
+		font-size: clamp(2.4rem, 6vw, 4rem);
+		letter-spacing: -0.03em;
+		color: var(--navy);
 	}
 	.signup-card {
 		max-width: 720px;
 		background: var(--white);
 		border: 3px solid var(--navy);
 		padding: clamp(1.2rem, 3vw, 1.8rem);
-	}
-	.kicker {
-		font-family: var(--font-mono);
-		font-size: 0.82rem;
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--navy);
 	}
 	.line {
 		margin-top: 0.7rem;
@@ -167,10 +159,6 @@
 		margin-top: 0.8rem;
 		max-width: 52ch;
 		color: var(--slate);
-	}
-	.quiet {
-		color: var(--muted);
-		font-size: 0.95rem;
 	}
 	.thanks {
 		margin-top: 1rem;
