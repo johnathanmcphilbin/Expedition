@@ -317,6 +317,32 @@ the time of the migration those tables held either nothing or leftover rows
 from onboarding UI that no longer exists — no real submission or review had
 ever been recorded through them.
 
+## Irish student sign-ups
+
+`/ireland` collects sign-ups for the spots held for students in Ireland.
+`/admin/ireland` lists them. The tables are added by
+`supabase/migrations/0047_ireland_signups.sql` (new tables only). Apply that
+file to the Orchard database. Do not replay the whole migration history onto
+production.
+
+Sign-ups are **closed** until an admin opens them on `/admin/ireland`, or
+`IRELAND_SIGNUPS_OPEN` is `1` / `true` / `yes` / `on`. `0` / `false` / `no` /
+`off` forces them closed even if the admin switch is on. Capacity defaults to
+30 (`IRELAND_CAPACITY` overrides the number saved in the admin). Approved and
+pending sign-ups hold a spot. Past that, new sign-ups are marked waitlist and
+the public page says so. Approving past the number of approved spots needs the
+override checkbox on that row.
+
+Approved people go to Attend as a CSV from `/admin/ireland/export`. The columns
+Attend's importer reads are `Email`, `First Name`, `Last Name`, `Country` and
+`State` (the county). Import that file on the Expedition event. The other
+columns are extra and Attend ignores them.
+
+Attend also documents `POST /api/v1/events/{event_id}/participants` (an event
+or series API key). That call is off unless both `ATTEND_API_TOKEN` and
+`ATTEND_EVENT_ID` are set. When they are, approving someone invites them.
+Rejecting them here does not remove them from Attend.
+
 ## Known gaps / next steps
 
 - **Deploy adapter.** Still `@sveltejs/adapter-auto`; pick a concrete adapter

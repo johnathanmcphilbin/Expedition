@@ -40,6 +40,7 @@
 				<a class="btn btn-outline" href="/admin/owed">What you owe</a>
 				<a class="btn btn-outline" href="/admin/projects">Projects</a>
 				<a class="btn btn-outline" href="/admin/outreach">Outreach</a>
+				<a class="btn btn-outline" href="/admin/ireland">Ireland</a>
 				<a class="btn btn-outline" href="/admin/leaderboard">Leaderboard</a>
 				<a class="btn btn-outline" href="/admin/checkpoints">
 					Shared checkpoints{data.sharedWaiting ? ` (${data.sharedWaiting})` : ''}
