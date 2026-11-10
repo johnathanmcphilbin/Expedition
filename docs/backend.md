@@ -328,10 +328,11 @@ production.
 Sign-ups are **closed** until an admin opens them on `/admin/ireland`, or
 `IRELAND_SIGNUPS_OPEN` is `1` / `true` / `yes` / `on`. `0` / `false` / `no` /
 `off` forces them closed even if the admin switch is on. Capacity defaults to
-30 (`IRELAND_CAPACITY` overrides the number saved in the admin). Approved and
-pending sign-ups hold a spot. Past that, new sign-ups are marked waitlist and
-the public page says so. Approving past the number of approved spots needs the
-override checkbox on that row.
+30 (`IRELAND_CAPACITY` overrides the number saved in the admin). That number
+is only shown on `/admin/ireland`. The public pages say places are limited,
+or that they are full, and never a count. Approved and pending sign-ups hold
+a spot. Past that, new sign-ups are marked waitlist. Approving past the
+number of approved spots needs the override checkbox on that row.
 
 Approved people go to Attend as a CSV from `/admin/ireland/export`. The columns
 Attend's importer reads are `Email`, `First Name`, `Last Name`, `Country` and

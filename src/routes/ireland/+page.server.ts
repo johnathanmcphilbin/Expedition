@@ -1,6 +1,6 @@
 import { fail, type Cookies } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { DEFAULT_CAPACITY, publicStatus, tooFast } from '$lib/ireland';
+import { tooFast, type PublicIrelandStatus } from '$lib/ireland';
 import { FORM_COOKIE, createSignup, publicIreland, saveNotifyEmail } from '$lib/server/ireland';
 
 function rememberForm(cookies: Cookies, url: URL) {
@@ -16,10 +16,11 @@ function rememberForm(cookies: Cookies, url: URL) {
 export const load: PageServerLoad = async ({ cookies, setHeaders, url }) => {
 	setHeaders({ 'cache-control': 'private, no-store' });
 	rememberForm(cookies, url);
+	const closed: PublicIrelandStatus = { open: false, acceptingWaitlist: false };
 	try {
 		return { ireland: await publicIreland() };
 	} catch {
-		return { ireland: publicStatus({ open: false, capacity: DEFAULT_CAPACITY, holding: 0 }) };
+		return { ireland: closed };
 	}
 };
 

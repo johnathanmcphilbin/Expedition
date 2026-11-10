@@ -1,8 +1,7 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
 	import { TRAVEL_RATE, TRAVEL_CAP_HOURS, EVENT, hoursToQualify, money } from '$lib/data';
 
-	let { children }: { children?: Snippet } = $props();
+	let { lead = true }: { lead?: boolean } = $props();
 
 	// Worked examples, computed from the real rule so they can't drift from it.
 	const examples = [100, 800].map((flight) => {
@@ -20,7 +19,7 @@
 	];
 </script>
 
-<section class="section dublin-section" id="dublin">
+<section class="section dublin-section" class:lead id="dublin">
 	<div class="wrap">
 		{#each polaroids as p (p.src)}
 			<figure class="polaroid {p.cls}" style:--tilt="{p.tilt}deg" aria-hidden="true">
@@ -33,12 +32,6 @@
 			A free overnight hackathon at <a href={EVENT.mapsUrl} target="_blank" rel="noopener noreferrer">PorterShed, Galway</a>.
 			Starts the evening of 4 December, ends 2pm on 6 December.
 		</p>
-
-		{#if children}
-			<div class="signup-slot">
-				{@render children()}
-			</div>
-		{/if}
 
 		<div class="travel">
 			<h3 class="t-kicker">Travelling to Galway</h3>
@@ -94,10 +87,13 @@
 		   read against it instead of melting into the same texture */
 		background: linear-gradient(180deg, var(--sea) 0%, var(--sea-deep) 100%);
 		color: var(--navy);
-		/* first on the page: the nav's 90px wave band hangs over the top */
-		padding-top: calc(90px + clamp(1.5rem, 4vw, 3rem));
+		padding-top: clamp(1.5rem, 4vw, 3rem);
 		/* and the dark sea below crests up 90px into the bottom of this one */
 		padding-bottom: calc(90px + clamp(2rem, 5vw, 3.5rem));
+	}
+	/* first on the page: the nav's 90px wave band hangs over the top */
+	.dublin-section.lead {
+		padding-top: calc(90px + clamp(1.5rem, 4vw, 3rem));
 	}
 	.dublin-section::after {
 		content: '';
@@ -121,12 +117,6 @@
 		margin-top: 1rem;
 		font-size: 1.15rem;
 		color: var(--slate);
-	}
-	.signup-slot {
-		position: relative;
-		z-index: 1;
-		margin-top: 1.6rem;
-		max-width: 720px;
 	}
 
 	/* ---- travelling to Dublin: one plain notice, like a note on the chart ---- */
