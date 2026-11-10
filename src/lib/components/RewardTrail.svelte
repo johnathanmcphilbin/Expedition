@@ -116,7 +116,7 @@
 			keep your hours and bank them toward a travel grant to Galway.
 		</p>
 		<p class="scrawl">
-			<a href={live ? '/dashboard#travel' : '/ireland'}>bank them for Galway</a> <span aria-hidden="true">→</span>
+			<a href={live ? '/dashboard#travel' : '/galway'}>bank them for Galway</a> <span aria-hidden="true">→</span>
 		</p>
 
 		<!-- ---------- banked readout ---------- -->

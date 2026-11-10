@@ -65,7 +65,6 @@
 				<h2 class="section-label">Sign-ups</h2>
 				<p class="hint">
 					Right now sign-ups are {data.settings.open ? 'open' : 'closed'}.
-					Closed until you open them. Leave them closed while Garda vetting is being sorted.
 					{#if data.settings.openSource === 'env'}
 						<strong>IRELAND_SIGNUPS_OPEN is overriding this switch.</strong>
 					{/if}
