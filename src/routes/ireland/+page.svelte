@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '$lib/styles/app.css';
 	import Footer from '$lib/components/Footer.svelte';
+	import { EVENT } from '$lib/data';
 	import { COUNTIES } from '$lib/ireland';
 	import type { ActionData, PageData } from './$types';
 
@@ -22,9 +23,28 @@
 
 <main>
 	<section class="signup-section">
-		<div class="wrap">
-		<div class="signup-card">
+		<div class="wrap layout">
+		<div class="facts">
 			<h1>Irish students</h1>
+			<p>
+				Expedition is a free overnight hackathon run by Hack Club. It’s at
+				<a href={EVENT.mapsUrl} target="_blank" rel="noopener noreferrer">PorterShed</a>, in Galway city centre.
+			</p>
+			<p>
+				Arrive Saturday morning, 5 December 2026. That’s when it starts. You stay one night, and it finishes on Sunday 6 December.
+			</p>
+			<p>
+				Ages 13 to 18. Free to attend. No experience needed, and you can build whatever you want. Teenagers from around the world will be there.
+			</p>
+			<h2>What to bring</h2>
+			<ul>
+				<li>Laptop and charger</li>
+				<li>A sleeping bag, or something to sleep on</li>
+				<li>Toiletries</li>
+				<li>Any medication you need</li>
+			</ul>
+		</div>
+		<div class="signup-card">
 			<p class="line">
 				{#if !data.ireland.open}
 					Sign-ups open soon. Places are limited.
@@ -136,16 +156,58 @@
 		padding-top: calc(90px + clamp(1.5rem, 4vw, 3rem));
 		padding-bottom: calc(90px + clamp(2rem, 5vw, 3.5rem));
 	}
+	.layout {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(16rem, 28rem);
+		gap: clamp(1.5rem, 4vw, 2.75rem);
+		align-items: start;
+	}
 	h1 {
-		font-size: clamp(2.4rem, 6vw, 4rem);
+		font-size: clamp(2.4rem, 6vw, 3.6rem);
 		letter-spacing: -0.03em;
 		color: var(--navy);
 	}
+	.facts p {
+		margin-top: 0.85rem;
+		max-width: 42ch;
+		color: var(--navy);
+		font-size: 1.05rem;
+	}
+	.facts a {
+		color: var(--navy);
+		font-weight: 800;
+	}
+	h2 {
+		margin-top: 1.5rem;
+		font-family: var(--font-mono);
+		font-size: 0.82rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--navy);
+	}
+	ul {
+		margin: 0.7rem 0 0;
+		padding: 0;
+		list-style: none;
+		max-width: 36ch;
+	}
+	li {
+		margin-top: 0.45rem;
+		padding-left: 0.85rem;
+		border-left: 3px solid var(--navy);
+		font-weight: 700;
+		color: var(--navy);
+	}
 	.signup-card {
-		max-width: 720px;
 		background: var(--white);
 		border: 3px solid var(--navy);
 		padding: clamp(1.2rem, 3vw, 1.8rem);
+	}
+	@media (max-width: 800px) {
+		.layout {
+			grid-template-columns: 1fr;
+		}
 	}
 	.line {
 		margin-top: 0.7rem;
