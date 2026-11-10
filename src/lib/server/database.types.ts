@@ -348,6 +348,52 @@ export type ExpeditionProgressRow = {
 	finished: boolean;
 }
 
+export type IrelandSignupStatus = 'pending' | 'approved' | 'rejected' | 'waitlist';
+
+export type IrelandSignupRow = {
+	id: string;
+	name: string;
+	email: string;
+	age: number;
+	school: string;
+	county: string;
+	github_username: string | null;
+	built_note: string | null;
+	built_url: string | null;
+	status: IrelandSignupStatus;
+	ip_hash: string | null;
+	attend_participant_event_id: string | null;
+	attend_synced_at: string | null;
+	attend_error: string | null;
+	decided_at: string | null;
+	decided_by: string | null;
+	created_at: string;
+	updated_at: string;
+};
+
+export type IrelandSignupSettingsRow = {
+	id: number;
+	signups_open: boolean;
+	capacity: number;
+	updated_at: string;
+};
+
+export type IrelandNotifyRow = {
+	email: string;
+	ip_hash: string | null;
+	created_at: string;
+};
+
+export type IrelandRpcResult = {
+	ok: boolean;
+	error?: string;
+	id?: string;
+	status?: string;
+	approved?: number;
+	capacity?: number;
+	promoted?: number;
+};
+
 export interface Database {
 	public: {
 		Tables: {
@@ -466,6 +512,9 @@ export interface Database {
 				bytes: string;
 				created_at: string;
 			}>;
+			ireland_signups: Table<IrelandSignupRow>;
+			ireland_signup_settings: Table<IrelandSignupSettingsRow>;
+			ireland_notify_emails: Table<IrelandNotifyRow>;
 		};
 		Views: {
 			user_hour_balances: { Row: HourBalanceRow; Relationships: [] };
@@ -513,6 +562,38 @@ export interface Database {
 			referral_pay_for_review: { Args: { p_review_id: string }; Returns: string };
 			referral_reconcile: { Args: Record<string, never>; Returns: number };
 			referral_reverse: { Args: { p_reward_id: string; p_admin_id: string; p_note: string | null }; Returns: boolean };
+			ireland_create_signup: {
+				Args: {
+					p_name: string;
+					p_email: string;
+					p_age: number;
+					p_school: string;
+					p_county: string;
+					p_github: string | null;
+					p_built_note: string | null;
+					p_built_url: string | null;
+					p_ip_hash: string | null;
+					p_capacity: number;
+					p_open: boolean;
+					p_rate_limit: number;
+					p_window_secs: number;
+				};
+				Returns: IrelandRpcResult;
+			};
+			ireland_set_status: {
+				Args: {
+					p_id: string;
+					p_status: string;
+					p_override: boolean;
+					p_admin: string;
+					p_capacity: number;
+				};
+				Returns: IrelandRpcResult;
+			};
+			ireland_fill_waitlist: {
+				Args: { p_capacity: number };
+				Returns: number;
+			};
 			review_hackclub_submission: {
 				Args: {
 					p_review_id: string;

@@ -1,5 +1,8 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { TRAVEL_RATE, TRAVEL_CAP_HOURS, EVENT, hoursToQualify, money } from '$lib/data';
+
+	let { children }: { children?: Snippet } = $props();
 
 	// Worked examples, computed from the real rule so they can't drift from it.
 	const examples = [100, 800].map((flight) => {
@@ -30,6 +33,12 @@
 			A free overnight hackathon at <a href={EVENT.mapsUrl} target="_blank" rel="noopener noreferrer">PorterShed, Galway</a>.
 			Starts the evening of 4 December, ends 2pm on 6 December.
 		</p>
+
+		{#if children}
+			<div class="signup-slot">
+				{@render children()}
+			</div>
+		{/if}
 
 		<div class="travel">
 			<h3 class="t-kicker">Travelling to Galway</h3>
@@ -112,6 +121,12 @@
 		margin-top: 1rem;
 		font-size: 1.15rem;
 		color: var(--slate);
+	}
+	.signup-slot {
+		position: relative;
+		z-index: 1;
+		margin-top: 1.6rem;
+		max-width: 720px;
 	}
 
 	/* ---- travelling to Dublin: one plain notice, like a note on the chart ---- */

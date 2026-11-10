@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import ShipRoutes from './ShipRoutes.svelte';
 
-	let { form = null }: { form?: { message: string } | null } = $props();
+	let { form = null, irelandOpen = false }: { form?: { message: string } | null; irelandOpen?: boolean } = $props();
 
 	let submitting = $state(false);
 </script>
@@ -56,6 +56,10 @@
 				Club.
 			</p>
 		{/if}
+		<p class="local">
+			<a href="/ireland">In Ireland? Sign up here</a>
+			<span class="local-state" class:open={irelandOpen}>{irelandOpen ? 'Sign-ups are open' : 'Opening soon'}</span>
+		</p>
 		<p class="slack">
 			New to Hack Club? <a href="https://hackclub.com/slack" target="_blank" rel="noopener noreferrer">Join the Slack</a>
 			first. It's where everyone hangs out, shares what they're building and gets help.
@@ -197,6 +201,41 @@
 	}
 	.form-error {
 		color: var(--red-dark);
+	}
+
+	/* Same white card as the Slack note, one line. The ship routes
+	   cross the open water, so the words need a solid ground. */
+	.local {
+		margin-top: 0.9rem;
+		padding: 0.85rem 1.1rem;
+		background: var(--white);
+		border: 3px solid var(--navy);
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.35rem 0.75rem;
+		font-size: 0.98rem;
+		font-weight: 700;
+		color: var(--navy);
+	}
+	.local a {
+		color: var(--navy);
+		font-weight: 800;
+		text-underline-offset: 3px;
+	}
+	.local a:hover {
+		color: var(--green-dark);
+	}
+	.local-state {
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--navy);
+	}
+	.local-state.open {
+		color: var(--green-dark);
 	}
 
 	@media (max-width: 560px) {

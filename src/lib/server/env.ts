@@ -81,6 +81,40 @@ export const config = {
 	},
 
 	/**
+	 * Irish student sign-ups. Both are optional.
+	 * Unset `IRELAND_SIGNUPS_OPEN` uses the admin toggle, which defaults to closed.
+	 * `1`/`true`/`yes`/`on` forces open. `0`/`false`/`no`/`off` forces closed.
+	 * Anything else non-empty also stays closed.
+	 * `IRELAND_CAPACITY` overrides the database capacity when it is a whole number.
+	 */
+	ireland: {
+		get signupsOpen() {
+			return env.IRELAND_SIGNUPS_OPEN;
+		},
+		get capacity() {
+			return env.IRELAND_CAPACITY;
+		}
+	},
+
+	/**
+	 * Optional Attend invite on approval. Off unless both are set.
+	 * `ATTEND_API_TOKEN` is an event or series API key.
+	 * `ATTEND_EVENT_ID` is the event id or slug (`expedition`).
+	 * `ATTEND_API_BASE` defaults to https://attend.hackclub.com/api/v1.
+	 */
+	attend: {
+		get apiToken() {
+			return env.ATTEND_API_TOKEN;
+		},
+		get eventId() {
+			return env.ATTEND_EVENT_ID;
+		},
+		get apiBase() {
+			return env.ATTEND_API_BASE;
+		}
+	},
+
+	/**
 	 * Hack Club's Unified YSWS Airtable base — the source of truth for whether
 	 * a project has been submitted. Expedition reads from it and writes its own
 	 * review decisions into a separate table Expedition owns; it never writes
