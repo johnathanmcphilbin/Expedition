@@ -61,11 +61,13 @@ export type County = (typeof COUNTIES)[number];
 
 export type IrelandSignupStatus = 'pending' | 'approved' | 'rejected' | 'waitlist';
 
-/** What the public page is allowed to know. Counts only. No names, no emails. */
+/**
+ * What a public page is allowed to know. No names, no emails, and no
+ * capacity or remaining-place count. The cap stays on the server and on
+ * /admin/ireland.
+ */
 export type PublicIrelandStatus = {
 	open: boolean;
-	capacity: number;
-	spotsLeft: number;
 	acceptingWaitlist: boolean;
 };
 
@@ -178,12 +180,10 @@ export function publicStatus(args: {
 	capacity: number;
 	holding: number;
 }): PublicIrelandStatus {
-	const spotsLeft = Math.max(0, args.capacity - args.holding);
+	const full = args.holding >= args.capacity;
 	return {
 		open: args.open,
-		capacity: args.capacity,
-		spotsLeft,
-		acceptingWaitlist: args.open && spotsLeft === 0
+		acceptingWaitlist: args.open && full
 	};
 }
 

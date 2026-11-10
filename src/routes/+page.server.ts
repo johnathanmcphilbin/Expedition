@@ -1,19 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
-import type { Actions, PageServerLoad } from './$types';
-import { readIrelandSettings } from '$lib/server/ireland';
+import type { Actions } from './$types';
 import { saveMailingSignup } from '$lib/server/queries';
 import { email as emailField, ValidationError } from '$lib/server/validate';
-
-export const load: PageServerLoad = async ({ setHeaders }) => {
-	// The open/closed line is the only dynamic bit. A minute of cache is enough.
-	setHeaders({ 'cache-control': 'public, max-age=60' });
-	try {
-		const settings = await readIrelandSettings();
-		return { irelandOpen: settings.open };
-	} catch {
-		return { irelandOpen: false };
-	}
-};
 
 export const actions: Actions = {
 	/**

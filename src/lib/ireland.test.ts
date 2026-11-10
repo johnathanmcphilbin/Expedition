@@ -122,13 +122,14 @@ describe('spots and approval', () => {
 		expect(intakeStatus(31, 30)).toBe('waitlist');
 	});
 
-	it('publishes only the count, and says when new people wait', () => {
+	it('tells the public whether sign-ups are open and whether new people wait, and nothing else', () => {
 		const open = publicStatus({ open: true, capacity: 30, holding: 12 });
-		expect(open).toEqual({ open: true, capacity: 30, spotsLeft: 18, acceptingWaitlist: false });
-		expect(Object.keys(open).sort()).toEqual(['acceptingWaitlist', 'capacity', 'open', 'spotsLeft']);
+		expect(open).toEqual({ open: true, acceptingWaitlist: false });
+		expect(Object.keys(open).sort()).toEqual(['acceptingWaitlist', 'open']);
+		expect(JSON.stringify(open)).not.toMatch(/\d/);
 		expect(publicStatus({ open: true, capacity: 30, holding: 30 }).acceptingWaitlist).toBe(true);
 		expect(publicStatus({ open: false, capacity: 30, holding: 30 }).acceptingWaitlist).toBe(false);
-		expect(publicStatus({ open: true, capacity: 30, holding: 40 }).spotsLeft).toBe(0);
+		expect(publicStatus({ open: true, capacity: 30, holding: 40 }).acceptingWaitlist).toBe(true);
 	});
 
 	it('refuses an approval past capacity unless override is explicit', () => {

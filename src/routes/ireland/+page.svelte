@@ -23,17 +23,17 @@
 </svelte:head>
 
 <main>
-	<Dublin>
+	<section class="signup-section">
+		<div class="wrap">
 		<div class="signup-card">
 			<p class="kicker">Students in Ireland</p>
-			<p class="spots">
-				{data.ireland.capacity} spots for students in Ireland.
+			<p class="line">
 				{#if !data.ireland.open}
-					Sign-ups open soon.
+					Sign-ups open soon. Places are limited.
 				{:else if data.ireland.acceptingWaitlist}
-					Those spots are full. You can still sign up and we’ll put you on the waitlist.
+					Places are full. You can still sign up and we’ll put you on the waitlist.
 				{:else}
-					{data.ireland.spotsLeft} still open.
+					Places are limited.
 				{/if}
 			</p>
 
@@ -128,13 +128,21 @@
 				</form>
 			{/if}
 		</div>
-	</Dublin>
+		</div>
+	</section>
+	<Dublin lead={false} />
 	<OceanCrossing />
 </main>
 <Footer />
 
 <style>
+	.signup-section {
+		background: var(--sea);
+		padding-top: calc(90px + clamp(1.5rem, 4vw, 3rem));
+		padding-bottom: clamp(1.5rem, 4vw, 2.5rem);
+	}
 	.signup-card {
+		max-width: 720px;
 		background: var(--white);
 		border: 3px solid var(--navy);
 		padding: clamp(1.2rem, 3vw, 1.8rem);
@@ -147,7 +155,7 @@
 		text-transform: uppercase;
 		color: var(--navy);
 	}
-	.spots {
+	.line {
 		margin-top: 0.7rem;
 		font-size: 1.2rem;
 		font-weight: 800;
