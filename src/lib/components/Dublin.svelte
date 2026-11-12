@@ -48,8 +48,26 @@
 				Keep building past {TRAVEL_CAP_HOURS} and every extra approved hour is another {money(TRAVEL_RATE)}.
 			</p>
 			<p class="t-body">
-				<strong>Accommodation</strong> comes out of the same stipend: keep around 7 to 14 hours for it.
-				Group accommodation is being sorted, so don't book flights or hotels yet.
+				<strong>Book your flights now.</strong> Aim to land in Dublin between 10am and 5pm on Friday 4 December 2026.
+				If you're not flying into Dublin, message Johnny immediately.
+				We'll share how to get from Dublin to Galway soon.
+			</p>
+			<p class="t-body">
+				If you already have enough approved hours, we can give you a card grant to book your flights in full.
+				That's decided case by case.
+				Everyone else can keep working on hours after the event and get reimbursed then.
+			</p>
+			<p class="t-body">
+				Everyone stays together at Kinlay Hostel, Eyre Square, Galway on the night of 4 December.
+				Breakfast is included. It's booked, so don't book a hotel yourself.
+			</p>
+			<p class="t-body">
+				<strong>Accommodation</strong> comes out of the same stipend, still {money(TRAVEL_RATE)} per approved hour.
+				Bank your hours for accommodation on your dashboard.
+				If you don't, accommodation will be taken from your hours automatically after the event.
+				(Don't worry too much about banking hours for accommodation right now, that can be sorted later.)
+			</p>
+			<p class="t-body">
 				Visa info and invitation letters are being worked on too.
 			</p>
 

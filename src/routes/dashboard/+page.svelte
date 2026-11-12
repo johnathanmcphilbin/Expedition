@@ -253,7 +253,13 @@
 					{#if f.status === 'suggested'}
 						<!-- organisers can paste the exact flight; otherwise it's Skyscanner from that airport for the event dates -->
 						<a class="btn book-btn" href={f.bookingUrl ?? skyscannerUrl(f.outFrom)} target="_blank" rel="noopener noreferrer">Book this flight ↗</a>
-						<p class="flight-note">Book exactly this flight so we can pick you up at the airport, then tell us below.</p>
+						<p class="flight-note">
+							Book exactly this flight, then tell us below.
+							If you already have enough approved hours, we can give you a card grant to book your flights in full.
+							That's decided case by case.
+							Everyone else can keep working on hours after the event and get reimbursed then.
+							We'll share how to get from Dublin to Galway soon.
+						</p>
 						<form method="POST" action="?/bookFlight" use:enhance class="book-form">
 							<label>Booking reference <input name="booking_ref" required maxlength="20" placeholder="e.g. X7KQ2P" autocomplete="off" /></label>
 							<label class="check"><input type="checkbox" name="different" value="yes" bind:checked={bookedDifferent} /> I booked a different flight</label>
@@ -267,7 +273,8 @@
 					{:else}
 						<p class="flight-note">
 							Thanks, you're booked{f.status === 'changed' && f.bookedFlight ? ` on ${f.bookedFlight}${f.bookedArrivesAt ? `, landing ${fmtDublin(f.bookedArrivesAt)}` : ''}` : ''}.
-							We'll meet you at the airport. If anything changes, tell an organiser straight away.
+							If anything changes, tell an organiser straight away.
+							We'll share how to get from Dublin to Galway soon.
 						</p>
 					{/if}
 				</div>
@@ -286,6 +293,22 @@
 				full {TRAVEL_CAP_HOURS} hour Expedition. <strong>{TRAVEL_CAP_HOURS} hours is the maximum
 				requirement.</strong> Once you qualify, your stipend goes towards your travel and accommodation,
 				and you cover anything left over.
+			</p>
+			<p class="hint block-hint">
+				Book your flights now. Aim to land in Dublin between 10am and 5pm on Friday 4 December 2026.
+				If you're not flying into Dublin, message Johnny immediately.
+				We'll share how to get from Dublin to Galway soon.
+				If you already have enough approved hours, we can give you a card grant to book your flights in full.
+				That's decided case by case.
+				Everyone else can keep working on hours after the event and get reimbursed then.
+			</p>
+			<p class="hint block-hint">
+				Everyone stays together at Kinlay Hostel, Eyre Square, Galway on the night of 4 December. Breakfast is included.
+				It's booked, so don't book a hotel yourself.
+				Accommodation comes out of the same stipend, still {money(TRAVEL_RATE)} per approved hour.
+				Bank your hours for accommodation here.
+				If you don't, accommodation will be taken from your hours automatically after the event.
+				(Don't worry too much about banking hours for accommodation right now, that can be sorted later.)
 			</p>
 			<div class="panel trip-card" class:qualified={t.remaining === 0}>
 				<div class="trip-cols">
@@ -319,12 +342,12 @@
 										<p class="trip-fine">Leaves {fmtLocal(q.departLocal)}, lands {fmtLocal(q.arriveLocal)} Irish time</p>
 									{/if}
 									<a class="btn sky-btn" href={q.link} target="_blank" rel="noopener noreferrer">See this flight ↗</a>
-									<p class="trip-fine">From Google Flights, checked {new Date(q.fetchedAt).toLocaleDateString('en-IE', { day: 'numeric', month: 'short' })}. Prices change, so don't book yet.</p>
+									<p class="trip-fine">From Google Flights, checked {new Date(q.fetchedAt).toLocaleDateString('en-IE', { day: 'numeric', month: 'short' })}. Prices change. Book your flight now. Aim to land in Dublin between 10am and 5pm on Friday 4 December 2026.</p>
 								</div>
 							{/if}
 							{/await}
 							<a class="btn btn-outline sky-btn" href={t.estimate.skyscanner} target="_blank" rel="noopener noreferrer">Compare on Skyscanner ↗</a>
-							<p class="trip-fine">An estimate, for the event dates. Don't book yet: we'll tell you which flight to take.</p>
+							<p class="trip-fine">An estimate, for the event dates. Book your own flight. If you're not flying into Dublin, message Johnny immediately. If you already have enough approved hours, we can give you a card grant to book it in full, decided case by case. Otherwise keep working on hours after the event and get reimbursed then.</p>
 						{:else if t.estimate}
 							<p class="trip-big">No flight needed</p>
 						{:else}

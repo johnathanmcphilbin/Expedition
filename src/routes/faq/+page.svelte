@@ -34,7 +34,8 @@
 			q: 'wait, how do i cover the travel cost?',
 			a: [
 				'you do hours to get a travel grant. the rate is $8 per hour',
-				"for example, if someone's travel costs $800 they'd need 100 hours to cover all of it at $8/h"
+				"for example, if someone's travel costs $800 they'd need 100 hours to cover all of it at $8/h",
+				'if you already have enough approved hours we can give you a card grant to book your flights in full, decided case by case. everyone else can keep working on hours after the event and get reimbursed then'
 			]
 		},
 		{
@@ -44,12 +45,19 @@
 		{
 			q: 'what about accommodation?',
 			a: [
-				'same as the travel stipend! id recommend keeping around 7 to 14 hours for accommodation. orgs are working on group accommodation for everyone atm so dont go booking random hotels yet, we will sort that closer to the time'
+				'same as the travel stipend! still $8 per approved hour, and accommodation comes out of that',
+				'everyone stays together at Kinlay Hostel, Eyre Square, Galway on the night of 4 December. breakfast included. its booked, so dont book a hotel yourself',
+				'bank your hours for accommodation on your dashboard. if you dont, accommodation will be taken from your hours automatically after the event (dont worry too much about banking hours for accommodation right now, that can be sorted later)'
 			]
 		},
 		{
 			q: 'should i book flights/hotels now?',
-			a: ['pls dont yet. theres still stuff being sorted']
+			a: [
+				'book your flights now. aim to land in Dublin between 10am and 5pm on Friday 4 December 2026',
+				'if you are not flying into Dublin, message Johnny immediately. we will share how to get from Dublin to Galway soon',
+				'dont book a hotel yourself. everyone stays together at Kinlay Hostel, Eyre Square, Galway on the night of 4 December, breakfast included. its already booked',
+				'if you already have enough approved hours we can give you a card grant to book your flights in full, decided case by case. everyone else can keep working on hours after the event and get reimbursed then'
+			]
 		},
 		{
 			q: 'can i do more than 40 hours then?',
