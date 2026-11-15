@@ -1,7 +1,8 @@
--- A reviewer can send an approval to a fraud check instead of straight to
--- Hack Club. It waits here, with everything the approval needs, until a
+-- Approving a project holds the approval here instead of sending it straight
+-- to Hack Club. It waits, with everything the approval needs, until a
 -- different reviewer or admin says yes: only then is it sent to Airtable and
--- the hours credited. Saying no puts it back in the queue, flagged.
+-- the hours credited, signed as the original approver. Saying no puts it
+-- back in the queue, flagged.
 --
 -- Works for both kinds of item, keyed like review_flags: 'new' by
 -- submission_queue.id, 'hc' by its Airtable record id.

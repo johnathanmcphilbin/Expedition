@@ -126,11 +126,14 @@ own form, with the Hackatime ID and project set on the server.
 There is one holding step before that row exists. A new submission waits in
 `submission_queue` (see `src/lib/server/queue.ts` and migration 0010) until
 an Expedition reviewer on `/admin/reviews` (the one review page, shared with already-sent submissions) edits and approves it.
-Approving creates the one real row in Hack Club's table (`createSubmission`),
-caches it in `hackclub_submissions`, credits the hours through
-`review_hackclub_submission()`, then clears the address, birthday and
-screenshot from Expedition's copy. Needs-changes and rejected submissions
-never reach Hack Club.
+Approving does not send it yet. The decision is stored in `fraud_checks`
+until a different reviewer or admin clears it. Clearing is what creates the
+one real row in Hack Club's table (`createSubmission`), caches it in
+`hackclub_submissions`, credits the hours through
+`review_hackclub_submission()` (signed as the original approver), then clears
+the address, birthday and screenshot from Expedition's copy. Needs-changes
+and rejected submissions never reach Hack Club. A fraud check that is turned
+down goes back to the review queue with a `review_flags` row.
 
 Expedition's own tables only **cache** and **review** that submission:
 
@@ -316,6 +319,19 @@ cache-and-review model described above. Nothing of real value was lost: at
 the time of the migration those tables held either nothing or leftover rows
 from onboarding UI that no longer exists — no real submission or review had
 ever been recorded through them.
+
+## Fraud check
+
+`supabase/migrations/0048_fraud_checks.sql` adds `fraud_checks` only. It does
+not alter or drop anything already in the database. After this is merged,
+apply that one file to the Orchard database (the same way
+`0047_ireland_signups.sql` was applied). Do not replay the whole migration
+history onto production, and do not apply the file before it is merged.
+
+The app role that owns the tables (the Orchard database user, or `expedition`
+where `deploy/postgrest/roles.sql` reassigned ownership) bypasses row level
+security, which is the same access `review_flags` uses. Restart the PostgREST
+app after the table exists so it reloads the schema.
 
 ## Irish student sign-ups
 

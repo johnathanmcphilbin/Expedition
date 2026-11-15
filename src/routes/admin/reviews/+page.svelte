@@ -253,7 +253,7 @@
 		<p class="row-title">Waiting on a fraud check</p>
 		<p>
 			<strong>{h.approvedBy}</strong> approved <strong>{h.hours}h</strong>{#if h.trackedHours !== null} ({h.trackedHours}h tracked){/if}
-			and sent it here {new Date(h.heldAt).toLocaleString()}. Nothing has gone to Hack Club and no hours have been given yet.
+			on {new Date(h.heldAt).toLocaleString()}. Nothing has gone to Hack Club and no hours have been given yet. When someone else clears it, it is signed as {h.approvedBy}.
 		</p>
 		<p class="hint">Feedback they'll get:</p>
 		<p class="p-feedback">“{h.feedback}”</p>
@@ -261,7 +261,7 @@
 		{#if form && 'message' in form && form.message}<p class="error">{form.message}</p>{/if}
 		<div class="actions">
 			{#if h.mine}
-				<span class="hint">You sent this one, so someone else has to clear it.</span>
+				<span class="hint">You approved this one, so someone else has to clear it.</span>
 			{:else}
 				<form method="POST" action="?/clearFraud" use:enhance={() => { submitting = 'clearFraud'; return async ({ update }) => { await update(); submitting = null; }; }}>
 					<input type="hidden" name="kind" value={kind} />
@@ -289,8 +289,8 @@
 			<div>
 				<h1 class="app-title">Reviews</h1>
 				<p class="hint">
-					Everything in one place. Ones marked <strong>Not sent yet</strong> only go to Hack Club when you
-					approve them.
+					Everything in one place. Approving holds the decision until a different reviewer clears it.
+					Only then does it go to Hack Club, signed as the person who approved it.
 				</p>
 			</div>
 			<form method="GET" class="search-form">
@@ -308,7 +308,7 @@
 
 		{#if !data.isAdmin}
 			<p class="shadow-note">Hi {data.reviewerName}! Your decisions are signed "Reviewed by {data.reviewerName}" in the notes and in Hack Club's Additional Justification. Your own projects don't show up here.
-				{#if data.earnings}You earn ${data.earnings.approve.toFixed(2)}{data.earnings.cash ? ', paid by an organiser,' : ' in hours'} for each submission you approve and ${data.earnings.sendBack.toFixed(2)} for each one you send back or reject: <strong>{data.earnings.reviews} so far (${data.earnings.usd.toFixed(2)})</strong>.{/if}</p>
+				{#if data.earnings}You earn ${data.earnings.approve.toFixed(2)}{data.earnings.cash ? ', paid by an organiser,' : ' in hours'} for each submission you approve, once another reviewer clears it, and ${data.earnings.sendBack.toFixed(2)} for each one you send back or reject: <strong>{data.earnings.reviews} so far (${data.earnings.usd.toFixed(2)})</strong>.{/if}</p>
 		{/if}
 
 		{#if data.isAdmin}
@@ -363,6 +363,7 @@
 						<span class="qi-project">{item.project ?? 'No project named'}</span>
 						<span class="qi-tags">
 							{#if item.hardware}<span class="tag tag-hw">Hardware</span>{/if}
+							{#if item.held}<span class="tag tag-fraud">Fraud check</span>{/if}
 							<span class="tag tag-{item.status}">{STATUS_LABEL[item.status]}</span>
 							{#if item.kind === 'new' && item.status === 'pending'}<span class="tag tag-new">Not sent yet</span>{/if}
 							
@@ -551,7 +552,7 @@
 							{:else}
 								<fieldset>
 									<legend>Address</legend>
-									<p class="hint">Hidden for reviewers. It's on file and goes to Hack Club automatically when you approve.</p>
+									<p class="hint">Hidden for reviewers. It's on file and goes to Hack Club when a second reviewer clears the approval.</p>
 								</fieldset>
 							{/if}
 
@@ -563,7 +564,7 @@
 							</details>
 
 							<details class="justify" open>
-								<summary>Hack Club justification <span class="optional">sent to Hack Club when you approve</span></summary>
+								<summary>Hack Club justification <span class="optional">sent to Hack Club when the approval is cleared</span></summary>
 								<JustificationFields fields={data.justificationFields} values={data.queuedDetail.justifications} />
 							</details>
 
@@ -593,10 +594,7 @@
 
 								<div class="actions">
 									<button class="btn" type="submit" name="decision" value="approve" disabled={!!submitting}>
-										{submitting === 'approve' ? 'Sending…' : 'Approve & send to Hack Club'}
-									</button>
-									<button class="btn btn-outline" type="submit" name="decision" value="fraud" disabled={!!submitting}>
-										{submitting === 'fraud' ? 'Sending…' : 'Send to fraud check'}
+										{submitting === 'approve' ? 'Holding…' : 'Approve'}
 									</button>
 									<button class="btn btn-outline" type="submit" name="decision" value="changes_requested" disabled={!!submitting}>Needs changes</button>
 									<button class="btn btn-outline" type="submit" name="decision" value="rejected" disabled={!!submitting}>Reject</button>
@@ -605,6 +603,7 @@
 									</button>
 									<span class="autosave-status" aria-live="polite" data-autosave>Changes save automatically</span>
 								</div>
+								<p class="hint">Approving holds it for a second reviewer. Nothing goes to Hack Club, and no hours are credited, until someone else says yes. You can't clear your own.</p>
 							</fieldset>
 						</form>
 					{/if}
@@ -773,10 +772,7 @@
 
 								<div class="actions">
 									<button class="btn" type="submit" name="status" value="approved" disabled={!!submitting}>
-										{submitting === 'approved' ? 'Approving…' : 'Approve'}
-									</button>
-									<button class="btn btn-outline" type="submit" name="status" value="fraud" disabled={!!submitting}>
-										{submitting === 'fraud' ? 'Sending…' : 'Send to fraud check'}
+										{submitting === 'approved' ? 'Holding…' : 'Approve'}
 									</button>
 									<button class="btn btn-outline" type="submit" name="status" value="changes_requested" disabled={!!submitting}>Needs changes</button>
 									<button class="btn btn-outline" type="submit" name="status" value="rejected" disabled={!!submitting}>Reject</button>
@@ -785,6 +781,7 @@
 									</button>
 									<span class="autosave-status" aria-live="polite" data-autosave>Changes save automatically</span>
 								</div>
+								<p class="hint">Approving holds it for a second reviewer. Nothing is written to Hack Club, and no hours are credited, until someone else says yes. You can't clear your own.</p>
 							</form>
 						{/if}
 					</div>
@@ -1497,6 +1494,11 @@
 		border-color: var(--orange);
 		background: #fff4ea;
 		color: var(--orange-dark);
+	}
+	.tag-fraud {
+		border-color: #a34a00;
+		background: #fff6ec;
+		color: #a34a00;
 	}
 
 	/* ---- card ---- */
