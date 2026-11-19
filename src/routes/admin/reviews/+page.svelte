@@ -18,7 +18,6 @@
 	const FILTERS = [
 		{ value: 'hardware', label: 'Hardware' },
 		{ value: 'pending', label: 'Pending' },
-		{ value: 'fraud', label: 'Fraud check' },
 		{ value: 'changes_requested', label: 'Needs changes' },
 		{ value: 'approved', label: 'Approved' },
 		{ value: 'rejected', label: 'Rejected' },
@@ -210,9 +209,24 @@
 {/snippet}
 
 {#snippet flagPanel(kind: 'hc' | 'new', key: string)}
-	{#if data.selectedChecked}
-		<p class="checked-note">✓ Fraud checked by <strong>{data.selectedChecked.by}</strong> on {new Date(data.selectedChecked.at).toLocaleDateString()}. Good to go.</p>
-	{/if}
+	{@const tick = data.selectedFraudCheck}
+	<div class="fraud-tick" class:on={!!tick}>
+		{#if data.isAdmin}
+			<form method="POST" action="?/fraudTick" use:enhance={() => async ({ update }) => update({ reset: false })}>
+				<input type="hidden" name="kind" value={kind} />
+				<input type="hidden" name="key" value={key} />
+				<input type="hidden" name="on" value={tick ? 'no' : 'yes'} />
+				<button class="tick-btn" type="submit" aria-pressed={!!tick}>
+					<span class="tick-box" aria-hidden="true">{tick ? '✓' : ''}</span>
+					{tick ? 'Fraud checked' : 'Mark as fraud checked'}
+				</button>
+			</form>
+		{:else}
+			<span class="tick-box" aria-hidden="true">{tick ? '✓' : ''}</span>
+			<span>{tick ? 'Fraud checked' : 'Not fraud checked yet'}</span>
+		{/if}
+		{#if tick}<span class="hint">by {tick.by}, {new Date(tick.at).toLocaleDateString()}</span>{/if}
+	</div>
 	<div class="flag-panel" class:on={!!data.selectedFlag}>
 		{#if data.selectedFlag}
 			<p>
@@ -246,40 +260,6 @@
 			</form>
 		{:else}
 			<button class="text-btn flag-open" type="button" onclick={() => (flagging = true)}>⚑ Flag as possible fraud</button>
-		{/if}
-	</div>
-{/snippet}
-
-{#snippet fraudPanel(kind: 'hc' | 'new', key: string)}
-	{@const h = data.selectedHold!}
-	<div class="fraud-panel">
-		<p class="row-title">Waiting on a fraud check</p>
-		<p>
-			<strong>{h.approvedBy}</strong> approved <strong>{h.hours}h</strong>{#if h.trackedHours !== null} ({h.trackedHours}h tracked){/if}
-			and sent it here {new Date(h.heldAt).toLocaleString()}. Nothing has gone to Hack Club and no hours have been given yet.
-		</p>
-		<p class="hint">Feedback they'll get:</p>
-		<p class="p-feedback">“{h.feedback}”</p>
-		{#if h.notes}<p class="hint">Private notes: {h.notes}</p>{/if}
-		{#if form && 'message' in form && form.message}<p class="error">{form.message}</p>{/if}
-		{#if data.isAdmin}
-			<div class="actions">
-				<form method="POST" action="?/clearFraud" use:enhance={() => { submitting = 'clearFraud'; return async ({ update }) => { await update(); submitting = null; }; }}>
-					<input type="hidden" name="kind" value={kind} />
-					<input type="hidden" name="key" value={key} />
-					<button class="btn" type="submit" disabled={!!submitting}>
-						{submitting === 'clearFraud' ? 'Sending…' : '✓ Good to go: approve & send to Hack Club'}
-					</button>
-				</form>
-				<form method="POST" action="?/failFraud" class="flag-form" use:enhance={() => { submitting = 'failFraud'; return async ({ update }) => { await update(); submitting = null; }; }}>
-					<input type="hidden" name="kind" value={kind} />
-					<input type="hidden" name="key" value={key} />
-					<input name="reason" maxlength="480" placeholder="Why not? e.g. copied repo" />
-					<button class="btn btn-outline" type="submit" disabled={!!submitting}>No, back to the queue</button>
-				</form>
-			</div>
-		{:else}
-			<p class="hint">Waiting on an admin to check it.</p>
 		{/if}
 	</div>
 {/snippet}
@@ -369,7 +349,7 @@
 							<span class="tag tag-{item.status}">{STATUS_LABEL[item.status]}</span>
 							{#if item.kind === 'new' && item.status === 'pending'}<span class="tag tag-new">Not sent yet</span>{/if}
 							
-							{#if item.held}<span class="tag tag-claim">Waiting on fraud check</span>{:else if item.checked}<span class="tag tag-checked" title="Checked by {item.checked.by}">✓ Fraud checked</span>{/if}
+							{#if item.fraudChecked}<span class="tag tag-checked" title="Fraud checked by {item.fraudChecked.by}">✓ Fraud checked</span>{/if}
 							{#if item.claim}<span class="tag tag-claim" class:mine={item.claim.mine}>{item.claim.held ? (item.claim.mine ? 'Held for you' : `Held for ${item.claim.by}`) : item.claim.mine ? 'Yours' : `Claimed by ${item.claim.by}`}</span>{/if}
 							{#if !item.matched}<span class="tag tag-warn">No account</span>{/if}
 							{#if item.gone}<span class="tag tag-warn">Gone from Airtable</span>{/if}
@@ -452,8 +432,6 @@
 							{/if}
 						</p>
 						<p class="description">{r.description}</p>
-					{:else if data.selectedHold}
-						{@render fraudPanel('new', r.id)}
 					{:else}
 						<form
 							class:claim-locked={locked}
@@ -599,9 +577,6 @@
 									<button class="btn" type="submit" name="decision" value="approve" disabled={!!submitting}>
 										{submitting === 'approve' ? 'Sending…' : 'Approve & send to Hack Club'}
 									</button>
-									<button class="btn btn-outline" type="submit" name="decision" value="fraud" disabled={!!submitting}>
-										{submitting === 'fraud' ? 'Sending…' : 'Send to fraud check'}
-									</button>
 									<button class="btn btn-outline" type="submit" name="decision" value="changes_requested" disabled={!!submitting}>Needs changes</button>
 									<button class="btn btn-outline" type="submit" name="decision" value="rejected" disabled={!!submitting}>Reject</button>
 									<button class="save-draft" formnovalidate type="submit" name="decision" value="draft" disabled={!!submitting}>
@@ -723,8 +698,6 @@
 							{/if}
 						{:else if !data.detail.hackatimeProjects.length}
 							<p class="error">Couldn't reach this participant's Hackatime, so there's nothing to review against yet. Try again shortly.</p>
-						{:else if data.selectedHold}
-							{@render fraudPanel('hc', s.airtable_record_id)}
 						{:else}
 							<form
 								class:claim-locked={locked}
@@ -778,9 +751,6 @@
 								<div class="actions">
 									<button class="btn" type="submit" name="status" value="approved" disabled={!!submitting}>
 										{submitting === 'approved' ? 'Approving…' : 'Approve'}
-									</button>
-									<button class="btn btn-outline" type="submit" name="status" value="fraud" disabled={!!submitting}>
-										{submitting === 'fraud' ? 'Sending…' : 'Send to fraud check'}
 									</button>
 									<button class="btn btn-outline" type="submit" name="status" value="changes_requested" disabled={!!submitting}>Needs changes</button>
 									<button class="btn btn-outline" type="submit" name="status" value="rejected" disabled={!!submitting}>Reject</button>
@@ -1406,20 +1376,6 @@
 	.flag-open {
 		color: #9b1c1c;
 	}
-	.fraud-panel {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		padding: 0.9rem 1rem;
-		border: 2px solid #a34a00;
-		background: #fff6ec;
-	}
-	.fraud-panel p {
-		margin: 0;
-	}
-	.fraud-panel .p-feedback {
-		font-style: italic;
-	}
 	.flag-form {
 		display: flex;
 		flex-wrap: wrap;
@@ -1489,8 +1445,36 @@
 		border-color: var(--green);
 		color: var(--green-dark);
 	}
-	.checked-note {
-		margin: 0 0 0.75rem;
+	.fraud-tick {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+	}
+	.fraud-tick form {
+		margin: 0;
+	}
+	.tick-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0;
+		border: 0;
+		background: none;
+		font: inherit;
+		cursor: pointer;
+	}
+	.tick-box {
+		display: inline-grid;
+		place-items: center;
+		width: 1.25rem;
+		height: 1.25rem;
+		border: 2px solid currentColor;
+		font-weight: 700;
+		line-height: 1;
+	}
+	.fraud-tick.on {
 		color: var(--green-dark);
 	}
 	.tag-approved {

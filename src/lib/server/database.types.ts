@@ -228,21 +228,6 @@ export type ReviewFlagRow = {
 	flagged_at: string;
 }
 
-export type FraudCheckRow = {
-	item_kind: 'hc' | 'new';
-	item_key: string;
-	approved_by: string;
-	approved_hours: number;
-	tracked_hours: number | null;
-	hackatime_project: string | null;
-	internal_notes: string | null;
-	participant_feedback: string;
-	held_at: string;
-	cleared_by: string | null;
-	cleared_at: string | null;
-	sent_as: string | null;
-}
-
 export type ReviewPayoutRow = {
 	item_kind: 'hc' | 'new';
 	item_key: string;
@@ -426,7 +411,7 @@ export interface Database {
 			travel_origins: Table<TravelOriginRow>;
 			trip_flights: Table<TripFlightRow>;
 			review_flags: Table<ReviewFlagRow>;
-			fraud_checks: Table<FraudCheckRow>;
+			fraud_ticks: Table<{ item_kind: 'hc' | 'new'; item_key: string; checked_by: string | null; checked_at: string }>;
 			review_payouts: Table<ReviewPayoutRow>;
 			outreach_access: Table<{ email: string; added_by: string | null; added_at: string }>;
 			outreach_contacts: Table<{ user_id: string; contacted_by: string | null; contacted_at: string; note: string | null }>;
