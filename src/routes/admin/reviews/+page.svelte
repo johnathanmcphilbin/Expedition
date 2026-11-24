@@ -63,6 +63,7 @@
 	}
 
 	let submitting = $state<string | null>(null);
+	let checkSaveError = $state<string | null>(null);
 	// Seeded from the loaded suggestion whenever the selection changes.
 	let selectedProject = $state('');
 	$effect(() => {
@@ -87,26 +88,39 @@
 			if (label) label.textContent = text;
 		};
 		let timer: ReturnType<typeof setTimeout> | null = null;
-		let inflight = Promise.resolve();
-		const run = () => {
+		let inflight: Promise<void> = Promise.resolve();
+		const run = (): Promise<{ ok: boolean; message?: string }> => {
 			timer = null;
 			const body = new FormData(node);
 			if (opts.kind) body.set('kind', opts.kind);
 			status('Saving…');
-			inflight = inflight.then(async () => {
+			const job = inflight.then(async () => {
 				try {
 					// keepalive: a save sent as you leave the page still arrives
 					const res = await fetch(opts.action, { method: 'POST', body, keepalive: true, headers: { 'x-sveltekit-action': 'true' } });
 					const result = deserialize(await res.text());
-					if (result.type === 'success') status(`Saved ${clock()}`);
-					else if (result.type === 'failure') {
+					if (result.type === 'success') {
+						status(`Saved ${clock()}`);
+						return { ok: true };
+					}
+					if (result.type === 'failure') {
 						const d = result.data as { autosave?: string; justMessage?: string } | undefined;
-						status(`Not saved: ${d?.autosave ?? d?.justMessage ?? 'try again'}`);
-					} else status('Not saved: try again');
+						const message = d?.autosave ?? d?.justMessage ?? 'try again';
+						status(`Not saved: ${message}`);
+						return { ok: false, message };
+					}
+					status('Not saved: try again');
+					return { ok: false, message: 'try again' };
 				} catch {
 					status('Not saved: offline?');
+					return { ok: false, message: 'offline?' };
 				}
 			});
+			inflight = job.then(
+				() => undefined,
+				() => undefined
+			);
+			return job;
 		};
 		const schedule = () => {
 			if (timer) clearTimeout(timer);
@@ -125,9 +139,16 @@
 				run();
 			}
 		};
+		// the check's "approve" button asks for a save of whatever is typed, first
+		const onFlush = (event: Event) => {
+			const finish = (event as CustomEvent<(result: { ok: boolean; message?: string }) => void>).detail;
+			if (timer) clearTimeout(timer);
+			void run().then(finish);
+		};
 		node.addEventListener('input', schedule);
 		node.addEventListener('change', schedule);
 		node.addEventListener('submit', cancel);
+		node.addEventListener('review-flush', onFlush);
 		window.addEventListener('pagehide', flush);
 		return {
 			destroy() {
@@ -135,14 +156,33 @@
 				node.removeEventListener('input', schedule);
 				node.removeEventListener('change', schedule);
 				node.removeEventListener('submit', cancel);
+				node.removeEventListener('review-flush', onFlush);
 				window.removeEventListener('pagehide', flush);
 			}
 		};
+	}
+
+	// Save the open review before an admin clears a check, so the fields they
+	// just edited are what gets sent. No review form: nothing to save.
+	function flushReviewForm(): Promise<{ ok: boolean; message?: string }> {
+		const node = document.getElementById('review-form');
+		if (!(node instanceof HTMLFormElement)) return Promise.resolve({ ok: true });
+		return new Promise((resolve) => {
+			let settled = false;
+			const finish = (result: { ok: boolean; message?: string }) => {
+				if (settled) return;
+				settled = true;
+				resolve(result);
+			};
+			node.dispatchEvent(new CustomEvent('review-flush', { detail: finish }));
+			setTimeout(() => finish({ ok: false, message: 'Could not save the edits. Try Save edits, then approve.' }), 20000);
+		});
 	}
 	// close a half-written flag when moving to another submission
 	$effect(() => {
 		void data.selected?.key;
 		flagging = false;
+		checkSaveError = null;
 	});
 	let hardwareNote = $state<string | null>(null);
 
@@ -173,18 +213,38 @@
 	{@const h = data.selectedHold!}
 	<div class="check-panel">
 		<p class="row-title">Waiting on an admin's check</p>
-		<p class="hint">Their full review is below, exactly as they left it.</p>
-		<p>
-			<strong>{h.approvedBy}</strong> approved <strong>{h.hours}h</strong>{#if h.trackedHours !== null} ({h.trackedHours}h tracked){/if}
-			on {new Date(h.heldAt).toLocaleString()}. Nothing has gone to Hack Club and no hours have been given yet.
-		</p>
-		<p class="hint">Feedback they'll get:</p>
-		<p class="p-feedback">“{h.feedback}”</p>
-		{#if h.notes}<p class="hint">Private notes: {h.notes}</p>{/if}
+		{#if data.isAdmin}
+			<p class="hint">You can still edit the fields below, including the hours and the feedback. What you save is what gets sent.</p>
+			<p>
+				<strong>{h.approvedBy}</strong> sent this for a check on {new Date(h.heldAt).toLocaleString()}.
+				Nothing has gone to Hack Club and no hours have been given yet.
+			</p>
+		{:else}
+			<p class="hint">Their full review is below, exactly as they left it.</p>
+			<p>
+				<strong>{h.approvedBy}</strong> approved <strong>{h.hours}h</strong>{#if h.trackedHours !== null} ({h.trackedHours}h tracked){/if}
+				on {new Date(h.heldAt).toLocaleString()}. Nothing has gone to Hack Club and no hours have been given yet.
+			</p>
+			<p class="hint">Feedback they'll get:</p>
+			<p class="p-feedback">“{h.feedback}”</p>
+			{#if h.notes}<p class="hint">Private notes: {h.notes}</p>{/if}
+		{/if}
+		{#if checkSaveError}<p class="error">{checkSaveError}</p>{/if}
 		{#if form && 'message' in form && form.message}<p class="error">{form.message}</p>{/if}
 		{#if data.isAdmin}
 			<div class="actions">
-				<form method="POST" action="?/clearCheck" use:enhance={() => { submitting = 'clearCheck'; return async ({ update }) => { await update(); submitting = null; }; }}>
+				<form method="POST" action="?/clearCheck" use:enhance={async ({ cancel }) => {
+					submitting = 'clearCheck';
+					checkSaveError = null;
+					const flushed = await flushReviewForm();
+					if (!flushed.ok) {
+						checkSaveError = flushed.message ?? 'Save the edits before approving.';
+						submitting = null;
+						cancel();
+						return;
+					}
+					return async ({ update }) => { await update(); submitting = null; };
+				}}>
 					<input type="hidden" name="kind" value={kind} />
 					<input type="hidden" name="key" value={key} />
 					<button class="btn" type="submit" disabled={!!submitting}>
@@ -467,11 +527,13 @@
 						<p class="description">{r.description}</p>
 					{:else}
 						{#if data.selectedHold}{@render checkPanel('new', r.id)}{/if}
-						<!-- held for a check: their whole review, read-only -->
+						<!-- held for a check: reviewers see it read-only; an admin can still edit -->
 						<form
+							id="review-form"
 							class:claim-locked={locked}
-							class:held-view={!!data.selectedHold}
-							inert={locked || !!data.selectedHold}
+							class:held-view={!!data.selectedHold && !data.isAdmin}
+							class:admin-check={!!data.selectedHold && data.isAdmin}
+							inert={locked || (!!data.selectedHold && !data.isAdmin)}
 							method="POST"
 							action="?/saveNew"
 							use:autosave={{ action: '?/autosave', kind: 'new' }}
@@ -610,11 +672,13 @@
 								{/if}
 
 								<div class="actions">
+									{#if !data.selectedHold}
 									<button class="btn" type="submit" name="decision" value="approve" disabled={!!submitting}>
 										{submitting === 'approve' ? 'Sending…' : data.needsCheck ? 'Approve (an admin checks it next)' : 'Approve & send to Hack Club'}
 									</button>
 									<button class="btn btn-outline" type="submit" name="decision" value="changes_requested" disabled={!!submitting}>Needs changes</button>
 									<button class="btn btn-outline" type="submit" name="decision" value="rejected" disabled={!!submitting}>Reject</button>
+									{/if}
 									<button class="save-draft" formnovalidate type="submit" name="decision" value="draft" disabled={!!submitting}>
 										{submitting === 'draft' ? 'Saving…' : 'Save edits'}
 									</button>
@@ -736,18 +800,20 @@
 							<p class="error">Couldn't reach this participant's Hackatime, so there's nothing to review against yet. Try again shortly.</p>
 						{:else}
 							{#if data.selectedHold}{@render checkPanel('hc', s.airtable_record_id)}{/if}
-							<!-- held for a check: their whole review, read-only -->
+							<!-- held for a check: reviewers see it read-only; an admin can still edit -->
 							<form
+								id="review-form"
 								class:claim-locked={locked}
-								class:held-view={!!data.selectedHold}
-								inert={locked || !!data.selectedHold}
+								class:held-view={!!data.selectedHold && !data.isAdmin}
+								class:admin-check={!!data.selectedHold && data.isAdmin}
+								inert={locked || (!!data.selectedHold && !data.isAdmin)}
 								method="POST"
 								action="?/save"
 								use:autosave={{ action: '?/autosave', kind: 'hc' }}
 								use:enhance={({ submitter }) => {
 									submitting = submitter?.getAttribute('value') ?? 'save';
 									return async ({ update }) => {
-										await update();
+										await update({ reset: !data.selectedHold });
 										submitting = null;
 									};
 								}}>
@@ -788,11 +854,13 @@
 								{/if}
 
 								<div class="actions">
+									{#if !data.selectedHold}
 									<button class="btn" type="submit" name="status" value="approved" disabled={!!submitting}>
 										{submitting === 'approved' ? 'Approving…' : data.needsCheck ? 'Approve (an admin checks it next)' : 'Approve'}
 									</button>
 									<button class="btn btn-outline" type="submit" name="status" value="changes_requested" disabled={!!submitting}>Needs changes</button>
 									<button class="btn btn-outline" type="submit" name="status" value="rejected" disabled={!!submitting}>Reject</button>
+									{/if}
 									<button class="save-draft" formnovalidate type="submit" name="status" value="pending" disabled={!!submitting}>
 										{submitting === 'pending' ? 'Saving…' : 'Save draft'}
 									</button>
@@ -806,8 +874,8 @@
 						<summary>Hack Club justification <span class="optional">saved straight to their Airtable</span></summary>
 						{#if data.detail.justifications}
 							<form
-								class:claim-locked={locked}
-								inert={locked}
+								class:claim-locked={locked || (!!data.selectedHold && !data.isAdmin)}
+								inert={locked || (!!data.selectedHold && !data.isAdmin)}
 								method="POST"
 								action="?/saveJustification"
 								use:autosave={{ action: '?/saveJustification', delay: 2500 }}
@@ -1339,7 +1407,8 @@
 	.claim-locked {
 		opacity: 0.45;
 	}
-	.held-view {
+	.held-view,
+	.admin-check {
 		margin-top: 1rem;
 	}
 	.held-view .actions,
