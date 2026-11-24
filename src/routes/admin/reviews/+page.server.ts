@@ -45,7 +45,18 @@ import {
 } from '$lib/server/queue';
 import { parseSubmissionFields, parseJustifications } from '$lib/server/submission-fields';
 import { hours, text, uuid, oneOf, ValidationError } from '$lib/server/validate';
-import { needsCheck, listApprovalChecks, getApprovalCheck, holdForCheck, takeApprovalCheck, restoreApprovalCheck, type ApprovalCheck } from '$lib/server/approval-checks';
+import {
+	needsCheck,
+	listApprovalChecks,
+	getApprovalCheck,
+	holdForCheck,
+	takeApprovalCheck,
+	restoreApprovalCheck,
+	updateHeldCheck,
+	rejectHeldEdit,
+	heldFieldProblem,
+	type ApprovalCheck
+} from '$lib/server/approval-checks';
 import type { SubmissionStatus } from '$lib/server/database.types';
 import type { QueueItem } from '$lib/server/queries';
 
@@ -517,6 +528,16 @@ function nextInTab(requestUrl: string): string {
 	return `/admin/reviews${qs.toString() ? `?${qs}` : ''}`;
 }
 
+/** Tracked hours for the Hackatime projects on a submission. Null when Hackatime can't be reached. */
+async function trackedHoursFor(userId: string, names: string[]): Promise<number | null> {
+	const times = await fetchProjectTimes(userId);
+	const matched = (times ?? []).filter((t) => names.includes(t.name));
+	const missing = times ? names.filter((n) => !times.some((t) => t.name === n)) : [];
+	if (missing.length) throw new ValidationError(`"${missing[0]}" isn't in their Hackatime`, 'project');
+	if (!matched.length) return null;
+	return Math.round((matched.reduce((sum, t) => sum + t.totalSeconds, 0) / 3600) * 100) / 100;
+}
+
 /** An admin can't check an approval of their own project or someone they referred. */
 async function checkProblem(admin: UserRow, check: ApprovalCheck): Promise<string | null> {
 	const owner =
@@ -665,6 +686,9 @@ export const actions: Actions = {
 			const recordId = text(form.get('airtable_record_id'), 'Submission', { max: 200, required: true })!;
 			if (!/^rec[A-Za-z0-9]{10,20}$/.test(recordId)) return fail(400, { justMessage: 'Invalid submission.' });
 			if (await ownsRecord(reviewer.id, recordId)) return fail(403, { justMessage: "You can't review your own project." });
+			if (rejectHeldEdit(reviewer.role, !!(await getApprovalCheck('hc', recordId).catch(() => null)), true)) {
+				return fail(403, { justMessage: "This one's waiting on an admin's check." });
+			}
 			if (await hcWaiting(recordId)) {
 				const problem = await claimProblem(reviewer, 'hc', recordId);
 				if (problem) return fail(403, { justMessage: problem });
@@ -730,7 +754,11 @@ export const actions: Actions = {
 			const row = await getQueued(id);
 			if (!row || row.status === 'sent') return fail(409, { autosave: 'Already sent' });
 			if (row.user_id === reviewer.id) return fail(403, { autosave: "You can't review your own project" });
-			if (row.status === 'pending') {
+			const held = await getApprovalCheck('new', id).catch(() => null);
+			const heldBlock = rejectHeldEdit(reviewer.role, !!held, true);
+			if (heldBlock) return fail(409, { autosave: heldBlock });
+			// a held one is already decided by the reviewer; an admin edits it without claiming
+			if (row.status === 'pending' && !held) {
 				const problem = await claimProblem(reviewer, 'new', id);
 				if (problem) return fail(403, { autosave: 'Not claimed' });
 			}
@@ -738,8 +766,30 @@ export const actions: Actions = {
 			let fields: ReturnType<typeof parseSubmissionFields> | null = null;
 			try {
 				fields = parseSubmissionFields(form);
-			} catch {
+			} catch (e) {
+				// an admin's edit is about to be what gets sent, so a half-typed field stops the save
+				if (held) return fail(400, { autosave: e instanceof ValidationError ? e.message : 'Check the fields' });
 				fields = null; // mid-edit; the review parts still save
+			}
+			if (held) {
+				const problem = heldFieldProblem(approvedHours, feedback);
+				if (problem) return fail(400, { autosave: problem });
+				if (!fields) return fail(400, { autosave: 'Check the fields' });
+			}
+			let tracked = held?.tracked_hours ?? null;
+			let projectsChanged = false;
+			if (held && fields) {
+				const next = fields.hackatime_projects;
+				const prev = hackatimeNames(row);
+				projectsChanged = next.length !== prev.length || next.some((n) => !prev.includes(n));
+				if (projectsChanged) {
+					try {
+						tracked = await trackedHoursFor(row.user_id, next);
+					} catch (e) {
+						if (e instanceof ValidationError) return fail(400, { autosave: e.message });
+						throw e;
+					}
+				}
 			}
 			const { error } = await db()
 				.from('submission_queue')
@@ -748,11 +798,24 @@ export const actions: Actions = {
 					approved_hours: approvedHours,
 					internal_notes: notes,
 					participant_feedback: feedback,
-					justifications: parseJustifications(form)
+					justifications: parseJustifications(form),
+					...(projectsChanged ? { tracked_hours: tracked } : {})
 				})
 				.eq('id', id)
 				.neq('status', 'sent');
 			if (error) return fail(500, { autosave: error.message });
+			if (held) {
+				try {
+					await updateHeldCheck('new', id, {
+						approved_hours: approvedHours!,
+						tracked_hours: tracked,
+						internal_notes: notes,
+						participant_feedback: feedback!
+					});
+				} catch (e) {
+					return fail(409, { autosave: e instanceof Error ? e.message : "Couldn't update the check" });
+				}
+			}
 			return { autosaved: new Date().toISOString() };
 		}
 
@@ -763,6 +826,9 @@ export const actions: Actions = {
 			if (!linked?.user_id) return fail(400, { autosave: 'Link it to an account first' });
 			if (linked.airtable_status === AIRTABLE_GONE) return fail(409, { autosave: 'Gone from Airtable' });
 			if (linked.user_id === reviewer.id) return fail(403, { autosave: "You can't review your own project" });
+			const held = await getApprovalCheck('hc', recordId).catch(() => null);
+			const heldBlock = rejectHeldEdit(reviewer.role, !!held, true);
+			if (heldBlock) return fail(409, { autosave: heldBlock });
 			const project = String(form.get('hackatime_project') ?? '').trim();
 			const { data: existing } = await db()
 				.from('submission_reviews')
@@ -771,7 +837,7 @@ export const actions: Actions = {
 				.order('created_at', { ascending: false })
 				.limit(1)
 				.maybeSingle();
-			if (!existing || existing.status === 'pending' || existing.status === 'in_review') {
+			if ((!existing || existing.status === 'pending' || existing.status === 'in_review') && !held) {
 				const problem = await claimProblem(reviewer, 'hc', recordId);
 				if (problem) return fail(403, { autosave: 'Not claimed' });
 			}
@@ -782,17 +848,45 @@ export const actions: Actions = {
 			} else if (existing && existing.status !== 'pending' && existing.status !== 'in_review') {
 				return fail(409, { autosave: 'Already decided' });
 			}
+			let tracked = held?.tracked_hours ?? null;
+			if (held) {
+				const problem = heldFieldProblem(approvedHours, feedback);
+				if (problem) return fail(400, { autosave: problem });
+				if (!project) return fail(400, { autosave: 'Pick the Hackatime project.' });
+				if (project !== held.hackatime_project) {
+					try {
+						tracked = await trackedHoursFor(linked.user_id, [project]);
+					} catch (e) {
+						if (e instanceof ValidationError) return fail(400, { autosave: e.message });
+						throw e;
+					}
+				}
+			}
 			const { error } = await db()
 				.from('submission_reviews')
 				.update({
 					approved_hours: approvedHours,
 					internal_notes: notes,
 					participant_feedback: feedback,
-					...(project ? { hackatime_project: project } : {})
+					...(project ? { hackatime_project: project } : {}),
+					...(held && project !== held.hackatime_project ? { submitted_hours: tracked } : {})
 				})
 				.eq('id', reviewId)
 				.in('status', ['pending', 'in_review']);
 			if (error) return fail(500, { autosave: error.message });
+			if (held) {
+				try {
+					await updateHeldCheck('hc', recordId, {
+						approved_hours: approvedHours!,
+						tracked_hours: tracked,
+						hackatime_project: project,
+						internal_notes: notes,
+						participant_feedback: feedback!
+					});
+				} catch (e) {
+					return fail(409, { autosave: e instanceof Error ? e.message : "Couldn't update the check" });
+				}
+			}
 			return { autosaved: new Date().toISOString() };
 		}
 		return fail(400, { autosave: 'Unknown submission' });
@@ -1010,6 +1104,8 @@ export const actions: Actions = {
 		try {
 			const id = uuid(form.get('id')?.toString(), 'submission');
 			if ((await getQueued(id))?.user_id === reviewer.id) return fail(403, { message: "You can't review your own project." });
+			const heldBlock = rejectHeldEdit(reviewer.role, !!(await getApprovalCheck('new', id).catch(() => null)), true);
+			if (heldBlock) return fail(403, { message: heldBlock });
 			await setQueuedHardware(id, form.get('hardware') === 'yes');
 			return { hardwareSaved: true };
 		} catch (e) {
@@ -1028,10 +1124,14 @@ export const actions: Actions = {
 			const row = await getQueued(id);
 			if (!row) return fail(404, { message: 'That submission no longer exists.' });
 			if (row.status === 'sent') return fail(409, { message: 'This one has already been sent to Hack Club.' });
-			if (await getApprovalCheck('new', id).catch(() => null)) return fail(409, { message: "This one's waiting on an admin's check." });
 			if (row.user_id === reviewer.id) return fail(403, { message: "You can't review your own project." });
 			if (await referredBy(reviewer.id, row.user_id)) return fail(403, { message: "You can't review someone you referred." });
-			if (row.status === 'pending') {
+			const heldCheck = await getApprovalCheck('new', id).catch(() => null);
+			// reviewers stay locked once it's waiting on a check; an admin may still edit the fields
+			if (rejectHeldEdit(reviewer.role, !!heldCheck, true)) {
+				return fail(409, { message: "This one's waiting on an admin's check." });
+			}
+			if (row.status === 'pending' && !heldCheck) {
 				const problem = await claimProblem(reviewer, 'new', id);
 				if (problem) return fail(403, { message: problem });
 			}
@@ -1067,6 +1167,14 @@ export const actions: Actions = {
 				return fail(400, {
 					message: decision === 'approve' ? 'Write them some feedback before approving. It’s the message they get.' : 'Give them some feedback to act on.'
 				});
+			}
+			// the check buttons send it; saving here only updates the fields the admin is looking at
+			if (heldCheck && decision !== 'draft') {
+				return fail(409, { message: "This one's waiting on an admin's check." });
+			}
+			if (heldCheck) {
+				const problem = heldFieldProblem(approvedHours, feedback);
+				if (problem) return fail(400, { message: problem });
 			}
 
 			await updateQueuedFields(id, fields, parseJustifications(form));
@@ -1128,7 +1236,21 @@ export const actions: Actions = {
 				}
 			}
 
-			if (decision === 'draft') return { saved: true };
+			if (decision === 'draft') {
+				if (heldCheck) {
+					try {
+						await updateHeldCheck('new', id, {
+							approved_hours: approvedHours!,
+							tracked_hours: trackedHours === null ? heldCheck.tracked_hours : Math.round(trackedHours * 100) / 100,
+							internal_notes: internalNotes,
+							participant_feedback: feedback!
+						});
+					} catch (e) {
+						return fail(409, { message: e instanceof Error ? e.message : "Couldn't update the check." });
+					}
+				}
+				return { saved: true };
+			}
 			// non-admin reviewers earn hours for each submission they decide
 			await payForReview(reviewer, 'new', id, fields.project_name, row.status === 'pending', row.updated_at, decision === 'approve').catch((e) =>
 				console.error('payForReview', e)
@@ -1230,7 +1352,12 @@ export const actions: Actions = {
 			}
 			if (!linked?.user_id) return fail(400, { message: 'Link this submission to an account first.' });
 			const userId = linked.user_id;
-			if (await getApprovalCheck('hc', airtableRecordId).catch(() => null)) return fail(409, { message: "This one's waiting on an admin's check." });
+			const heldCheck = await getApprovalCheck('hc', airtableRecordId).catch(() => null);
+			// reviewers stay locked; an admin can still save the fields. Approve / reject stay on the check buttons.
+			const savingFields = status === 'pending' || status === 'in_review';
+			if (rejectHeldEdit(reviewer.role, !!heldCheck, savingFields)) {
+				return fail(409, { message: "This one's waiting on an admin's check." });
+			}
 			if (userId === reviewer.id) return fail(403, { message: "You can't review your own project." });
 			if (await referredBy(reviewer.id, userId)) return fail(403, { message: "You can't review someone you referred." });
 
@@ -1242,6 +1369,55 @@ export const actions: Actions = {
 			const times = await fetchProjectTimes(userId);
 			const match = times?.find((t) => t.name === hackatimeProject);
 			const submittedHours = match ? match.totalSeconds / 3600 : null;
+
+			if (heldCheck) {
+				const problem = heldFieldProblem(approvedHours, participantFeedback);
+				if (problem) return fail(400, { message: problem });
+				if (hackatimeProject !== heldCheck.hackatime_project && times && !match) {
+					throw new ValidationError(`"${hackatimeProject}" isn't in their Hackatime`, 'hackatime_project');
+				}
+				const { data: open, error: openError } = await db()
+					.from('submission_reviews')
+					.select('id')
+					.eq('airtable_record_id', airtableRecordId)
+					.in('status', ['pending', 'in_review'])
+					.order('created_at', { ascending: false })
+					.limit(1)
+					.maybeSingle();
+				if (openError) return fail(500, { message: openError.message });
+				if (!open) return fail(409, { message: 'This review is no longer open.' });
+				const tracked =
+					hackatimeProject !== heldCheck.hackatime_project && match
+						? Math.round((match.totalSeconds / 3600) * 100) / 100
+						: submittedHours === null
+							? heldCheck.tracked_hours
+							: Math.round(submittedHours * 100) / 100;
+				const { error: updateError } = await db()
+					.from('submission_reviews')
+					.update({
+						approved_hours: approvedHours,
+						internal_notes: internalNotes,
+						participant_feedback: participantFeedback,
+						hackatime_project: hackatimeProject,
+						submitted_hours: tracked
+					})
+					.eq('id', open.id)
+					.in('status', ['pending', 'in_review']);
+				if (updateError) return fail(500, { message: updateError.message });
+				try {
+					await updateHeldCheck('hc', airtableRecordId, {
+						approved_hours: approvedHours!,
+						tracked_hours: tracked,
+						hackatime_project: hackatimeProject,
+						internal_notes: internalNotes,
+						participant_feedback: participantFeedback!
+					});
+				} catch (e) {
+					return fail(409, { message: e instanceof Error ? e.message : "Couldn't update the check." });
+				}
+				// stays in review until the admin uses the check buttons, so nothing is sent or credited here
+				return { saved: true };
+			}
 
 			const review = await getOrCreateReview(
 				airtableRecordId,

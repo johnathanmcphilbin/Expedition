@@ -59,3 +59,57 @@ export async function restoreApprovalCheck(check: ApprovalCheck): Promise<void> 
 	const { error } = await db().from('approval_checks').upsert(check, { onConflict: 'item_kind,item_key' });
 	if (error) console.error('restoreApprovalCheck', error.message);
 }
+
+/**
+ * A held approval is read-only for reviewers. An admin checking it can still
+ * save field edits. A decision (approve, reject, needs changes) stays on the
+ * check buttons, which send it as the original reviewer.
+ * Returns the error to show, or null when the save may proceed.
+ */
+export function rejectHeldEdit(role: string, held: boolean, savingFieldsOnly: boolean): string | null {
+	if (!held) return null;
+	if (role === 'admin' && savingFieldsOnly) return null;
+	return "This one's waiting on an admin's check.";
+}
+
+/** Hours and feedback an admin's edit must keep valid, because clearing the check sends them. */
+export function heldFieldProblem(approvedHours: number | null, feedback: string | null): string | null {
+	if (approvedHours === null || approvedHours <= 0) return 'Set how many hours to approve (more than zero).';
+	if (!feedback?.trim()) return 'Write the feedback they will get.';
+	return null;
+}
+
+/**
+ * Write an admin's edits onto the held approval. Who approved it, and when,
+ * stay as they were — clearing the check still sends it as that reviewer.
+ */
+export async function updateHeldCheck(
+	kind: Kind,
+	key: string,
+	edits: {
+		approved_hours: number;
+		tracked_hours: number | null;
+		hackatime_project?: string | null;
+		internal_notes: string | null;
+		participant_feedback: string;
+	}
+): Promise<void> {
+	if (!(edits.approved_hours > 0)) throw new Error('Set how many hours to approve (more than zero).');
+	const feedback = edits.participant_feedback.trim();
+	if (!feedback) throw new Error('Write the feedback they will get.');
+	const patch: Partial<ApprovalCheck> = {
+		approved_hours: edits.approved_hours,
+		tracked_hours: edits.tracked_hours,
+		internal_notes: edits.internal_notes,
+		participant_feedback: feedback
+	};
+	if (edits.hackatime_project !== undefined) patch.hackatime_project = edits.hackatime_project;
+	const { data, error } = await db()
+		.from('approval_checks')
+		.update(patch)
+		.eq('item_kind', kind)
+		.eq('item_key', key)
+		.select('item_key');
+	if (error) throw new Error(error.message);
+	if (!data?.length) throw new Error('Someone has already dealt with this one.');
+}
