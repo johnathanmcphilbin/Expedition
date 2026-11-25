@@ -108,6 +108,85 @@ export async function countQueuePending(): Promise<number> {
 	return count ?? 0;
 }
 
+export type PublicQueueItem = {
+	position: number;
+	project: string;
+	hardware: boolean;
+	submittedAt: string;
+	status: 'waiting' | 'needs_changes';
+};
+
+/** A privacy-safe view of the review queue for the public status page and API. */
+export async function listPublicQueue(): Promise<PublicQueueItem[]> {
+	const [queuedResult, submissionsResult, reviewsResult] = await Promise.all([
+		db()
+			.from('submission_queue')
+			.select('id, project_name, hardware, status, created_at, queued_at, airtable_record_id')
+			.neq('status', 'sent')
+			.order('created_at', { ascending: true }),
+		db()
+			.from('hackclub_submissions')
+			.select('airtable_record_id, project_names_raw, airtable_status, airtable_created_at')
+			.neq('airtable_status', 'Deleted'),
+		db()
+			.from('submission_reviews')
+			.select('airtable_record_id, status')
+	]);
+
+	if (queuedResult.error) console.error('publicQueue queued', queuedResult.error.message);
+	if (submissionsResult.error) console.error('publicQueue submissions', submissionsResult.error.message);
+	if (reviewsResult.error) console.error('publicQueue reviews', reviewsResult.error.message);
+
+	const reviewsByRecord = new Map<string, string[]>();
+	for (const review of reviewsResult.data ?? []) {
+		const statuses = reviewsByRecord.get(review.airtable_record_id) ?? [];
+		statuses.push(review.status);
+		reviewsByRecord.set(review.airtable_record_id, statuses);
+	}
+	const halfSentIds = new Set(
+		(queuedResult.data ?? [])
+			.filter((row) => row.airtable_record_id && row.status !== 'sent')
+			.map((row) => row.airtable_record_id as string)
+	);
+
+	const items: (Omit<PublicQueueItem, 'position'> & { date: string })[] = [];
+
+	for (const row of queuedResult.data ?? []) {
+		if (row.status !== 'pending' && row.status !== 'changes_requested') continue;
+		items.push({
+			project: row.project_name,
+			hardware: !!row.hardware,
+			submittedAt: row.queued_at ?? row.created_at,
+			status: row.status === 'changes_requested' ? 'needs_changes' : 'waiting',
+			date: row.queued_at ?? row.created_at
+		});
+	}
+
+	for (const row of submissionsResult.data ?? []) {
+		if (!row.airtable_record_id || halfSentIds.has(row.airtable_record_id)) continue;
+		const statuses = reviewsByRecord.get(row.airtable_record_id) ?? [];
+		const active = statuses.find((status) => !['approved', 'rejected'].includes(status));
+		if (statuses.length && !active) continue;
+		items.push({
+			project: row.project_names_raw?.trim() || 'Unnamed project',
+			hardware: false,
+			submittedAt: row.airtable_created_at ?? new Date(0).toISOString(),
+			status: active === 'changes_requested' ? 'needs_changes' : 'waiting',
+			date: row.airtable_created_at ?? new Date(0).toISOString()
+		});
+	}
+
+	return items
+		.sort((a, b) => a.date.localeCompare(b.date))
+		.map((item, index) => ({
+			position: index + 1,
+			project: item.project,
+			hardware: item.hardware,
+			submittedAt: item.submittedAt,
+			status: item.status
+		}));
+}
+
 export async function getQueued(id: string): Promise<QueuedSubmissionRow | null> {
 	const { data } = await db().from('submission_queue').select('*').eq('id', id).maybeSingle();
 	return (data as QueuedSubmissionRow | null) ?? null;

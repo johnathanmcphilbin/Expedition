@@ -44,6 +44,9 @@ export const config = {
 		authorizeUrl: 'https://auth.hackclub.com/oauth/authorize',
 		tokenUrl: 'https://auth.hackclub.com/oauth/token',
 		userinfoUrl: 'https://auth.hackclub.com/oauth/userinfo',
+		get configured() {
+			return !!env.HCA_CLIENT_ID?.trim() && !!env.HCA_CLIENT_SECRET?.trim();
+		},
 		get clientId() {
 			return required('HCA_CLIENT_ID');
 		},

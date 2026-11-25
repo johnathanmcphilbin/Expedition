@@ -2,6 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions } from './$types';
 import { saveMailingSignup } from '$lib/server/queries';
 import { email as emailField, ValidationError } from '$lib/server/validate';
+import { config } from '$lib/server/env';
 
 export const actions: Actions = {
 	/**
@@ -14,6 +15,12 @@ export const actions: Actions = {
 	 */
 	join: async ({ request }) => {
 		const form = await request.formData();
+
+		if (!config.hca.configured) {
+			return fail(503, {
+				message: 'Sign-in is not configured in this local environment. Add HCA_CLIENT_ID and HCA_CLIENT_SECRET to .env.'
+			});
+		}
 
 		try {
 			const address = emailField(form.get('email'), 'Email');
